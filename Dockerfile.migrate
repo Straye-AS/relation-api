@@ -1,0 +1,33 @@
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build migration tool
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o /bin/migrate ./cmd/migrate
+
+# Runtime stage
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+# Copy binary and migrations
+COPY --from=builder /bin/migrate /app/migrate
+COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/config.json /app/config.json
+
+# Run migrations
+ENTRYPOINT ["/app/migrate"]
+CMD ["up"]
+

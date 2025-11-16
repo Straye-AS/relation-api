@@ -1,0 +1,67 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: relation-postgres
+    environment:
+      POSTGRES_DB: relation
+      POSTGRES_USER: relation_user
+      POSTGRES_PASSWORD: relation_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relation_user -d relation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    container_name: relation-migrate
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: relation
+      DATABASE_USER: relation_user
+      DATABASE_PASSWORD: relation_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: relation-api
+    environment:
+      APP_ENVIRONMENT: development
+      APP_PORT: 8080
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: relation
+      DATABASE_USER: relation_user
+      DATABASE_PASSWORD: relation_password
+      STORAGE_MODE: local
+      STORAGE_LOCALBASEPATH: /app/storage
+      ADMIN_API_KEY: dev-admin-key-change-in-production
+      LOGGING_LEVEL: info
+    ports:
+      - "8080:8080"
+    volumes:
+      - api_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  api_storage:

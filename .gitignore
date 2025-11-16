@@ -1,0 +1,42 @@
+# Binaries and build artifacts
+bin/
+tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build cache and test outputs
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Generated docs
+docs/swagger/
+
+# Editor/IDE metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+*.orig
+*.DS_Store
+
+# Environment & secret files
+.env
+.env.*
+config.local.json
+
+# Local storage/uploads
+storage/
+
+# Docker & compose overrides
+docker-compose.override.yml
+
+# Air tmp files
+.air.toml.local

@@ -1,0 +1,47 @@
+{
+  "app": {
+    "name": "Straye Relation API",
+    "environment": "development",
+    "port": 8080
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "relation",
+    "user": "relation_user",
+    "password": "relation_password",
+    "sslMode": "disable",
+    "maxOpenConns": 25,
+    "maxIdleConns": 5,
+    "connMaxLifetime": 300
+  },
+  "azureAd": {
+    "tenantId": "",
+    "clientId": "",
+    "instanceUrl": "https://login.microsoftonline.com/",
+    "requiredScopes": "api://relation-api/access"
+  },
+  "apiKey": {
+    "secretName": "admin-api-key"
+  },
+  "storage": {
+    "mode": "local",
+    "localBasePath": "./storage",
+    "cloudConnectionString": "",
+    "cloudContainer": "files",
+    "maxUploadSizeMB": 50
+  },
+  "secrets": {
+    "keyVaultName": ""
+  },
+  "logging": {
+    "level": "info",
+    "format": "console"
+  },
+  "server": {
+    "readTimeout": 30,
+    "writeTimeout": 30,
+    "requestTimeout": 60,
+    "enableSwagger": true
+  }
+}
