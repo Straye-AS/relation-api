@@ -23,11 +23,13 @@ func (r *OfferRepository) Create(ctx context.Context, offer *domain.Offer) error
 
 func (r *OfferRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Offer, error) {
 	var offer domain.Offer
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Preload("Customer").
 		Preload("Project").
 		Preload("Items").
-		First(&offer, "id = ?", id).Error
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&offer).Error
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +49,9 @@ func (r *OfferRepository) List(ctx context.Context, page, pageSize int, customer
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&domain.Offer{}).Preload("Customer").Preload("Project")
+
+	// Apply multi-tenant company filter
+	query = ApplyCompanyFilter(ctx, query)
 
 	if customerID != nil {
 		query = query.Where("customer_id = ?", *customerID)
@@ -84,24 +89,25 @@ func (r *OfferRepository) GetFilesCount(ctx context.Context, offerID uuid.UUID) 
 
 func (r *OfferRepository) GetTotalPipelineValue(ctx context.Context) (float64, error) {
 	var total float64
-	err := r.db.WithContext(ctx).Model(&domain.Offer{}).
+	query := r.db.WithContext(ctx).Model(&domain.Offer{}).
 		Where("phase IN ?", []domain.OfferPhase{
 			domain.OfferPhaseSent,
 			domain.OfferPhaseInProgress,
-		}).
-		Select("COALESCE(SUM(value), 0)").
+		})
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Select("COALESCE(SUM(value), 0)").
 		Scan(&total).Error
 	return total, err
 }
 
-func (r *OfferRepository) Search(ctx context.Context, query string, limit int) ([]domain.Offer, error) {
+func (r *OfferRepository) Search(ctx context.Context, searchQuery string, limit int) ([]domain.Offer, error) {
 	var offers []domain.Offer
-	searchPattern := "%" + strings.ToLower(query) + "%"
-	err := r.db.WithContext(ctx).
+	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
+	query := r.db.WithContext(ctx).
 		Preload("Customer").
 		Preload("Project").
-		Where("LOWER(title) LIKE ?", searchPattern).
-		Limit(limit).
-		Find(&offers).Error
+		Where("LOWER(title) LIKE ?", searchPattern)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Limit(limit).Find(&offers).Error
 	return offers, err
 }

@@ -20,6 +20,7 @@ type UserContext struct {
 type contextKey string
 
 const userContextKey contextKey = "userContext"
+const companyFilterKey contextKey = "companyFilter"
 
 // WithUserContext adds user context to the context
 func WithUserContext(ctx context.Context, user *UserContext) context.Context {
@@ -219,4 +220,41 @@ func (u *UserContext) RolesAsStrings() []string {
 		result[i] = string(role)
 	}
 	return result
+}
+
+// CompanyFilter represents the effective company filter for queries
+// This is set by middleware based on user context and query parameters
+type CompanyFilter struct {
+	// CompanyID is the company to filter by (nil means no filter / all companies)
+	CompanyID *domain.CompanyID
+	// RequestedByGruppenUser indicates if a Gruppen user explicitly requested a specific company
+	RequestedByGruppenUser bool
+}
+
+// WithCompanyFilter adds company filter to the context
+func WithCompanyFilter(ctx context.Context, filter *CompanyFilter) context.Context {
+	return context.WithValue(ctx, companyFilterKey, filter)
+}
+
+// CompanyFilterFromContext extracts company filter from the context
+func CompanyFilterFromContext(ctx context.Context) (*CompanyFilter, bool) {
+	filter, ok := ctx.Value(companyFilterKey).(*CompanyFilter)
+	return filter, ok
+}
+
+// GetEffectiveCompanyFilter returns the company ID to filter queries by
+// This should be used by repositories to apply multi-tenant filtering
+// Returns nil if no filtering should be applied (user has access to all companies)
+func GetEffectiveCompanyFilter(ctx context.Context) *domain.CompanyID {
+	// First check if there's an explicit company filter set by middleware
+	if filter, ok := CompanyFilterFromContext(ctx); ok && filter != nil {
+		return filter.CompanyID
+	}
+
+	// Fall back to user's default company filter
+	if userCtx, ok := FromContext(ctx); ok {
+		return userCtx.GetCompanyFilter()
+	}
+
+	return nil
 }

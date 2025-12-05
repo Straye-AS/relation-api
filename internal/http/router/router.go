@@ -17,17 +17,18 @@ import (
 )
 
 type Router struct {
-	cfg              *config.Config
-	logger           *zap.Logger
-	db               *gorm.DB
-	authMiddleware   *auth.Middleware
-	customerHandler  *handler.CustomerHandler
-	projectHandler   *handler.ProjectHandler
-	offerHandler     *handler.OfferHandler
-	fileHandler      *handler.FileHandler
-	dashboardHandler *handler.DashboardHandler
-	authHandler      *handler.AuthHandler
-	companyHandler   *handler.CompanyHandler
+	cfg                     *config.Config
+	logger                  *zap.Logger
+	db                      *gorm.DB
+	authMiddleware          *auth.Middleware
+	companyFilterMiddleware *middleware.CompanyFilterMiddleware
+	customerHandler         *handler.CustomerHandler
+	projectHandler          *handler.ProjectHandler
+	offerHandler            *handler.OfferHandler
+	fileHandler             *handler.FileHandler
+	dashboardHandler        *handler.DashboardHandler
+	authHandler             *handler.AuthHandler
+	companyHandler          *handler.CompanyHandler
 }
 
 func NewRouter(
@@ -35,6 +36,7 @@ func NewRouter(
 	logger *zap.Logger,
 	db *gorm.DB,
 	authMiddleware *auth.Middleware,
+	companyFilterMiddleware *middleware.CompanyFilterMiddleware,
 	customerHandler *handler.CustomerHandler,
 	projectHandler *handler.ProjectHandler,
 	offerHandler *handler.OfferHandler,
@@ -44,17 +46,18 @@ func NewRouter(
 	companyHandler *handler.CompanyHandler,
 ) *Router {
 	return &Router{
-		cfg:              cfg,
-		logger:           logger,
-		db:               db,
-		authMiddleware:   authMiddleware,
-		customerHandler:  customerHandler,
-		projectHandler:   projectHandler,
-		offerHandler:     offerHandler,
-		fileHandler:      fileHandler,
-		dashboardHandler: dashboardHandler,
-		authHandler:      authHandler,
-		companyHandler:   companyHandler,
+		cfg:                     cfg,
+		logger:                  logger,
+		db:                      db,
+		authMiddleware:          authMiddleware,
+		companyFilterMiddleware: companyFilterMiddleware,
+		customerHandler:         customerHandler,
+		projectHandler:          projectHandler,
+		offerHandler:            offerHandler,
+		fileHandler:             fileHandler,
+		dashboardHandler:        dashboardHandler,
+		authHandler:             authHandler,
+		companyHandler:          companyHandler,
 	}
 }
 
@@ -165,6 +168,7 @@ func (rt *Router) Setup() http.Handler {
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(rt.authMiddleware.Authenticate)
+			r.Use(rt.companyFilterMiddleware.Filter)
 
 			// Auth
 			r.Get("/auth/me", rt.authHandler.Me)

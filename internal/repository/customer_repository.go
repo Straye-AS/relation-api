@@ -23,7 +23,9 @@ func (r *CustomerRepository) Create(ctx context.Context, customer *domain.Custom
 
 func (r *CustomerRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Customer, error) {
 	var customer domain.Customer
-	err := r.db.WithContext(ctx).First(&customer, "id = ?", id).Error
+	query := r.db.WithContext(ctx).Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&customer).Error
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +45,9 @@ func (r *CustomerRepository) List(ctx context.Context, page, pageSize int, searc
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&domain.Customer{})
+
+	// Apply multi-tenant company filter
+	query = ApplyCompanyFilter(ctx, query)
 
 	if search != "" {
 		searchPattern := "%" + strings.ToLower(search) + "%"
@@ -79,16 +84,18 @@ func (r *CustomerRepository) GetOffersCount(ctx context.Context, customerID uuid
 
 func (r *CustomerRepository) Count(ctx context.Context) (int, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.Customer{}).Count(&count).Error
+	query := r.db.WithContext(ctx).Model(&domain.Customer{})
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Count(&count).Error
 	return int(count), err
 }
 
-func (r *CustomerRepository) Search(ctx context.Context, query string, limit int) ([]domain.Customer, error) {
+func (r *CustomerRepository) Search(ctx context.Context, searchQuery string, limit int) ([]domain.Customer, error) {
 	var customers []domain.Customer
-	searchPattern := "%" + strings.ToLower(query) + "%"
-	err := r.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern).
-		Limit(limit).
-		Find(&customers).Error
+	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
+	query := r.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Limit(limit).Find(&customers).Error
 	return customers, err
 }

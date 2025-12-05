@@ -13,6 +13,7 @@ import (
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
 	"github.com/straye-as/relation-api/internal/http/handler"
+	"github.com/straye-as/relation-api/internal/http/middleware"
 	"github.com/straye-as/relation-api/internal/http/router"
 	"github.com/straye-as/relation-api/internal/logger"
 	"github.com/straye-as/relation-api/internal/repository"
@@ -118,6 +119,7 @@ func run() error {
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, log)
+	companyFilterMiddleware := middleware.NewCompanyFilterMiddleware(log)
 
 	// Initialize handlers
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
@@ -134,6 +136,7 @@ func run() error {
 		log,
 		db,
 		authMiddleware,
+		companyFilterMiddleware,
 		customerHandler,
 		projectHandler,
 		offerHandler,

@@ -23,7 +23,9 @@ func (r *ProjectRepository) Create(ctx context.Context, project *domain.Project)
 
 func (r *ProjectRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Project, error) {
 	var project domain.Project
-	err := r.db.WithContext(ctx).Preload("Customer").First(&project, "id = ?", id).Error
+	query := r.db.WithContext(ctx).Preload("Customer").Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&project).Error
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +45,9 @@ func (r *ProjectRepository) List(ctx context.Context, page, pageSize int, custom
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&domain.Project{}).Preload("Customer")
+
+	// Apply multi-tenant company filter
+	query = ApplyCompanyFilter(ctx, query)
 
 	if customerID != nil {
 		query = query.Where("customer_id = ?", *customerID)
@@ -64,18 +69,19 @@ func (r *ProjectRepository) List(ctx context.Context, page, pageSize int, custom
 
 func (r *ProjectRepository) CountActive(ctx context.Context) (int, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("status = ?", domain.ProjectStatusActive).
-		Count(&count).Error
+	query := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("status = ?", domain.ProjectStatusActive)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Count(&count).Error
 	return int(count), err
 }
 
-func (r *ProjectRepository) Search(ctx context.Context, query string, limit int) ([]domain.Project, error) {
+func (r *ProjectRepository) Search(ctx context.Context, searchQuery string, limit int) ([]domain.Project, error) {
 	var projects []domain.Project
-	searchPattern := "%" + strings.ToLower(query) + "%"
-	err := r.db.WithContext(ctx).Preload("Customer").
-		Where("LOWER(name) LIKE ? OR LOWER(summary) LIKE ?", searchPattern, searchPattern).
-		Limit(limit).
-		Find(&projects).Error
+	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
+	query := r.db.WithContext(ctx).Preload("Customer").
+		Where("LOWER(name) LIKE ? OR LOWER(summary) LIKE ?", searchPattern, searchPattern)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Limit(limit).Find(&projects).Error
 	return projects, err
 }
