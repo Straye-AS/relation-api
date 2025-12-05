@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/config"
+	"github.com/straye-as/relation-api/internal/domain"
 	"go.uber.org/zap"
 )
 
@@ -32,12 +33,13 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		// Try API key first
 		if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
 			if m.validateAPIKey(apiKey) {
-				// Create system user context
+				// Create system user context with API service role
 				userCtx := &UserContext{
 					UserID:      uuid.MustParse("00000000-0000-0000-0000-000000000000"),
 					DisplayName: "System",
 					Email:       "system@straye.io",
-					Roles:       []string{"system", "admin"},
+					Roles:       []domain.UserRoleType{domain.RoleSuperAdmin, domain.RoleAPIService},
+					CompanyID:   domain.CompanyGruppen,
 				}
 				ctx := WithUserContext(r.Context(), userCtx)
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -75,7 +77,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 }
 
 // RequireRole middleware ensures user has specific role
-func (m *Middleware) RequireRole(roles ...string) func(http.Handler) http.Handler {
+func (m *Middleware) RequireRole(roles ...domain.UserRoleType) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userCtx, ok := FromContext(r.Context())
@@ -103,13 +105,33 @@ func (m *Middleware) RequireAdmin(next http.Handler) http.Handler {
 			return
 		}
 
-		if !userCtx.HasAnyRole("admin", "system") {
+		if !userCtx.IsCompanyAdmin() {
 			http.Error(w, "Forbidden: admin access required", http.StatusForbidden)
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequirePermission middleware ensures user has specific permission
+func (m *Middleware) RequirePermission(permission domain.PermissionType) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userCtx, ok := FromContext(r.Context())
+			if !ok {
+				http.Error(w, "Forbidden: no user context", http.StatusForbidden)
+				return
+			}
+
+			if !userCtx.HasPermission(permission) {
+				http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func (m *Middleware) validateAPIKey(key string) bool {

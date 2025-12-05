@@ -6,6 +6,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
+	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,26 +56,26 @@ func TestJWTValidator_ExtractRoles(t *testing.T) {
 	tests := []struct {
 		name     string
 		claims   jwt.MapClaims
-		expected []string
+		expected []domain.UserRoleType
 	}{
 		{
 			name: "array of roles",
 			claims: jwt.MapClaims{
 				"roles": []interface{}{"admin", "user"},
 			},
-			expected: []string{"admin", "user"},
+			expected: []domain.UserRoleType{"admin", "user"},
 		},
 		{
 			name: "single role as string",
 			claims: jwt.MapClaims{
 				"role": "admin",
 			},
-			expected: []string{"admin"},
+			expected: []domain.UserRoleType{"admin"},
 		},
 		{
 			name:     "no roles",
 			claims:   jwt.MapClaims{},
-			expected: []string{},
+			expected: []domain.UserRoleType{},
 		},
 	}
 
