@@ -616,14 +616,69 @@ type ProjectBudgetDTO struct {
 }
 
 type ActivityDTO struct {
-	ID          uuid.UUID    `json:"id"`
-	TargetType  ActivityType `json:"targetType"`
-	TargetID    uuid.UUID    `json:"targetId"`
-	Title       string       `json:"title"`
-	Body        string       `json:"body,omitempty"`
-	OccurredAt  string       `json:"occurredAt"`
-	CreatorName string       `json:"creatorName,omitempty"`
-	CreatedAt   string       `json:"createdAt"`
+	ID              uuid.UUID          `json:"id"`
+	TargetType      ActivityTargetType `json:"targetType"`
+	TargetID        uuid.UUID          `json:"targetId"`
+	Title           string             `json:"title"`
+	Body            string             `json:"body,omitempty"`
+	OccurredAt      string             `json:"occurredAt"`
+	CreatorName     string             `json:"creatorName,omitempty"`
+	CreatedAt       string             `json:"createdAt"`
+	ActivityType    ActivityType       `json:"activityType"`
+	Status          ActivityStatus     `json:"status"`
+	ScheduledAt     string             `json:"scheduledAt,omitempty"`
+	DueDate         string             `json:"dueDate,omitempty"`
+	CompletedAt     string             `json:"completedAt,omitempty"`
+	DurationMinutes *int               `json:"durationMinutes,omitempty"`
+	Priority        int                `json:"priority"`
+	IsPrivate       bool               `json:"isPrivate"`
+	CreatorID       string             `json:"creatorId,omitempty"`
+	AssignedToID    string             `json:"assignedToId,omitempty"`
+	CompanyID       *CompanyID         `json:"companyId,omitempty"`
+}
+
+// UserRole DTOs
+
+type UserRoleDTO struct {
+	ID        uuid.UUID    `json:"id"`
+	UserID    string       `json:"userId"`
+	Role      UserRoleType `json:"role"`
+	CompanyID *CompanyID   `json:"companyId,omitempty"`
+	GrantedBy string       `json:"grantedBy,omitempty"`
+	GrantedAt string       `json:"grantedAt"`
+	ExpiresAt string       `json:"expiresAt,omitempty"`
+	IsActive  bool         `json:"isActive"`
+}
+
+type UserPermissionDTO struct {
+	ID         uuid.UUID      `json:"id"`
+	UserID     string         `json:"userId"`
+	Permission PermissionType `json:"permission"`
+	CompanyID  *CompanyID     `json:"companyId,omitempty"`
+	IsGranted  bool           `json:"isGranted"`
+	GrantedBy  string         `json:"grantedBy,omitempty"`
+	GrantedAt  string         `json:"grantedAt"`
+	ExpiresAt  string         `json:"expiresAt,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
+}
+
+type AuditLogDTO struct {
+	ID          uuid.UUID   `json:"id"`
+	UserID      string      `json:"userId,omitempty"`
+	UserEmail   string      `json:"userEmail,omitempty"`
+	UserName    string      `json:"userName,omitempty"`
+	Action      AuditAction `json:"action"`
+	EntityType  string      `json:"entityType"`
+	EntityID    *uuid.UUID  `json:"entityId,omitempty"`
+	EntityName  string      `json:"entityName,omitempty"`
+	CompanyID   *CompanyID  `json:"companyId,omitempty"`
+	OldValues   interface{} `json:"oldValues,omitempty"`
+	NewValues   interface{} `json:"newValues,omitempty"`
+	Changes     interface{} `json:"changes,omitempty"`
+	IPAddress   string      `json:"ipAddress,omitempty"`
+	UserAgent   string      `json:"userAgent,omitempty"`
+	RequestID   string      `json:"requestId,omitempty"`
+	PerformedAt string      `json:"performedAt"`
 }
 
 type FileDTO struct {

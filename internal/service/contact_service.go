@@ -70,7 +70,7 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeContact,
+			TargetType:  domain.ActivityTargetContact,
 			TargetID:    contact.ID,
 			Title:       "Contact created",
 			Body:        fmt.Sprintf("Contact '%s' was created", contact.FullName()),
@@ -154,7 +154,7 @@ func (s *ContactService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeContact,
+			TargetType:  domain.ActivityTargetContact,
 			TargetID:    contact.ID,
 			Title:       "Contact updated",
 			Body:        fmt.Sprintf("Contact '%s' was updated", contact.FullName()),

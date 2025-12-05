@@ -52,7 +52,7 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeCustomer,
+			TargetType:  domain.ActivityTargetCustomer,
 			TargetID:    customer.ID,
 			Title:       "Customer created",
 			Body:        fmt.Sprintf("Customer '%s' was created", customer.Name),
@@ -105,7 +105,7 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeCustomer,
+			TargetType:  domain.ActivityTargetCustomer,
 			TargetID:    customer.ID,
 			Title:       "Customer updated",
 			Body:        fmt.Sprintf("Customer '%s' was updated", customer.Name),

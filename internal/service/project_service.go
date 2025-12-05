@@ -63,7 +63,7 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeProject,
+			TargetType:  domain.ActivityTargetProject,
 			TargetID:    project.ID,
 			Title:       "Project created",
 			Body:        fmt.Sprintf("Project '%s' was created", project.Name),
@@ -113,7 +113,7 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeProject,
+			TargetType:  domain.ActivityTargetProject,
 			TargetID:    project.ID,
 			Title:       "Project updated",
 			Body:        fmt.Sprintf("Project '%s' was updated", project.Name),
@@ -177,7 +177,7 @@ func (s *ProjectService) GetBudget(ctx context.Context, id uuid.UUID) (*domain.P
 }
 
 func (s *ProjectService) GetActivities(ctx context.Context, id uuid.UUID, limit int) ([]domain.ActivityDTO, error) {
-	activities, err := s.activityRepo.ListByTarget(ctx, domain.ActivityTypeProject, id, limit)
+	activities, err := s.activityRepo.ListByTarget(ctx, domain.ActivityTargetProject, id, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activities: %w", err)
 	}

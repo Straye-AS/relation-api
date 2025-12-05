@@ -145,20 +145,26 @@ func TestToActivityDTO(t *testing.T) {
 			ID:        uuid.New(),
 			CreatedAt: time.Now(),
 		},
-		TargetType:  domain.ActivityTypeCustomer,
-		TargetID:    targetID,
-		Title:       "Customer created",
-		Body:        "New customer was created",
-		OccurredAt:  occurredAt,
-		CreatorName: "Test User",
+		TargetType:   domain.ActivityTargetCustomer,
+		TargetID:     targetID,
+		Title:        "Customer created",
+		Body:         "New customer was created",
+		OccurredAt:   occurredAt,
+		CreatorName:  "Test User",
+		ActivityType: domain.ActivityTypeNote,
+		Status:       domain.ActivityStatusCompleted,
+		Priority:     0,
+		IsPrivate:    false,
 	}
 
 	dto := mapper.ToActivityDTO(activity)
 
 	assert.Equal(t, activity.ID, dto.ID)
-	assert.Equal(t, domain.ActivityTypeCustomer, dto.TargetType)
+	assert.Equal(t, domain.ActivityTargetCustomer, dto.TargetType)
 	assert.Equal(t, targetID, dto.TargetID)
 	assert.Equal(t, "Customer created", dto.Title)
 	assert.Equal(t, "New customer was created", dto.Body)
 	assert.Equal(t, "Test User", dto.CreatorName)
+	assert.Equal(t, domain.ActivityTypeNote, dto.ActivityType)
+	assert.Equal(t, domain.ActivityStatusCompleted, dto.Status)
 }
