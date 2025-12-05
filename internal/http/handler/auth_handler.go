@@ -31,11 +31,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	// Upsert user in database
 	user := &domain.User{
+		ID:          userCtx.UserID.String(),
 		DisplayName: userCtx.DisplayName,
 		Email:       userCtx.Email,
 		Roles:       userCtx.Roles,
 	}
-	user.ID = userCtx.UserID
 
 	if err := h.userRepo.Upsert(r.Context(), user); err != nil {
 		h.logger.Warn("failed to upsert user", zap.Error(err))
