@@ -34,4 +34,3 @@ func respondValidationError(w http.ResponseWriter, err error) {
 		"errors": errors,
 	})
 }
-

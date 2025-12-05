@@ -53,32 +53,40 @@ func main() {
 }
 
 func run() error {
-	// Load configuration
-	cfg, err := config.Load()
+	ctx := context.Background()
+
+	// Load basic configuration first (for logging setup)
+	basicCfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Initialize logger
-	log, err := logger.NewLogger(&cfg.Logging, &cfg.App)
+	log, err := logger.NewLogger(&basicCfg.Logging, &basicCfg.App)
 	if err != nil {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
 	defer log.Sync()
 
 	log.Info("Starting application",
-		zap.String("app", cfg.App.Name),
-		zap.String("env", cfg.App.Environment),
-		zap.Int("port", cfg.App.Port),
+		zap.String("app", basicCfg.App.Name),
+		zap.String("env", basicCfg.App.Environment),
+		zap.Int("port", basicCfg.App.Port),
 	)
 
-	// Connect to database
-	db, err := database.NewDatabase(&cfg.Database)
+	// Load full configuration with secrets
+	// In development: uses environment variables
+	// In staging/production: fetches from Azure Key Vault
+	cfg, err := config.LoadWithSecrets(ctx, log)
+	if err != nil {
+		return fmt.Errorf("failed to load secrets: %w", err)
+	}
+
+	// Connect to database with retry logic
+	db, err := database.NewDatabase(&cfg.Database, log)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-
-	log.Info("Connected to database")
 
 	// Initialize storage
 	fileStorage, err := storage.NewStorage(&cfg.Storage)
@@ -124,6 +132,7 @@ func run() error {
 	rt := router.NewRouter(
 		cfg,
 		log,
+		db,
 		authMiddleware,
 		customerHandler,
 		projectHandler,

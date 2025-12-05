@@ -1,21 +1,25 @@
 package router
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
+	"github.com/straye-as/relation-api/internal/database"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/http/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type Router struct {
 	cfg              *config.Config
 	logger           *zap.Logger
+	db               *gorm.DB
 	authMiddleware   *auth.Middleware
 	customerHandler  *handler.CustomerHandler
 	projectHandler   *handler.ProjectHandler
@@ -29,6 +33,7 @@ type Router struct {
 func NewRouter(
 	cfg *config.Config,
 	logger *zap.Logger,
+	db *gorm.DB,
 	authMiddleware *auth.Middleware,
 	customerHandler *handler.CustomerHandler,
 	projectHandler *handler.ProjectHandler,
@@ -41,6 +46,7 @@ func NewRouter(
 	return &Router{
 		cfg:              cfg,
 		logger:           logger,
+		db:               db,
 		authMiddleware:   authMiddleware,
 		customerHandler:  customerHandler,
 		projectHandler:   projectHandler,
@@ -70,10 +76,78 @@ func (rt *Router) Setup() http.Handler {
 		MaxAge:           300,
 	}))
 
-	// Health check
+	// Health check (basic liveness probe)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+	})
+
+	// Database health check (readiness probe with detailed stats)
+	r.Get("/health/db", func(w http.ResponseWriter, r *http.Request) {
+		stats, err := database.HealthCheckWithStats(rt.db)
+		if err != nil {
+			rt.logger.Error("Database health check failed", zap.Error(err))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "unhealthy",
+				"error":   err.Error(),
+				"service": "database",
+			})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "healthy",
+			"service": "database",
+			"stats": map[string]interface{}{
+				"max_open_connections": stats.MaxOpenConnections,
+				"open_connections":     stats.OpenConnections,
+				"in_use":               stats.InUse,
+				"idle":                 stats.Idle,
+				"wait_count":           stats.WaitCount,
+				"wait_duration_ms":     stats.WaitDuration.Milliseconds(),
+				"max_idle_closed":      stats.MaxIdleClosed,
+				"max_lifetime_closed":  stats.MaxLifetimeClosed,
+			},
+		})
+	})
+
+	// Combined readiness check (checks all dependencies)
+	r.Get("/health/ready", func(w http.ResponseWriter, r *http.Request) {
+		checks := make(map[string]interface{})
+		allHealthy := true
+
+		// Check database
+		if err := database.HealthCheck(rt.db); err != nil {
+			rt.logger.Error("Database health check failed", zap.Error(err))
+			checks["database"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+			allHealthy = false
+		} else {
+			checks["database"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if allHealthy {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "healthy",
+				"checks": checks,
+			})
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "unhealthy",
+				"checks": checks,
+			})
+		}
 	})
 
 	// Swagger documentation
