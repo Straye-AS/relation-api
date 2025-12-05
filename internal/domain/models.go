@@ -27,32 +27,38 @@ const (
 	CompanyMontasje   CompanyID = "montasje"
 )
 
-// Company represents a Straye group company
+// Company represents a Straye group company (stored in database)
 type Company struct {
-	ID        CompanyID `json:"id"`
-	Name      string    `json:"name"`
-	ShortName string    `json:"shortName"`
-	Color     string    `json:"color"`
-	Logo      string    `json:"logo,omitempty"`
+	ID        CompanyID `gorm:"type:varchar(50);primaryKey" json:"id"`
+	Name      string    `gorm:"type:varchar(200);not null" json:"name"`
+	ShortName string    `gorm:"type:varchar(50);not null;column:short_name" json:"shortName"`
+	OrgNumber string    `gorm:"type:varchar(20);column:org_number" json:"orgNumber,omitempty"`
+	Color     string    `gorm:"type:varchar(20);not null;default:'#000000'" json:"color"`
+	Logo      string    `gorm:"type:varchar(500)" json:"logo,omitempty"`
+	IsActive  bool      `gorm:"not null;default:true;column:is_active" json:"isActive"`
+	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 // Customer represents an organization in the CRM
 type Customer struct {
 	BaseModel
-	Name          string    `gorm:"type:varchar(200);not null;index"`
-	OrgNumber     string    `gorm:"type:varchar(20);unique;index"`
-	Email         string    `gorm:"type:varchar(255);not null"`
-	Phone         string    `gorm:"type:varchar(50);not null"`
-	Address       string    `gorm:"type:varchar(500)"`
-	City          string    `gorm:"type:varchar(100)"`
-	PostalCode    string    `gorm:"type:varchar(20)"`
-	Country       string    `gorm:"type:varchar(100);not null;default:'Norway'"`
-	ContactPerson string    `gorm:"type:varchar(200)"`
-	ContactEmail  string    `gorm:"type:varchar(255)"`
-	ContactPhone  string    `gorm:"type:varchar(50)"`
-	Contacts      []Contact `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
-	Projects      []Project `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
-	Offers        []Offer   `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Name          string     `gorm:"type:varchar(200);not null;index"`
+	OrgNumber     string     `gorm:"type:varchar(20);unique;index"`
+	Email         string     `gorm:"type:varchar(255);not null"`
+	Phone         string     `gorm:"type:varchar(50);not null"`
+	Address       string     `gorm:"type:varchar(500)"`
+	City          string     `gorm:"type:varchar(100)"`
+	PostalCode    string     `gorm:"type:varchar(20)"`
+	Country       string     `gorm:"type:varchar(100);not null;default:'Norway'"`
+	ContactPerson string     `gorm:"type:varchar(200)"`
+	ContactEmail  string     `gorm:"type:varchar(255)"`
+	ContactPhone  string     `gorm:"type:varchar(50)"`
+	CompanyID     *CompanyID `gorm:"type:varchar(50);column:company_id;index"`
+	Company       *Company   `gorm:"foreignKey:CompanyID"`
+	Contacts      []Contact  `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Projects      []Project  `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Offers        []Offer    `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
 }
 
 // Contact represents an individual person
@@ -209,8 +215,27 @@ type Notification struct {
 
 // User represents a user in the system
 type User struct {
-	BaseModel
-	DisplayName string   `gorm:"type:varchar(200);not null"`
-	Email       string   `gorm:"type:varchar(255);not null;unique"`
-	Roles       []string `gorm:"type:text[];not null"`
+	ID          string         `gorm:"type:varchar(100);primaryKey" json:"id"`
+	AzureADOID  string         `gorm:"type:varchar(100);unique;column:azure_ad_oid" json:"azureAdOid,omitempty"`
+	Email       string         `gorm:"type:varchar(255);not null;unique" json:"email"`
+	FirstName   string         `gorm:"type:varchar(100);column:first_name" json:"firstName,omitempty"`
+	LastName    string         `gorm:"type:varchar(100);column:last_name" json:"lastName,omitempty"`
+	DisplayName string         `gorm:"type:varchar(200);not null;column:name" json:"displayName"`
+	Roles       pq.StringArray `gorm:"type:text[];not null" json:"roles"`
+	Department  string         `gorm:"type:varchar(100)" json:"department,omitempty"`
+	Avatar      string         `gorm:"type:varchar(500)" json:"avatar,omitempty"`
+	CompanyID   *CompanyID     `gorm:"type:varchar(50);column:company_id" json:"companyId,omitempty"`
+	Company     *Company       `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
+	IsActive    bool           `gorm:"not null;default:true;column:is_active" json:"isActive"`
+	LastLoginAt *time.Time     `gorm:"column:last_login_at" json:"lastLoginAt,omitempty"`
+	CreatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+}
+
+// FullName returns the user's full name, or display name if first/last not set
+func (u *User) FullName() string {
+	if u.FirstName != "" && u.LastName != "" {
+		return u.FirstName + " " + u.LastName
+	}
+	return u.DisplayName
 }

@@ -125,12 +125,12 @@ func ToUserDTO(user *domain.User) domain.UserDTO {
 	}
 
 	return domain.UserDTO{
-		ID:         user.ID.String(),
+		ID:         user.ID,
 		Name:       user.DisplayName,
 		Email:      user.Email,
 		Roles:      roles,
-		Department: "",
-		Avatar:     "",
+		Department: user.Department,
+		Avatar:     user.Avatar,
 	}
 }
 
