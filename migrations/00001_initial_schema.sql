@@ -62,8 +62,6 @@ CREATE TABLE projects (
     manager_id VARCHAR(100) NOT NULL,
     manager_name VARCHAR(200),
     team_members TEXT [],
-    teams_channel_id VARCHAR(200),
-    teams_channel_url VARCHAR(500),
     offer_id UUID REFERENCES offers(id) ON DELETE
     SET NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

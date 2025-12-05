@@ -168,26 +168,64 @@ type BudgetSummaryDTO struct {
 }
 
 type ProjectDTO struct {
-	ID              uuid.UUID     `json:"id"`
-	Name            string        `json:"name"`
-	Summary         string        `json:"summary,omitempty"`
-	Description     string        `json:"description,omitempty"`
-	CustomerID      uuid.UUID     `json:"customerId"`
-	CustomerName    string        `json:"customerName,omitempty"`
-	CompanyID       CompanyID     `json:"companyId"`
-	Status          ProjectStatus `json:"status"`
-	StartDate       string        `json:"startDate"`         // ISO 8601
-	EndDate         string        `json:"endDate,omitempty"` // ISO 8601
-	Budget          float64       `json:"budget"`
-	Spent           float64       `json:"spent"`
-	ManagerID       string        `json:"managerId"`
-	ManagerName     string        `json:"managerName,omitempty"`
-	TeamMembers     []string      `json:"teamMembers,omitempty"`
-	TeamsChannelID  string        `json:"teamsChannelId,omitempty"`
-	TeamsChannelURL string        `json:"teamsChannelUrl,omitempty"`
-	CreatedAt       string        `json:"createdAt"` // ISO 8601
-	UpdatedAt       string        `json:"updatedAt"` // ISO 8601
-	OfferID         *uuid.UUID    `json:"offerId,omitempty"`
+	ID                      uuid.UUID      `json:"id"`
+	Name                    string         `json:"name"`
+	Summary                 string         `json:"summary,omitempty"`
+	Description             string         `json:"description,omitempty"`
+	CustomerID              uuid.UUID      `json:"customerId"`
+	CustomerName            string         `json:"customerName,omitempty"`
+	CompanyID               CompanyID      `json:"companyId"`
+	Status                  ProjectStatus  `json:"status"`
+	StartDate               string         `json:"startDate"`         // ISO 8601
+	EndDate                 string         `json:"endDate,omitempty"` // ISO 8601
+	Budget                  float64        `json:"budget"`
+	Spent                   float64        `json:"spent"`
+	ManagerID               string         `json:"managerId"`
+	ManagerName             string         `json:"managerName,omitempty"`
+	TeamMembers             []string       `json:"teamMembers,omitempty"`
+	CreatedAt               string         `json:"createdAt"` // ISO 8601
+	UpdatedAt               string         `json:"updatedAt"` // ISO 8601
+	OfferID                 *uuid.UUID     `json:"offerId,omitempty"`
+	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
+	HasDetailedBudget       bool           `json:"hasDetailedBudget"`
+	Health                  *ProjectHealth `json:"health,omitempty"`
+	CompletionPercent       *float64       `json:"completionPercent,omitempty"`
+	EstimatedCompletionDate string         `json:"estimatedCompletionDate,omitempty"`
+}
+
+// Project Actual Cost DTOs
+
+type ProjectActualCostDTO struct {
+	ID                uuid.UUID  `json:"id"`
+	ProjectID         uuid.UUID  `json:"projectId"`
+	CostType          CostType   `json:"costType"`
+	Description       string     `json:"description"`
+	Amount            float64    `json:"amount"`
+	Currency          string     `json:"currency"`
+	CostDate          string     `json:"costDate"`
+	PostingDate       string     `json:"postingDate,omitempty"`
+	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
+	ERPSource         ERPSource  `json:"erpSource"`
+	ERPReference      string     `json:"erpReference,omitempty"`
+	ERPTransactionID  string     `json:"erpTransactionId,omitempty"`
+	ERPSyncedAt       string     `json:"erpSyncedAt,omitempty"`
+	IsApproved        bool       `json:"isApproved"`
+	ApprovedByID      string     `json:"approvedById,omitempty"`
+	ApprovedAt        string     `json:"approvedAt,omitempty"`
+	Notes             string     `json:"notes,omitempty"`
+	CreatedAt         string     `json:"createdAt"`
+	UpdatedAt         string     `json:"updatedAt"`
+}
+
+type ProjectCostSummaryDTO struct {
+	ProjectID         uuid.UUID `json:"projectId"`
+	ProjectName       string    `json:"projectName"`
+	Budget            float64   `json:"budget"`
+	Spent             float64   `json:"spent"`
+	ActualCosts       float64   `json:"actualCosts"`
+	RemainingBudget   float64   `json:"remainingBudget"`
+	BudgetUsedPercent float64   `json:"budgetUsedPercent"`
+	CostEntryCount    int       `json:"costEntryCount"`
 }
 
 type UserDTO struct {
@@ -400,37 +438,43 @@ type UpdateDealStageRequest struct {
 }
 
 type CreateProjectRequest struct {
-	Name            string        `json:"name" validate:"required,max=200"`
-	Summary         string        `json:"summary,omitempty"`
-	Description     string        `json:"description,omitempty"`
-	CustomerID      uuid.UUID     `json:"customerId" validate:"required"`
-	CompanyID       CompanyID     `json:"companyId" validate:"required"`
-	Status          ProjectStatus `json:"status" validate:"required"`
-	StartDate       time.Time     `json:"startDate" validate:"required"`
-	EndDate         *time.Time    `json:"endDate,omitempty"`
-	Budget          float64       `json:"budget" validate:"gte=0"`
-	Spent           float64       `json:"spent" validate:"gte=0"`
-	ManagerID       string        `json:"managerId" validate:"required"`
-	TeamMembers     []string      `json:"teamMembers,omitempty"`
-	TeamsChannelID  string        `json:"teamsChannelId,omitempty"`
-	TeamsChannelURL string        `json:"teamsChannelUrl,omitempty"`
-	OfferID         *uuid.UUID    `json:"offerId,omitempty"`
+	Name                    string         `json:"name" validate:"required,max=200"`
+	Summary                 string         `json:"summary,omitempty"`
+	Description             string         `json:"description,omitempty"`
+	CustomerID              uuid.UUID      `json:"customerId" validate:"required"`
+	CompanyID               CompanyID      `json:"companyId" validate:"required"`
+	Status                  ProjectStatus  `json:"status" validate:"required"`
+	StartDate               time.Time      `json:"startDate" validate:"required"`
+	EndDate                 *time.Time     `json:"endDate,omitempty"`
+	Budget                  float64        `json:"budget" validate:"gte=0"`
+	Spent                   float64        `json:"spent" validate:"gte=0"`
+	ManagerID               string         `json:"managerId" validate:"required"`
+	TeamMembers             []string       `json:"teamMembers,omitempty"`
+	OfferID                 *uuid.UUID     `json:"offerId,omitempty"`
+	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
+	HasDetailedBudget       bool           `json:"hasDetailedBudget,omitempty"`
+	Health                  *ProjectHealth `json:"health,omitempty"`
+	CompletionPercent       *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
+	EstimatedCompletionDate *time.Time     `json:"estimatedCompletionDate,omitempty"`
 }
 
 type UpdateProjectRequest struct {
-	Name            string        `json:"name" validate:"required,max=200"`
-	Summary         string        `json:"summary,omitempty"`
-	Description     string        `json:"description,omitempty"`
-	CompanyID       CompanyID     `json:"companyId" validate:"required"`
-	Status          ProjectStatus `json:"status" validate:"required"`
-	StartDate       time.Time     `json:"startDate" validate:"required"`
-	EndDate         *time.Time    `json:"endDate,omitempty"`
-	Budget          float64       `json:"budget" validate:"gte=0"`
-	Spent           float64       `json:"spent" validate:"gte=0"`
-	ManagerID       string        `json:"managerId" validate:"required"`
-	TeamMembers     []string      `json:"teamMembers,omitempty"`
-	TeamsChannelID  string        `json:"teamsChannelId,omitempty"`
-	TeamsChannelURL string        `json:"teamsChannelUrl,omitempty"`
+	Name                    string         `json:"name" validate:"required,max=200"`
+	Summary                 string         `json:"summary,omitempty"`
+	Description             string         `json:"description,omitempty"`
+	CompanyID               CompanyID      `json:"companyId" validate:"required"`
+	Status                  ProjectStatus  `json:"status" validate:"required"`
+	StartDate               time.Time      `json:"startDate" validate:"required"`
+	EndDate                 *time.Time     `json:"endDate,omitempty"`
+	Budget                  float64        `json:"budget" validate:"gte=0"`
+	Spent                   float64        `json:"spent" validate:"gte=0"`
+	ManagerID               string         `json:"managerId" validate:"required"`
+	TeamMembers             []string       `json:"teamMembers,omitempty"`
+	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
+	HasDetailedBudget       *bool          `json:"hasDetailedBudget,omitempty"`
+	Health                  *ProjectHealth `json:"health,omitempty"`
+	CompletionPercent       *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
+	EstimatedCompletionDate *time.Time     `json:"estimatedCompletionDate,omitempty"`
 }
 
 type CreateOfferRequest struct {
@@ -502,6 +546,41 @@ type UpdateBudgetDimensionRequest struct {
 	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
 	Unit                string   `json:"unit,omitempty" validate:"max=50"`
 	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
+}
+
+// Project Actual Cost Request DTOs
+
+type CreateProjectActualCostRequest struct {
+	ProjectID         uuid.UUID  `json:"projectId" validate:"required"`
+	CostType          CostType   `json:"costType" validate:"required"`
+	Description       string     `json:"description" validate:"required,max=500"`
+	Amount            float64    `json:"amount" validate:"required"`
+	Currency          string     `json:"currency,omitempty" validate:"max=3"`
+	CostDate          time.Time  `json:"costDate" validate:"required"`
+	PostingDate       *time.Time `json:"postingDate,omitempty"`
+	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
+	ERPSource         ERPSource  `json:"erpSource,omitempty"`
+	ERPReference      string     `json:"erpReference,omitempty" validate:"max=100"`
+	ERPTransactionID  string     `json:"erpTransactionId,omitempty" validate:"max=100"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+type UpdateProjectActualCostRequest struct {
+	CostType          CostType   `json:"costType" validate:"required"`
+	Description       string     `json:"description" validate:"required,max=500"`
+	Amount            float64    `json:"amount" validate:"required"`
+	Currency          string     `json:"currency,omitempty" validate:"max=3"`
+	CostDate          time.Time  `json:"costDate" validate:"required"`
+	PostingDate       *time.Time `json:"postingDate,omitempty"`
+	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
+	ERPSource         ERPSource  `json:"erpSource,omitempty"`
+	ERPReference      string     `json:"erpReference,omitempty" validate:"max=100"`
+	ERPTransactionID  string     `json:"erpTransactionId,omitempty" validate:"max=100"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+type ApproveProjectActualCostRequest struct {
+	IsApproved bool `json:"isApproved" validate:"required"`
 }
 
 // Additional DTOs for compatibility

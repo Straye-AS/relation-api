@@ -136,29 +136,35 @@ func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHis
 // ToProjectDTO converts Project to ProjectDTO
 func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 	dto := domain.ProjectDTO{
-		ID:              project.ID,
-		Name:            project.Name,
-		Summary:         project.Summary,
-		Description:     project.Description,
-		CustomerID:      project.CustomerID,
-		CustomerName:    project.CustomerName,
-		CompanyID:       project.CompanyID,
-		Status:          project.Status,
-		StartDate:       project.StartDate.Format("2006-01-02T15:04:05Z"),
-		Budget:          project.Budget,
-		Spent:           project.Spent,
-		ManagerID:       project.ManagerID,
-		ManagerName:     project.ManagerName,
-		TeamMembers:     project.TeamMembers,
-		TeamsChannelID:  project.TeamsChannelID,
-		TeamsChannelURL: project.TeamsChannelURL,
-		CreatedAt:       project.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:       project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		OfferID:         project.OfferID,
+		ID:                project.ID,
+		Name:              project.Name,
+		Summary:           project.Summary,
+		Description:       project.Description,
+		CustomerID:        project.CustomerID,
+		CustomerName:      project.CustomerName,
+		CompanyID:         project.CompanyID,
+		Status:            project.Status,
+		StartDate:         project.StartDate.Format("2006-01-02T15:04:05Z"),
+		Budget:            project.Budget,
+		Spent:             project.Spent,
+		ManagerID:         project.ManagerID,
+		ManagerName:       project.ManagerName,
+		TeamMembers:       project.TeamMembers,
+		CreatedAt:         project.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:         project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		OfferID:           project.OfferID,
+		DealID:            project.DealID,
+		HasDetailedBudget: project.HasDetailedBudget,
+		Health:            project.Health,
+		CompletionPercent: project.CompletionPercent,
 	}
 
 	if project.EndDate != nil {
 		dto.EndDate = project.EndDate.Format("2006-01-02T15:04:05Z")
+	}
+
+	if project.EstimatedCompletionDate != nil {
+		dto.EstimatedCompletionDate = project.EstimatedCompletionDate.Format("2006-01-02")
 	}
 
 	return dto
@@ -269,6 +275,67 @@ func ToBudgetSummaryDTO(parentType domain.BudgetParentType, parentID uuid.UUID, 
 		TotalRevenue:         totalRevenue,
 		OverallMarginPercent: overallMargin,
 		TotalProfit:          totalRevenue - totalCost,
+	}
+}
+
+// ToProjectActualCostDTO converts ProjectActualCost to ProjectActualCostDTO
+func ToProjectActualCostDTO(cost *domain.ProjectActualCost) domain.ProjectActualCostDTO {
+	dto := domain.ProjectActualCostDTO{
+		ID:                cost.ID,
+		ProjectID:         cost.ProjectID,
+		CostType:          cost.CostType,
+		Description:       cost.Description,
+		Amount:            cost.Amount,
+		Currency:          cost.Currency,
+		CostDate:          cost.CostDate.Format("2006-01-02"),
+		BudgetDimensionID: cost.BudgetDimensionID,
+		ERPSource:         cost.ERPSource,
+		ERPReference:      cost.ERPReference,
+		ERPTransactionID:  cost.ERPTransactionID,
+		IsApproved:        cost.IsApproved,
+		ApprovedByID:      cost.ApprovedByID,
+		Notes:             cost.Notes,
+		CreatedAt:         cost.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:         cost.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+
+	if cost.PostingDate != nil {
+		dto.PostingDate = cost.PostingDate.Format("2006-01-02")
+	}
+
+	if cost.ERPSyncedAt != nil {
+		dto.ERPSyncedAt = cost.ERPSyncedAt.Format("2006-01-02T15:04:05Z")
+	}
+
+	if cost.ApprovedAt != nil {
+		dto.ApprovedAt = cost.ApprovedAt.Format("2006-01-02T15:04:05Z")
+	}
+
+	return dto
+}
+
+// ToProjectCostSummaryDTO creates a cost summary DTO for a project
+func ToProjectCostSummaryDTO(project *domain.Project, actualCosts []domain.ProjectActualCost) domain.ProjectCostSummaryDTO {
+	totalActualCosts := 0.0
+	for _, cost := range actualCosts {
+		totalActualCosts += cost.Amount
+	}
+
+	remainingBudget := project.Budget - totalActualCosts
+	budgetUsedPercent := 0.0
+	if project.Budget > 0 {
+		budgetUsedPercent = (totalActualCosts / project.Budget) * 100
+	}
+
+	return domain.ProjectCostSummaryDTO{
+		ProjectID:         project.ID,
+		ProjectName:       project.Name,
+		Budget:            project.Budget,
+		Spent:             project.Spent,
+		ActualCosts:       totalActualCosts,
+		RemainingBudget:   remainingBudget,
+		BudgetUsedPercent: budgetUsedPercent,
+		CostEntryCount:    len(actualCosts),
 	}
 }
 

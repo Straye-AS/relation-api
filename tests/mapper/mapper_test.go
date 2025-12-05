@@ -57,21 +57,26 @@ func TestToContactDTO(t *testing.T) {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
-		CustomerID: &customerID,
-		Name:       "John Doe",
-		Email:      "john.doe@example.com",
-		Phone:      "+1234567890",
-		Role:       "CEO",
+		FirstName:         "John",
+		LastName:          "Doe",
+		Email:             "john.doe@example.com",
+		Phone:             "+1234567890",
+		Title:             "CEO",
+		PrimaryCustomerID: &customerID,
+		IsActive:          true,
 	}
 
 	dto := mapper.ToContactDTO(contact)
 
 	assert.Equal(t, contact.ID, dto.ID)
-	assert.Equal(t, &customerID, dto.CustomerID)
-	assert.Equal(t, "John Doe", dto.Name)
+	assert.Equal(t, "John", dto.FirstName)
+	assert.Equal(t, "Doe", dto.LastName)
+	assert.Equal(t, "John Doe", dto.FullName)
 	assert.Equal(t, "john.doe@example.com", dto.Email)
 	assert.Equal(t, "+1234567890", dto.Phone)
-	assert.Equal(t, "CEO", dto.Role)
+	assert.Equal(t, "CEO", dto.Title)
+	assert.Equal(t, &customerID, dto.PrimaryCustomerID)
+	assert.True(t, dto.IsActive)
 }
 
 func TestToProjectBudgetDTO(t *testing.T) {

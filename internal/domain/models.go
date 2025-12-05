@@ -170,28 +170,91 @@ const (
 	ProjectStatusCancelled ProjectStatus = "cancelled"
 )
 
+// ProjectHealth represents the health status of a project
+type ProjectHealth string
+
+const (
+	ProjectHealthOnTrack    ProjectHealth = "on_track"
+	ProjectHealthAtRisk     ProjectHealth = "at_risk"
+	ProjectHealthDelayed    ProjectHealth = "delayed"
+	ProjectHealthOverBudget ProjectHealth = "over_budget"
+)
+
 // Project represents work being performed for a customer
 type Project struct {
 	BaseModel
-	Name            string         `gorm:"type:varchar(200);not null;index"`
-	Summary         string         `gorm:"type:varchar(500)"`
-	Description     string         `gorm:"type:text"`
-	CustomerID      uuid.UUID      `gorm:"type:uuid;not null;index"`
-	Customer        *Customer      `gorm:"foreignKey:CustomerID"`
-	CustomerName    string         `gorm:"type:varchar(200)"`
-	CompanyID       CompanyID      `gorm:"type:varchar(50);not null;index"`
-	Status          ProjectStatus  `gorm:"type:varchar(50);not null;index"`
-	StartDate       time.Time      `gorm:"type:date;not null"`
-	EndDate         *time.Time     `gorm:"type:date"`
-	Budget          float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	Spent           float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	ManagerID       string         `gorm:"type:varchar(100);not null"`
-	ManagerName     string         `gorm:"type:varchar(200)"`
-	TeamMembers     pq.StringArray `gorm:"type:text[]"`
-	TeamsChannelID  string         `gorm:"type:varchar(200)"`
-	TeamsChannelURL string         `gorm:"type:varchar(500)"`
-	OfferID         *uuid.UUID     `gorm:"type:uuid;index"`
-	Offer           *Offer         `gorm:"foreignKey:OfferID"`
+	Name                    string         `gorm:"type:varchar(200);not null;index"`
+	Summary                 string         `gorm:"type:varchar(500)"`
+	Description             string         `gorm:"type:text"`
+	CustomerID              uuid.UUID      `gorm:"type:uuid;not null;index"`
+	Customer                *Customer      `gorm:"foreignKey:CustomerID"`
+	CustomerName            string         `gorm:"type:varchar(200)"`
+	CompanyID               CompanyID      `gorm:"type:varchar(50);not null;index"`
+	Status                  ProjectStatus  `gorm:"type:varchar(50);not null;index"`
+	StartDate               time.Time      `gorm:"type:date;not null"`
+	EndDate                 *time.Time     `gorm:"type:date"`
+	Budget                  float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	ManagerID               string         `gorm:"type:varchar(100);not null"`
+	ManagerName             string         `gorm:"type:varchar(200)"`
+	TeamMembers             pq.StringArray `gorm:"type:text[]"`
+	OfferID                 *uuid.UUID     `gorm:"type:uuid;index"`
+	Offer                   *Offer         `gorm:"foreignKey:OfferID"`
+	DealID                  *uuid.UUID     `gorm:"type:uuid;index;column:deal_id"`
+	Deal                    *Deal          `gorm:"foreignKey:DealID"`
+	HasDetailedBudget       bool           `gorm:"not null;default:false;column:has_detailed_budget"`
+	Health                  *ProjectHealth `gorm:"type:project_health;default:'on_track'"`
+	CompletionPercent       *float64       `gorm:"type:decimal(5,2);default:0;column:completion_percent"`
+	EstimatedCompletionDate *time.Time     `gorm:"type:date;column:estimated_completion_date"`
+}
+
+// ERPSource represents the source ERP system for cost data
+type ERPSource string
+
+const (
+	ERPSourceManual     ERPSource = "manual"
+	ERPSourceTripletex  ERPSource = "tripletex"
+	ERPSourceVisma      ERPSource = "visma"
+	ERPSourcePowerOffice ERPSource = "poweroffice"
+	ERPSourceOther      ERPSource = "other"
+)
+
+// CostType represents the type of cost entry
+type CostType string
+
+const (
+	CostTypeLabor        CostType = "labor"
+	CostTypeMaterials    CostType = "materials"
+	CostTypeEquipment    CostType = "equipment"
+	CostTypeSubcontractor CostType = "subcontractor"
+	CostTypeTravel       CostType = "travel"
+	CostTypeOverhead     CostType = "overhead"
+	CostTypeOther        CostType = "other"
+)
+
+// ProjectActualCost represents an actual cost entry for a project (from ERP or manual)
+type ProjectActualCost struct {
+	ID                uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	ProjectID         uuid.UUID        `gorm:"type:uuid;not null;index;column:project_id"`
+	Project           *Project         `gorm:"foreignKey:ProjectID"`
+	CostType          CostType         `gorm:"type:cost_type;not null;column:cost_type"`
+	Description       string           `gorm:"type:varchar(500);not null"`
+	Amount            float64          `gorm:"type:decimal(15,2);not null"`
+	Currency          string           `gorm:"type:varchar(3);not null;default:'NOK'"`
+	CostDate          time.Time        `gorm:"type:date;not null;column:cost_date"`
+	PostingDate       *time.Time       `gorm:"type:date;column:posting_date"`
+	BudgetDimensionID *uuid.UUID       `gorm:"type:uuid;column:budget_dimension_id"`
+	BudgetDimension   *BudgetDimension `gorm:"foreignKey:BudgetDimensionID"`
+	ERPSource         ERPSource        `gorm:"type:erp_source;not null;default:'manual';column:erp_source"`
+	ERPReference      string           `gorm:"type:varchar(100);column:erp_reference"`
+	ERPTransactionID  string           `gorm:"type:varchar(100);column:erp_transaction_id"`
+	ERPSyncedAt       *time.Time       `gorm:"column:erp_synced_at"`
+	IsApproved        bool             `gorm:"not null;default:false;column:is_approved"`
+	ApprovedByID      string           `gorm:"type:varchar(100);column:approved_by_id"`
+	ApprovedAt        *time.Time       `gorm:"column:approved_at"`
+	Notes             string           `gorm:"type:text"`
+	CreatedAt         time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt         time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
 // OfferPhase represents the phase of an offer in the sales pipeline
