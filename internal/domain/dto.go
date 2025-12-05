@@ -28,17 +28,72 @@ type CustomerDTO struct {
 }
 
 type ContactDTO struct {
-	ID           uuid.UUID  `json:"id"`
-	Name         string     `json:"name"`
-	Email        string     `json:"email"`
-	Phone        string     `json:"phone"`
-	Role         string     `json:"role,omitempty"`
-	CustomerID   *uuid.UUID `json:"customerId,omitempty"`
-	CustomerName string     `json:"customerName,omitempty"`
-	ProjectID    *uuid.UUID `json:"projectId,omitempty"`
-	ProjectName  string     `json:"projectName,omitempty"`
-	CreatedAt    string     `json:"createdAt"` // ISO 8601
-	UpdatedAt    string     `json:"updatedAt"` // ISO 8601
+	ID                     uuid.UUID                  `json:"id"`
+	FirstName              string                     `json:"firstName"`
+	LastName               string                     `json:"lastName"`
+	FullName               string                     `json:"fullName"`
+	Email                  string                     `json:"email,omitempty"`
+	Phone                  string                     `json:"phone,omitempty"`
+	Mobile                 string                     `json:"mobile,omitempty"`
+	Title                  string                     `json:"title,omitempty"`
+	Department             string                     `json:"department,omitempty"`
+	PrimaryCustomerID      *uuid.UUID                 `json:"primaryCustomerId,omitempty"`
+	PrimaryCustomerName    string                     `json:"primaryCustomerName,omitempty"`
+	Address                string                     `json:"address,omitempty"`
+	City                   string                     `json:"city,omitempty"`
+	PostalCode             string                     `json:"postalCode,omitempty"`
+	Country                string                     `json:"country,omitempty"`
+	LinkedInURL            string                     `json:"linkedInUrl,omitempty"`
+	PreferredContactMethod string                     `json:"preferredContactMethod,omitempty"`
+	Notes                  string                     `json:"notes,omitempty"`
+	IsActive               bool                       `json:"isActive"`
+	Relationships          []ContactRelationshipDTO   `json:"relationships,omitempty"`
+	CreatedAt              string                     `json:"createdAt"` // ISO 8601
+	UpdatedAt              string                     `json:"updatedAt"` // ISO 8601
+}
+
+type ContactRelationshipDTO struct {
+	ID         uuid.UUID         `json:"id"`
+	ContactID  uuid.UUID         `json:"contactId"`
+	EntityType ContactEntityType `json:"entityType"`
+	EntityID   uuid.UUID         `json:"entityId"`
+	Role       string            `json:"role,omitempty"`
+	IsPrimary  bool              `json:"isPrimary"`
+	CreatedAt  string            `json:"createdAt"`
+}
+
+type DealDTO struct {
+	ID                uuid.UUID `json:"id"`
+	Title             string    `json:"title"`
+	Description       string    `json:"description,omitempty"`
+	CustomerID        uuid.UUID `json:"customerId"`
+	CustomerName      string    `json:"customerName,omitempty"`
+	CompanyID         CompanyID `json:"companyId"`
+	Stage             DealStage `json:"stage"`
+	Probability       int       `json:"probability"`
+	Value             float64   `json:"value"`
+	WeightedValue     float64   `json:"weightedValue"`
+	Currency          string    `json:"currency"`
+	ExpectedCloseDate *string   `json:"expectedCloseDate,omitempty"`
+	ActualCloseDate   *string   `json:"actualCloseDate,omitempty"`
+	OwnerID           string    `json:"ownerId"`
+	OwnerName         string    `json:"ownerName,omitempty"`
+	Source            string    `json:"source,omitempty"`
+	Notes             string    `json:"notes,omitempty"`
+	LostReason        string    `json:"lostReason,omitempty"`
+	CreatedAt         string    `json:"createdAt"`
+	UpdatedAt         string    `json:"updatedAt"`
+}
+
+type DealStageHistoryDTO struct {
+	ID            uuid.UUID  `json:"id"`
+	DealID        uuid.UUID  `json:"dealId"`
+	FromStage     *DealStage `json:"fromStage,omitempty"`
+	ToStage       DealStage  `json:"toStage"`
+	ChangedByID   string     `json:"changedById"`
+	ChangedByName string     `json:"changedByName,omitempty"`
+	Notes         string     `json:"notes,omitempty"`
+	ChangedAt     string     `json:"changedAt"`
 }
 
 type OfferDTO struct {
@@ -223,21 +278,84 @@ type UpdateCustomerRequest struct {
 }
 
 type CreateContactRequest struct {
-	Name       string     `json:"name" validate:"required,max=200"`
-	Email      string     `json:"email" validate:"required,email"`
-	Phone      string     `json:"phone" validate:"required,max=50"`
-	Role       string     `json:"role,omitempty" validate:"max=120"`
-	CustomerID *uuid.UUID `json:"customerId,omitempty"`
-	ProjectID  *uuid.UUID `json:"projectId,omitempty"`
+	FirstName              string     `json:"firstName" validate:"required,max=100"`
+	LastName               string     `json:"lastName" validate:"required,max=100"`
+	Email                  string     `json:"email,omitempty" validate:"omitempty,email,max=255"`
+	Phone                  string     `json:"phone,omitempty" validate:"max=50"`
+	Mobile                 string     `json:"mobile,omitempty" validate:"max=50"`
+	Title                  string     `json:"title,omitempty" validate:"max=100"`
+	Department             string     `json:"department,omitempty" validate:"max=100"`
+	PrimaryCustomerID      *uuid.UUID `json:"primaryCustomerId,omitempty"`
+	Address                string     `json:"address,omitempty" validate:"max=500"`
+	City                   string     `json:"city,omitempty" validate:"max=100"`
+	PostalCode             string     `json:"postalCode,omitempty" validate:"max=20"`
+	Country                string     `json:"country,omitempty" validate:"max=100"`
+	LinkedInURL            string     `json:"linkedInUrl,omitempty" validate:"max=500"`
+	PreferredContactMethod string     `json:"preferredContactMethod,omitempty" validate:"max=50"`
+	Notes                  string     `json:"notes,omitempty"`
 }
 
 type UpdateContactRequest struct {
-	Name       string     `json:"name" validate:"required,max=200"`
-	Email      string     `json:"email" validate:"required,email"`
-	Phone      string     `json:"phone" validate:"required,max=50"`
-	Role       string     `json:"role,omitempty" validate:"max=120"`
-	CustomerID *uuid.UUID `json:"customerId,omitempty"`
-	ProjectID  *uuid.UUID `json:"projectId,omitempty"`
+	FirstName              string     `json:"firstName" validate:"required,max=100"`
+	LastName               string     `json:"lastName" validate:"required,max=100"`
+	Email                  string     `json:"email,omitempty" validate:"omitempty,email,max=255"`
+	Phone                  string     `json:"phone,omitempty" validate:"max=50"`
+	Mobile                 string     `json:"mobile,omitempty" validate:"max=50"`
+	Title                  string     `json:"title,omitempty" validate:"max=100"`
+	Department             string     `json:"department,omitempty" validate:"max=100"`
+	PrimaryCustomerID      *uuid.UUID `json:"primaryCustomerId,omitempty"`
+	Address                string     `json:"address,omitempty" validate:"max=500"`
+	City                   string     `json:"city,omitempty" validate:"max=100"`
+	PostalCode             string     `json:"postalCode,omitempty" validate:"max=20"`
+	Country                string     `json:"country,omitempty" validate:"max=100"`
+	LinkedInURL            string     `json:"linkedInUrl,omitempty" validate:"max=500"`
+	PreferredContactMethod string     `json:"preferredContactMethod,omitempty" validate:"max=50"`
+	Notes                  string     `json:"notes,omitempty"`
+	IsActive               *bool      `json:"isActive,omitempty"`
+}
+
+// Contact relationship request DTOs
+type AddContactRelationshipRequest struct {
+	EntityType ContactEntityType `json:"entityType" validate:"required"`
+	EntityID   uuid.UUID         `json:"entityId" validate:"required"`
+	Role       string            `json:"role,omitempty" validate:"max=100"`
+	IsPrimary  bool              `json:"isPrimary,omitempty"`
+}
+
+// Deal request DTOs
+type CreateDealRequest struct {
+	Title             string     `json:"title" validate:"required,max=200"`
+	Description       string     `json:"description,omitempty"`
+	CustomerID        uuid.UUID  `json:"customerId" validate:"required"`
+	CompanyID         CompanyID  `json:"companyId" validate:"required"`
+	Stage             DealStage  `json:"stage,omitempty"`
+	Probability       int        `json:"probability,omitempty" validate:"min=0,max=100"`
+	Value             float64    `json:"value,omitempty" validate:"gte=0"`
+	Currency          string     `json:"currency,omitempty" validate:"max=3"`
+	ExpectedCloseDate *time.Time `json:"expectedCloseDate,omitempty"`
+	OwnerID           string     `json:"ownerId" validate:"required,max=100"`
+	Source            string     `json:"source,omitempty" validate:"max=100"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+type UpdateDealRequest struct {
+	Title             string     `json:"title" validate:"required,max=200"`
+	Description       string     `json:"description,omitempty"`
+	Stage             DealStage  `json:"stage,omitempty"`
+	Probability       int        `json:"probability,omitempty" validate:"min=0,max=100"`
+	Value             float64    `json:"value,omitempty" validate:"gte=0"`
+	Currency          string     `json:"currency,omitempty" validate:"max=3"`
+	ExpectedCloseDate *time.Time `json:"expectedCloseDate,omitempty"`
+	ActualCloseDate   *time.Time `json:"actualCloseDate,omitempty"`
+	OwnerID           string     `json:"ownerId,omitempty" validate:"max=100"`
+	Source            string     `json:"source,omitempty" validate:"max=100"`
+	Notes             string     `json:"notes,omitempty"`
+	LostReason        string     `json:"lostReason,omitempty" validate:"max=500"`
+}
+
+type UpdateDealStageRequest struct {
+	Stage DealStage `json:"stage" validate:"required"`
+	Notes string    `json:"notes,omitempty"`
 }
 
 type CreateProjectRequest struct {
