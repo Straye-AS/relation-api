@@ -22,7 +22,9 @@ func (r *ActivityRepository) Create(ctx context.Context, activity *domain.Activi
 
 func (r *ActivityRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Activity, error) {
 	var activity domain.Activity
-	err := r.db.WithContext(ctx).First(&activity, "id = ?", id).Error
+	query := r.db.WithContext(ctx).Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&activity).Error
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +36,9 @@ func (r *ActivityRepository) List(ctx context.Context, page, pageSize int, targe
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&domain.Activity{})
+
+	// Apply multi-tenant company filter
+	query = ApplyCompanyFilter(ctx, query)
 
 	if targetType != nil {
 		query = query.Where("target_type = ?", *targetType)
@@ -55,9 +60,10 @@ func (r *ActivityRepository) List(ctx context.Context, page, pageSize int, targe
 
 func (r *ActivityRepository) ListByTarget(ctx context.Context, targetType domain.ActivityTargetType, targetID uuid.UUID, limit int) ([]domain.Activity, error) {
 	var activities []domain.Activity
-	err := r.db.WithContext(ctx).
-		Where("target_type = ? AND target_id = ?", targetType, targetID).
-		Order("occurred_at DESC").
+	query := r.db.WithContext(ctx).
+		Where("target_type = ? AND target_id = ?", targetType, targetID)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Order("occurred_at DESC").
 		Limit(limit).
 		Find(&activities).Error
 	return activities, err
