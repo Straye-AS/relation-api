@@ -235,7 +235,7 @@ type Offer struct {
 	Files               []File      `gorm:"foreignKey:OfferID"`
 }
 
-// OfferItem represents a line item in an offer
+// OfferItem represents a line item in an offer (legacy - being replaced by BudgetDimension)
 type OfferItem struct {
 	BaseModel
 	OfferID     uuid.UUID `gorm:"type:uuid;not null;index"`
@@ -247,6 +247,78 @@ type OfferItem struct {
 	Description string    `gorm:"type:text"`
 	Quantity    float64   `gorm:"type:decimal(10,2)"`
 	Unit        string    `gorm:"type:varchar(50)"`
+}
+
+// BudgetDimensionCategory represents a predefined budget line type
+type BudgetDimensionCategory struct {
+	ID           string    `gorm:"type:varchar(50);primaryKey" json:"id"`
+	Name         string    `gorm:"type:varchar(200);not null" json:"name"`
+	Description  string    `gorm:"type:text" json:"description,omitempty"`
+	DisplayOrder int       `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
+	IsActive     bool      `gorm:"not null;default:true;column:is_active" json:"isActive"`
+	CreatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+}
+
+// TableName returns the table name for BudgetDimensionCategory
+func (BudgetDimensionCategory) TableName() string {
+	return "budget_dimension_categories"
+}
+
+// BudgetCategoryID represents known budget dimension category IDs
+// These are reference constants - actual seed data is loaded separately
+type BudgetCategoryID string
+
+const (
+	BudgetCategorySteelStructure  BudgetCategoryID = "steel_structure"
+	BudgetCategoryHybridStructure BudgetCategoryID = "hybrid_structure"
+	BudgetCategoryRoofing         BudgetCategoryID = "roofing"
+	BudgetCategoryCladding        BudgetCategoryID = "cladding"
+	BudgetCategoryFoundation      BudgetCategoryID = "foundation"
+	BudgetCategoryAssembly        BudgetCategoryID = "assembly"
+	BudgetCategoryTransport       BudgetCategoryID = "transport"
+	BudgetCategoryEngineering     BudgetCategoryID = "engineering"
+	BudgetCategoryProjectMgmt     BudgetCategoryID = "project_management"
+	BudgetCategoryCraneRigging    BudgetCategoryID = "crane_rigging"
+	BudgetCategoryMiscellaneous   BudgetCategoryID = "miscellaneous"
+	BudgetCategoryContingency     BudgetCategoryID = "contingency"
+)
+
+// BudgetParentType represents the type of entity a budget dimension belongs to
+type BudgetParentType string
+
+const (
+	BudgetParentOffer   BudgetParentType = "offer"
+	BudgetParentProject BudgetParentType = "project"
+)
+
+// BudgetDimension represents a budget line item that can belong to an offer or project
+type BudgetDimension struct {
+	ID                  uuid.UUID                `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	ParentType          BudgetParentType         `gorm:"type:budget_parent_type;not null;column:parent_type" json:"parentType"`
+	ParentID            uuid.UUID                `gorm:"type:uuid;not null;column:parent_id" json:"parentId"`
+	CategoryID          *string                  `gorm:"type:varchar(50);column:category_id" json:"categoryId,omitempty"`
+	Category            *BudgetDimensionCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	CustomName          string                   `gorm:"type:varchar(200);column:custom_name" json:"customName,omitempty"`
+	Cost                float64                  `gorm:"type:decimal(15,2);not null;default:0" json:"cost"`
+	Revenue             float64                  `gorm:"type:decimal(15,2);not null;default:0" json:"revenue"`
+	TargetMarginPercent *float64                 `gorm:"type:decimal(5,2);column:target_margin_percent" json:"targetMarginPercent,omitempty"`
+	MarginOverride      bool                     `gorm:"not null;default:false;column:margin_override" json:"marginOverride"`
+	MarginPercent       float64                  `gorm:"type:decimal(5,2);column:margin_percent;->" json:"marginPercent"` // Read-only, computed by DB
+	Description         string                   `gorm:"type:text" json:"description,omitempty"`
+	Quantity            *float64                 `gorm:"type:decimal(10,2)" json:"quantity,omitempty"`
+	Unit                string                   `gorm:"type:varchar(50)" json:"unit,omitempty"`
+	DisplayOrder        int                      `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
+	CreatedAt           time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt           time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+}
+
+// GetName returns the display name (category name or custom name)
+func (bd *BudgetDimension) GetName() string {
+	if bd.Category != nil {
+		return bd.Category.Name
+	}
+	return bd.CustomName
 }
 
 // ActivityType represents the type of entity an activity is associated with

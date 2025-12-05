@@ -2,6 +2,7 @@
 -- +goose StatementBegin
 
 -- Create companies table
+-- Note: Seed data will be added separately via seed SQL files
 CREATE TABLE companies (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
@@ -13,15 +14,6 @@ CREATE TABLE companies (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
--- Insert seed data for Straye companies
-INSERT INTO companies (id, name, short_name, org_number, color, is_active) VALUES
-    ('gruppen', 'Straye Gruppen AS', 'Gruppen', '929 677 856', '#1a1a2e', true),
-    ('stalbygg', 'Straye Stålbygg AS', 'Stålbygg', '929 677 864', '#e63946', true),
-    ('hybridbygg', 'Straye Hybridbygg AS', 'Hybridbygg', '929 677 872', '#2a9d8f', true),
-    ('industri', 'Straye Industri AS', 'Industri', '929 677 880', '#e9c46a', true),
-    ('tak', 'Straye Tak AS', 'Tak', '929 677 899', '#264653', true),
-    ('montasje', 'Straye Montasje AS', 'Montasje', '929 677 902', '#f4a261', true);
 
 -- Create trigger for companies updated_at
 CREATE TRIGGER update_companies_updated_at BEFORE UPDATE ON companies
