@@ -6,6 +6,7 @@
 -- ============================================================================
 
 -- Create budget dimension categories table for predefined budget line types
+-- Note: Seed data will be added separately via seed SQL files
 CREATE TABLE budget_dimension_categories (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
@@ -15,21 +16,6 @@ CREATE TABLE budget_dimension_categories (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
--- Insert seed data for standard construction budget categories
-INSERT INTO budget_dimension_categories (id, name, description, display_order) VALUES
-    ('steel_structure', 'Stålkonstruksjon', 'Steel structure and framework', 1),
-    ('hybrid_structure', 'Hybridkonstruksjon', 'Hybrid construction elements', 2),
-    ('roofing', 'Tak', 'Roofing materials and installation', 3),
-    ('cladding', 'Kledning', 'Wall cladding and facade', 4),
-    ('foundation', 'Fundament', 'Foundation work', 5),
-    ('assembly', 'Montasje', 'Assembly and installation labor', 6),
-    ('transport', 'Transport', 'Transportation and logistics', 7),
-    ('engineering', 'Prosjektering', 'Engineering and design', 8),
-    ('project_mgmt', 'Prosjektledelse', 'Project management', 9),
-    ('crane_rigging', 'Kran og rigg', 'Crane rental and rigging', 10),
-    ('miscellaneous', 'Diverse', 'Miscellaneous costs', 11),
-    ('contingency', 'Uforutsett', 'Contingency/buffer', 12);
 
 -- Create trigger for budget_dimension_categories updated_at
 CREATE TRIGGER update_budget_dimension_categories_updated_at BEFORE UPDATE ON budget_dimension_categories

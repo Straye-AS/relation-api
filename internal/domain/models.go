@@ -265,6 +265,25 @@ func (BudgetDimensionCategory) TableName() string {
 	return "budget_dimension_categories"
 }
 
+// BudgetCategoryID represents known budget dimension category IDs
+// These are reference constants - actual seed data is loaded separately
+type BudgetCategoryID string
+
+const (
+	BudgetCategorySteelStructure  BudgetCategoryID = "steel_structure"
+	BudgetCategoryHybridStructure BudgetCategoryID = "hybrid_structure"
+	BudgetCategoryRoofing         BudgetCategoryID = "roofing"
+	BudgetCategoryCladding        BudgetCategoryID = "cladding"
+	BudgetCategoryFoundation      BudgetCategoryID = "foundation"
+	BudgetCategoryAssembly        BudgetCategoryID = "assembly"
+	BudgetCategoryTransport       BudgetCategoryID = "transport"
+	BudgetCategoryEngineering     BudgetCategoryID = "engineering"
+	BudgetCategoryProjectMgmt     BudgetCategoryID = "project_management"
+	BudgetCategoryCraneRigging    BudgetCategoryID = "crane_rigging"
+	BudgetCategoryMiscellaneous   BudgetCategoryID = "miscellaneous"
+	BudgetCategoryContingency     BudgetCategoryID = "contingency"
+)
+
 // BudgetParentType represents the type of entity a budget dimension belongs to
 type BudgetParentType string
 
