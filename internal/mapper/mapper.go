@@ -3,6 +3,7 @@ package mapper
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 )
 
@@ -201,6 +202,73 @@ func ToOfferItemDTO(item *domain.OfferItem) domain.OfferItemDTO {
 		Description: item.Description,
 		Quantity:    item.Quantity,
 		Unit:        item.Unit,
+	}
+}
+
+// ToBudgetDimensionCategoryDTO converts BudgetDimensionCategory to BudgetDimensionCategoryDTO
+func ToBudgetDimensionCategoryDTO(cat *domain.BudgetDimensionCategory) domain.BudgetDimensionCategoryDTO {
+	return domain.BudgetDimensionCategoryDTO{
+		ID:           cat.ID,
+		Name:         cat.Name,
+		Description:  cat.Description,
+		DisplayOrder: cat.DisplayOrder,
+		IsActive:     cat.IsActive,
+	}
+}
+
+// ToBudgetDimensionDTO converts BudgetDimension to BudgetDimensionDTO
+func ToBudgetDimensionDTO(dim *domain.BudgetDimension) domain.BudgetDimensionDTO {
+	dto := domain.BudgetDimensionDTO{
+		ID:                  dim.ID,
+		ParentType:          dim.ParentType,
+		ParentID:            dim.ParentID,
+		CategoryID:          dim.CategoryID,
+		CustomName:          dim.CustomName,
+		Name:                dim.GetName(),
+		Cost:                dim.Cost,
+		Revenue:             dim.Revenue,
+		TargetMarginPercent: dim.TargetMarginPercent,
+		MarginOverride:      dim.MarginOverride,
+		MarginPercent:       dim.MarginPercent,
+		Description:         dim.Description,
+		Quantity:            dim.Quantity,
+		Unit:                dim.Unit,
+		DisplayOrder:        dim.DisplayOrder,
+		CreatedAt:           dim.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:           dim.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+
+	if dim.Category != nil {
+		catDTO := ToBudgetDimensionCategoryDTO(dim.Category)
+		dto.Category = &catDTO
+	}
+
+	return dto
+}
+
+// ToBudgetSummaryDTO creates a summary DTO from budget dimensions
+func ToBudgetSummaryDTO(parentType domain.BudgetParentType, parentID uuid.UUID, dimensions []domain.BudgetDimension) domain.BudgetSummaryDTO {
+	totalCost := 0.0
+	totalRevenue := 0.0
+
+	for _, dim := range dimensions {
+		totalCost += dim.Cost
+		totalRevenue += dim.Revenue
+	}
+
+	overallMargin := 0.0
+	if totalRevenue > 0 {
+		overallMargin = ((totalRevenue - totalCost) / totalRevenue) * 100
+	}
+
+	return domain.BudgetSummaryDTO{
+		ParentType:           parentType,
+		ParentID:             parentID,
+		DimensionCount:       len(dimensions),
+		TotalCost:            totalCost,
+		TotalRevenue:         totalRevenue,
+		OverallMarginPercent: overallMargin,
+		TotalProfit:          totalRevenue - totalCost,
 	}
 }
 

@@ -126,6 +126,47 @@ type OfferItemDTO struct {
 	Unit        string    `json:"unit,omitempty"`
 }
 
+// Budget Dimension DTOs
+
+type BudgetDimensionCategoryDTO struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	DisplayOrder int    `json:"displayOrder"`
+	IsActive     bool   `json:"isActive"`
+}
+
+type BudgetDimensionDTO struct {
+	ID                  uuid.UUID                   `json:"id"`
+	ParentType          BudgetParentType            `json:"parentType"`
+	ParentID            uuid.UUID                   `json:"parentId"`
+	CategoryID          *string                     `json:"categoryId,omitempty"`
+	Category            *BudgetDimensionCategoryDTO `json:"category,omitempty"`
+	CustomName          string                      `json:"customName,omitempty"`
+	Name                string                      `json:"name"` // Resolved name (category or custom)
+	Cost                float64                     `json:"cost"`
+	Revenue             float64                     `json:"revenue"`
+	TargetMarginPercent *float64                    `json:"targetMarginPercent,omitempty"`
+	MarginOverride      bool                        `json:"marginOverride"`
+	MarginPercent       float64                     `json:"marginPercent"`
+	Description         string                      `json:"description,omitempty"`
+	Quantity            *float64                    `json:"quantity,omitempty"`
+	Unit                string                      `json:"unit,omitempty"`
+	DisplayOrder        int                         `json:"displayOrder"`
+	CreatedAt           string                      `json:"createdAt"`
+	UpdatedAt           string                      `json:"updatedAt"`
+}
+
+type BudgetSummaryDTO struct {
+	ParentType          BudgetParentType `json:"parentType"`
+	ParentID            uuid.UUID        `json:"parentId"`
+	DimensionCount      int              `json:"dimensionCount"`
+	TotalCost           float64          `json:"totalCost"`
+	TotalRevenue        float64          `json:"totalRevenue"`
+	OverallMarginPercent float64         `json:"overallMarginPercent"`
+	TotalProfit         float64          `json:"totalProfit"`
+}
+
 type ProjectDTO struct {
 	ID              uuid.UUID     `json:"id"`
 	Name            string        `json:"name"`
@@ -431,6 +472,36 @@ type UpdateOfferItemRequest struct {
 	Description string  `json:"description,omitempty"`
 	Quantity    float64 `json:"quantity,omitempty" validate:"gte=0"`
 	Unit        string  `json:"unit,omitempty" validate:"max=50"`
+}
+
+// Budget Dimension Request DTOs
+
+type CreateBudgetDimensionRequest struct {
+	ParentType          BudgetParentType `json:"parentType" validate:"required"`
+	ParentID            uuid.UUID        `json:"parentId" validate:"required"`
+	CategoryID          *string          `json:"categoryId,omitempty" validate:"omitempty,max=50"`
+	CustomName          string           `json:"customName,omitempty" validate:"max=200"`
+	Cost                float64          `json:"cost" validate:"gte=0"`
+	Revenue             float64          `json:"revenue,omitempty" validate:"gte=0"`
+	TargetMarginPercent *float64         `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
+	MarginOverride      bool             `json:"marginOverride,omitempty"`
+	Description         string           `json:"description,omitempty"`
+	Quantity            *float64         `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	Unit                string           `json:"unit,omitempty" validate:"max=50"`
+	DisplayOrder        int              `json:"displayOrder,omitempty" validate:"gte=0"`
+}
+
+type UpdateBudgetDimensionRequest struct {
+	CategoryID          *string  `json:"categoryId,omitempty" validate:"omitempty,max=50"`
+	CustomName          string   `json:"customName,omitempty" validate:"max=200"`
+	Cost                float64  `json:"cost" validate:"gte=0"`
+	Revenue             float64  `json:"revenue,omitempty" validate:"gte=0"`
+	TargetMarginPercent *float64 `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
+	MarginOverride      bool     `json:"marginOverride,omitempty"`
+	Description         string   `json:"description,omitempty"`
+	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	Unit                string   `json:"unit,omitempty" validate:"max=50"`
+	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
 // Additional DTOs for compatibility
