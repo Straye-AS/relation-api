@@ -64,16 +64,99 @@ type Customer struct {
 // Contact represents an individual person
 type Contact struct {
 	BaseModel
-	Name         string     `gorm:"type:varchar(200);not null;index"`
-	Email        string     `gorm:"type:varchar(255);not null"`
-	Phone        string     `gorm:"type:varchar(50);not null"`
-	Role         string     `gorm:"type:varchar(120)"`
-	CustomerID   *uuid.UUID `gorm:"type:uuid;index"`
-	Customer     *Customer  `gorm:"foreignKey:CustomerID"`
-	CustomerName string     `gorm:"type:varchar(200)"`
-	ProjectID    *uuid.UUID `gorm:"type:uuid;index"`
-	Project      *Project   `gorm:"foreignKey:ProjectID"`
-	ProjectName  string     `gorm:"type:varchar(200)"`
+	FirstName              string                `gorm:"type:varchar(100);not null;column:first_name"`
+	LastName               string                `gorm:"type:varchar(100);not null;column:last_name"`
+	Email                  string                `gorm:"type:varchar(255)"`
+	Phone                  string                `gorm:"type:varchar(50)"`
+	Mobile                 string                `gorm:"type:varchar(50)"`
+	Title                  string                `gorm:"type:varchar(100)"`
+	Department             string                `gorm:"type:varchar(100)"`
+	PrimaryCustomerID      *uuid.UUID            `gorm:"type:uuid;column:primary_customer_id"`
+	PrimaryCustomer        *Customer             `gorm:"foreignKey:PrimaryCustomerID"`
+	Address                string                `gorm:"type:varchar(500)"`
+	City                   string                `gorm:"type:varchar(100)"`
+	PostalCode             string                `gorm:"type:varchar(20)"`
+	Country                string                `gorm:"type:varchar(100);default:'Norway'"`
+	LinkedInURL            string                `gorm:"type:varchar(500);column:linkedin_url"`
+	PreferredContactMethod string                `gorm:"type:varchar(50);default:'email';column:preferred_contact_method"`
+	Notes                  string                `gorm:"type:text"`
+	IsActive               bool                  `gorm:"not null;default:true;column:is_active"`
+	Relationships          []ContactRelationship `gorm:"foreignKey:ContactID"`
+}
+
+// FullName returns the contact's full name
+func (c *Contact) FullName() string {
+	return c.FirstName + " " + c.LastName
+}
+
+// ContactEntityType represents the type of entity a contact can be related to
+type ContactEntityType string
+
+const (
+	ContactEntityCustomer ContactEntityType = "customer"
+	ContactEntityProject  ContactEntityType = "project"
+	ContactEntityDeal     ContactEntityType = "deal"
+)
+
+// ContactRelationship represents a polymorphic relationship between a contact and an entity
+type ContactRelationship struct {
+	ID         uuid.UUID         `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	ContactID  uuid.UUID         `gorm:"type:uuid;not null;index;column:contact_id"`
+	Contact    *Contact          `gorm:"foreignKey:ContactID"`
+	EntityType ContactEntityType `gorm:"type:varchar(50);not null;column:entity_type"`
+	EntityID   uuid.UUID         `gorm:"type:uuid;not null;column:entity_id"`
+	Role       string            `gorm:"type:varchar(100)"`
+	IsPrimary  bool              `gorm:"not null;default:false;column:is_primary"`
+	CreatedAt  time.Time         `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+// DealStage represents the stage of a deal in the sales pipeline
+type DealStage string
+
+const (
+	DealStageLead        DealStage = "lead"
+	DealStageQualified   DealStage = "qualified"
+	DealStageProposal    DealStage = "proposal"
+	DealStageNegotiation DealStage = "negotiation"
+	DealStageWon         DealStage = "won"
+	DealStageLost        DealStage = "lost"
+)
+
+// Deal represents a sales opportunity in the pipeline
+type Deal struct {
+	BaseModel
+	Title             string     `gorm:"type:varchar(200);not null"`
+	Description       string     `gorm:"type:text"`
+	CustomerID        uuid.UUID  `gorm:"type:uuid;not null;index;column:customer_id"`
+	Customer          *Customer  `gorm:"foreignKey:CustomerID"`
+	CompanyID         CompanyID  `gorm:"type:varchar(50);not null;index;column:company_id"`
+	Company           *Company   `gorm:"foreignKey:CompanyID"`
+	CustomerName      string     `gorm:"type:varchar(200);column:customer_name"`
+	Stage             DealStage  `gorm:"type:varchar(50);not null;default:'lead'"`
+	Probability       int        `gorm:"type:int;not null;default:0"`
+	Value             float64    `gorm:"type:decimal(15,2);not null;default:0"`
+	WeightedValue     float64    `gorm:"type:decimal(15,2);column:weighted_value;->"` // Read-only, computed by DB
+	Currency          string     `gorm:"type:varchar(3);not null;default:'NOK'"`
+	ExpectedCloseDate *time.Time `gorm:"type:date;column:expected_close_date"`
+	ActualCloseDate   *time.Time `gorm:"type:date;column:actual_close_date"`
+	OwnerID           string     `gorm:"type:varchar(100);not null;column:owner_id"`
+	OwnerName         string     `gorm:"type:varchar(200);column:owner_name"`
+	Source            string     `gorm:"type:varchar(100)"`
+	Notes             string     `gorm:"type:text"`
+	LostReason        string     `gorm:"type:varchar(500);column:lost_reason"`
+}
+
+// DealStageHistory tracks stage changes for audit purposes
+type DealStageHistory struct {
+	ID            uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	DealID        uuid.UUID  `gorm:"type:uuid;not null;index;column:deal_id"`
+	Deal          *Deal      `gorm:"foreignKey:DealID"`
+	FromStage     *DealStage `gorm:"type:varchar(50);column:from_stage"`
+	ToStage       DealStage  `gorm:"type:varchar(50);not null;column:to_stage"`
+	ChangedByID   string     `gorm:"type:varchar(100);not null;column:changed_by_id"`
+	ChangedByName string     `gorm:"type:varchar(200);column:changed_by_name"`
+	Notes         string     `gorm:"type:text"`
+	ChangedAt     time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP;column:changed_at"`
 }
 
 // ProjectStatus represents the status of a project
@@ -174,6 +257,7 @@ const (
 	ActivityTypeContact      ActivityType = "Contact"
 	ActivityTypeProject      ActivityType = "Project"
 	ActivityTypeOffer        ActivityType = "Offer"
+	ActivityTypeDeal         ActivityType = "Deal"
 	ActivityTypeFile         ActivityType = "File"
 	ActivityTypeNotification ActivityType = "Notification"
 )

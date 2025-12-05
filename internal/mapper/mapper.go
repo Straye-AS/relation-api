@@ -30,19 +30,106 @@ func ToCustomerDTO(customer *domain.Customer, totalValue float64, activeOffers i
 
 // ToContactDTO converts Contact to ContactDTO
 func ToContactDTO(contact *domain.Contact) domain.ContactDTO {
-	return domain.ContactDTO{
-		ID:           contact.ID,
-		Name:         contact.Name,
-		Email:        contact.Email,
-		Phone:        contact.Phone,
-		Role:         contact.Role,
-		CustomerID:   contact.CustomerID,
-		CustomerName: contact.CustomerName,
-		ProjectID:    contact.ProjectID,
-		ProjectName:  contact.ProjectName,
-		CreatedAt:    contact.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:    contact.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	dto := domain.ContactDTO{
+		ID:                     contact.ID,
+		FirstName:              contact.FirstName,
+		LastName:               contact.LastName,
+		FullName:               contact.FullName(),
+		Email:                  contact.Email,
+		Phone:                  contact.Phone,
+		Mobile:                 contact.Mobile,
+		Title:                  contact.Title,
+		Department:             contact.Department,
+		PrimaryCustomerID:      contact.PrimaryCustomerID,
+		Address:                contact.Address,
+		City:                   contact.City,
+		PostalCode:             contact.PostalCode,
+		Country:                contact.Country,
+		LinkedInURL:            contact.LinkedInURL,
+		PreferredContactMethod: contact.PreferredContactMethod,
+		Notes:                  contact.Notes,
+		IsActive:               contact.IsActive,
+		CreatedAt:              contact.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:              contact.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
+
+	// Map relationships if loaded
+	if len(contact.Relationships) > 0 {
+		dto.Relationships = make([]domain.ContactRelationshipDTO, len(contact.Relationships))
+		for i, rel := range contact.Relationships {
+			dto.Relationships[i] = ToContactRelationshipDTO(&rel)
+		}
+	}
+
+	return dto
+}
+
+// ToContactRelationshipDTO converts ContactRelationship to ContactRelationshipDTO
+func ToContactRelationshipDTO(rel *domain.ContactRelationship) domain.ContactRelationshipDTO {
+	return domain.ContactRelationshipDTO{
+		ID:         rel.ID,
+		ContactID:  rel.ContactID,
+		EntityType: rel.EntityType,
+		EntityID:   rel.EntityID,
+		Role:       rel.Role,
+		IsPrimary:  rel.IsPrimary,
+		CreatedAt:  rel.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+}
+
+// ToDealDTO converts Deal to DealDTO
+func ToDealDTO(deal *domain.Deal) domain.DealDTO {
+	dto := domain.DealDTO{
+		ID:            deal.ID,
+		Title:         deal.Title,
+		Description:   deal.Description,
+		CustomerID:    deal.CustomerID,
+		CompanyID:     deal.CompanyID,
+		CustomerName:  deal.CustomerName,
+		Stage:         deal.Stage,
+		Probability:   deal.Probability,
+		Value:         deal.Value,
+		WeightedValue: deal.WeightedValue,
+		Currency:      deal.Currency,
+		OwnerID:       deal.OwnerID,
+		OwnerName:     deal.OwnerName,
+		Source:        deal.Source,
+		Notes:         deal.Notes,
+		LostReason:    deal.LostReason,
+		CreatedAt:     deal.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:     deal.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+
+	if deal.ExpectedCloseDate != nil {
+		formatted := deal.ExpectedCloseDate.Format("2006-01-02")
+		dto.ExpectedCloseDate = &formatted
+	}
+
+	if deal.ActualCloseDate != nil {
+		formatted := deal.ActualCloseDate.Format("2006-01-02")
+		dto.ActualCloseDate = &formatted
+	}
+
+	return dto
+}
+
+// ToDealStageHistoryDTO converts DealStageHistory to DealStageHistoryDTO
+func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHistoryDTO {
+	dto := domain.DealStageHistoryDTO{
+		ID:            history.ID,
+		DealID:        history.DealID,
+		ToStage:       history.ToStage,
+		ChangedByID:   history.ChangedByID,
+		ChangedByName: history.ChangedByName,
+		Notes:         history.Notes,
+		ChangedAt:     history.ChangedAt.Format("2006-01-02T15:04:05Z"),
+	}
+
+	if history.FromStage != nil {
+		dto.FromStage = history.FromStage
+	}
+
+	return dto
 }
 
 // ToProjectDTO converts Project to ProjectDTO
@@ -176,13 +263,10 @@ func UpdateProjectDenormalizedFields(project *domain.Project, customerName, mana
 	project.ManagerName = managerName
 }
 
-func UpdateContactDenormalizedFields(contact *domain.Contact, customerName, projectName string) {
-	if contact.CustomerID != nil && customerName != "" {
-		contact.CustomerName = customerName
-	}
-	if contact.ProjectID != nil && projectName != "" {
-		contact.ProjectName = projectName
-	}
+// UpdateDealDenormalizedFields updates denormalized fields in a deal
+func UpdateDealDenormalizedFields(deal *domain.Deal, customerName, ownerName string) {
+	deal.CustomerName = customerName
+	deal.OwnerName = ownerName
 }
 
 // ToFileDTO converts File to FileDTO

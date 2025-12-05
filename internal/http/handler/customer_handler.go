@@ -196,7 +196,7 @@ func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 // @Success 201 {object} domain.ContactDTO
 // @Router /customers/{id}/contacts [post]
 func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	customerID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, "Invalid customer ID", http.StatusBadRequest)
 		return
@@ -208,12 +208,15 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Set the primary customer ID from the URL
+	req.PrimaryCustomerID = &customerID
+
 	if err := validate.Struct(req); err != nil {
 		respondValidationError(w, err)
 		return
 	}
 
-	contact, err := h.contactService.Create(r.Context(), id, &req)
+	contact, err := h.contactService.Create(r.Context(), &req)
 	if err != nil {
 		h.logger.Error("failed to create contact", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
