@@ -57,4 +57,3 @@ func (u *UserContext) HasAnyRole(roles ...string) bool {
 	}
 	return false
 }
-
