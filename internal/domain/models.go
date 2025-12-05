@@ -384,28 +384,205 @@ func (bd *BudgetDimension) GetName() string {
 	return bd.CustomName
 }
 
-// ActivityType represents the type of entity an activity is associated with
+// ActivityTargetType represents the type of entity an activity is associated with
+type ActivityTargetType string
+
+const (
+	ActivityTargetCustomer     ActivityTargetType = "Customer"
+	ActivityTargetContact      ActivityTargetType = "Contact"
+	ActivityTargetProject      ActivityTargetType = "Project"
+	ActivityTargetOffer        ActivityTargetType = "Offer"
+	ActivityTargetDeal         ActivityTargetType = "Deal"
+	ActivityTargetFile         ActivityTargetType = "File"
+	ActivityTargetNotification ActivityTargetType = "Notification"
+)
+
+// ActivityType represents the type of activity
 type ActivityType string
 
 const (
-	ActivityTypeCustomer     ActivityType = "Customer"
-	ActivityTypeContact      ActivityType = "Contact"
-	ActivityTypeProject      ActivityType = "Project"
-	ActivityTypeOffer        ActivityType = "Offer"
-	ActivityTypeDeal         ActivityType = "Deal"
-	ActivityTypeFile         ActivityType = "File"
-	ActivityTypeNotification ActivityType = "Notification"
+	ActivityTypeMeeting ActivityType = "meeting"
+	ActivityTypeCall    ActivityType = "call"
+	ActivityTypeEmail   ActivityType = "email"
+	ActivityTypeTask    ActivityType = "task"
+	ActivityTypeNote    ActivityType = "note"
+	ActivityTypeSystem  ActivityType = "system"
+)
+
+// ActivityStatus represents the status of an activity
+type ActivityStatus string
+
+const (
+	ActivityStatusPlanned    ActivityStatus = "planned"
+	ActivityStatusInProgress ActivityStatus = "in_progress"
+	ActivityStatusCompleted  ActivityStatus = "completed"
+	ActivityStatusCancelled  ActivityStatus = "cancelled"
 )
 
 // Activity represents an event log entry for any entity
 type Activity struct {
 	BaseModel
-	TargetType  ActivityType `gorm:"type:varchar(50);not null;index"`
-	TargetID    uuid.UUID    `gorm:"type:uuid;not null;index"`
-	Title       string       `gorm:"type:varchar(200);not null"`
-	Body        string       `gorm:"type:varchar(2000)"`
-	OccurredAt  time.Time    `gorm:"not null;default:CURRENT_TIMESTAMP;index"`
-	CreatorName string       `gorm:"type:varchar(200)"`
+	TargetType      ActivityTargetType `gorm:"type:varchar(50);not null;index;column:target_type"`
+	TargetID        uuid.UUID          `gorm:"type:uuid;not null;index;column:target_id"`
+	Title           string             `gorm:"type:varchar(200);not null"`
+	Body            string             `gorm:"type:varchar(2000)"`
+	OccurredAt      time.Time          `gorm:"not null;default:CURRENT_TIMESTAMP;index;column:occurred_at"`
+	CreatorName     string             `gorm:"type:varchar(200);column:creator_name"`
+	ActivityType    ActivityType       `gorm:"type:activity_type;not null;default:'note';column:activity_type"`
+	Status          ActivityStatus     `gorm:"type:activity_status;not null;default:'completed'"`
+	ScheduledAt     *time.Time         `gorm:"column:scheduled_at"`
+	DueDate         *time.Time         `gorm:"type:date;column:due_date"`
+	CompletedAt     *time.Time         `gorm:"column:completed_at"`
+	DurationMinutes *int               `gorm:"column:duration_minutes"`
+	Priority        int                `gorm:"default:0"`
+	IsPrivate       bool               `gorm:"not null;default:false;column:is_private"`
+	CreatorID       string             `gorm:"type:varchar(100);column:creator_id"`
+	AssignedToID    string             `gorm:"type:varchar(100);column:assigned_to_id"`
+	CompanyID       *CompanyID         `gorm:"type:varchar(50);column:company_id"`
+	Company         *Company           `gorm:"foreignKey:CompanyID"`
+}
+
+// UserRole represents a role a user can have
+type UserRoleType string
+
+const (
+	RoleSuperAdmin     UserRoleType = "super_admin"
+	RoleCompanyAdmin   UserRoleType = "company_admin"
+	RoleManager        UserRoleType = "manager"
+	RoleSales          UserRoleType = "sales"
+	RoleProjectManager UserRoleType = "project_manager"
+	RoleViewer         UserRoleType = "viewer"
+	RoleAPIService     UserRoleType = "api_service"
+)
+
+// UserRole represents a role assignment for a user
+type UserRole struct {
+	ID        uuid.UUID    `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID    string       `gorm:"type:varchar(100);not null;index;column:user_id"`
+	User      *User        `gorm:"foreignKey:UserID"`
+	Role      UserRoleType `gorm:"type:user_role;not null"`
+	CompanyID *CompanyID   `gorm:"type:varchar(50);column:company_id"`
+	Company   *Company     `gorm:"foreignKey:CompanyID"`
+	GrantedBy string       `gorm:"type:varchar(100);column:granted_by"`
+	GrantedAt time.Time    `gorm:"not null;default:CURRENT_TIMESTAMP;column:granted_at"`
+	ExpiresAt *time.Time   `gorm:"column:expires_at"`
+	IsActive  bool         `gorm:"not null;default:true;column:is_active"`
+	CreatedAt time.Time    `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time    `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+// PermissionType represents a specific permission
+type PermissionType string
+
+const (
+	// Customer permissions
+	PermissionCustomersRead   PermissionType = "customers:read"
+	PermissionCustomersWrite  PermissionType = "customers:write"
+	PermissionCustomersDelete PermissionType = "customers:delete"
+
+	// Contact permissions
+	PermissionContactsRead   PermissionType = "contacts:read"
+	PermissionContactsWrite  PermissionType = "contacts:write"
+	PermissionContactsDelete PermissionType = "contacts:delete"
+
+	// Deal permissions
+	PermissionDealsRead   PermissionType = "deals:read"
+	PermissionDealsWrite  PermissionType = "deals:write"
+	PermissionDealsDelete PermissionType = "deals:delete"
+
+	// Offer permissions
+	PermissionOffersRead    PermissionType = "offers:read"
+	PermissionOffersWrite   PermissionType = "offers:write"
+	PermissionOffersDelete  PermissionType = "offers:delete"
+	PermissionOffersApprove PermissionType = "offers:approve"
+
+	// Project permissions
+	PermissionProjectsRead   PermissionType = "projects:read"
+	PermissionProjectsWrite  PermissionType = "projects:write"
+	PermissionProjectsDelete PermissionType = "projects:delete"
+
+	// Budget permissions
+	PermissionBudgetsRead  PermissionType = "budgets:read"
+	PermissionBudgetsWrite PermissionType = "budgets:write"
+
+	// Activity permissions
+	PermissionActivitiesRead   PermissionType = "activities:read"
+	PermissionActivitiesWrite  PermissionType = "activities:write"
+	PermissionActivitiesDelete PermissionType = "activities:delete"
+
+	// User management permissions
+	PermissionUsersRead        PermissionType = "users:read"
+	PermissionUsersWrite       PermissionType = "users:write"
+	PermissionUsersManageRoles PermissionType = "users:manage_roles"
+
+	// Company management permissions
+	PermissionCompaniesRead  PermissionType = "companies:read"
+	PermissionCompaniesWrite PermissionType = "companies:write"
+
+	// Reports and analytics
+	PermissionReportsView   PermissionType = "reports:view"
+	PermissionReportsExport PermissionType = "reports:export"
+
+	// System administration
+	PermissionSystemAdmin     PermissionType = "system:admin"
+	PermissionSystemAuditLogs PermissionType = "system:audit_logs"
+)
+
+// UserPermission represents a permission override for a user
+type UserPermission struct {
+	ID         uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID     string         `gorm:"type:varchar(100);not null;index;column:user_id"`
+	User       *User          `gorm:"foreignKey:UserID"`
+	Permission PermissionType `gorm:"type:permission_type;not null"`
+	CompanyID  *CompanyID     `gorm:"type:varchar(50);column:company_id"`
+	Company    *Company       `gorm:"foreignKey:CompanyID"`
+	IsGranted  bool           `gorm:"not null;default:true;column:is_granted"`
+	GrantedBy  string         `gorm:"type:varchar(100);column:granted_by"`
+	GrantedAt  time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP;column:granted_at"`
+	ExpiresAt  *time.Time     `gorm:"column:expires_at"`
+	Reason     string         `gorm:"type:text"`
+	CreatedAt  time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt  time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+// AuditAction represents the type of audit action
+type AuditAction string
+
+const (
+	AuditActionCreate           AuditAction = "create"
+	AuditActionUpdate           AuditAction = "update"
+	AuditActionDelete           AuditAction = "delete"
+	AuditActionLogin            AuditAction = "login"
+	AuditActionLogout           AuditAction = "logout"
+	AuditActionPermissionGrant  AuditAction = "permission_grant"
+	AuditActionPermissionRevoke AuditAction = "permission_revoke"
+	AuditActionRoleAssign       AuditAction = "role_assign"
+	AuditActionRoleRemove       AuditAction = "role_remove"
+	AuditActionExport           AuditAction = "export"
+	AuditActionImport           AuditAction = "import"
+	AuditActionAPICall          AuditAction = "api_call"
+)
+
+// AuditLog represents an audit trail entry
+type AuditLog struct {
+	ID          uuid.UUID   `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID      string      `gorm:"type:varchar(100);column:user_id"`
+	UserEmail   string      `gorm:"type:varchar(255);column:user_email"`
+	UserName    string      `gorm:"type:varchar(200);column:user_name"`
+	Action      AuditAction `gorm:"type:audit_action;not null"`
+	EntityType  string      `gorm:"type:varchar(50);not null;column:entity_type"`
+	EntityID    *uuid.UUID  `gorm:"type:uuid;column:entity_id"`
+	EntityName  string      `gorm:"type:varchar(200);column:entity_name"`
+	CompanyID   *CompanyID  `gorm:"type:varchar(50);column:company_id"`
+	OldValues   string      `gorm:"type:jsonb;column:old_values"`
+	NewValues   string      `gorm:"type:jsonb;column:new_values"`
+	Changes     string      `gorm:"type:jsonb"`
+	IPAddress   string      `gorm:"type:inet;column:ip_address"`
+	UserAgent   string      `gorm:"type:text;column:user_agent"`
+	RequestID   string      `gorm:"type:varchar(100);column:request_id"`
+	Metadata    string      `gorm:"type:jsonb"`
+	PerformedAt time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP;column:performed_at"`
+	CreatedAt   time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
 // File represents an uploaded file

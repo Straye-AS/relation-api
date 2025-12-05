@@ -29,7 +29,7 @@ func (r *ActivityRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return &activity, nil
 }
 
-func (r *ActivityRepository) List(ctx context.Context, page, pageSize int, targetType *domain.ActivityType, targetID *uuid.UUID) ([]domain.Activity, int64, error) {
+func (r *ActivityRepository) List(ctx context.Context, page, pageSize int, targetType *domain.ActivityTargetType, targetID *uuid.UUID) ([]domain.Activity, int64, error) {
 	var activities []domain.Activity
 	var total int64
 
@@ -53,7 +53,7 @@ func (r *ActivityRepository) List(ctx context.Context, page, pageSize int, targe
 	return activities, total, err
 }
 
-func (r *ActivityRepository) ListByTarget(ctx context.Context, targetType domain.ActivityType, targetID uuid.UUID, limit int) ([]domain.Activity, error) {
+func (r *ActivityRepository) ListByTarget(ctx context.Context, targetType domain.ActivityTargetType, targetID uuid.UUID, limit int) ([]domain.Activity, error) {
 	var activities []domain.Activity
 	err := r.db.WithContext(ctx).
 		Where("target_type = ? AND target_id = ?", targetType, targetID).

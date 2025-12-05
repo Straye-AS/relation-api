@@ -70,7 +70,7 @@ func (s *FileService) Upload(ctx context.Context, filename, contentType string, 
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeFile,
+			TargetType:  domain.ActivityTargetFile,
 			TargetID:    file.ID,
 			Title:       "File uploaded",
 			Body:        fmt.Sprintf("File '%s' was uploaded", filename),

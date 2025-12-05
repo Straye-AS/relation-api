@@ -418,15 +418,98 @@ func ToFileDTO(file *domain.File) domain.FileDTO {
 
 // ToActivityDTO converts Activity to ActivityDTO
 func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
-	return domain.ActivityDTO{
-		ID:          activity.ID,
-		TargetType:  activity.TargetType,
-		TargetID:    activity.TargetID,
-		Title:       activity.Title,
-		Body:        activity.Body,
-		OccurredAt:  activity.OccurredAt.Format("2006-01-02T15:04:05Z"),
-		CreatorName: activity.CreatorName,
-		CreatedAt:   activity.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	dto := domain.ActivityDTO{
+		ID:              activity.ID,
+		TargetType:      activity.TargetType,
+		TargetID:        activity.TargetID,
+		Title:           activity.Title,
+		Body:            activity.Body,
+		OccurredAt:      activity.OccurredAt.Format("2006-01-02T15:04:05Z"),
+		CreatorName:     activity.CreatorName,
+		CreatedAt:       activity.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		ActivityType:    activity.ActivityType,
+		Status:          activity.Status,
+		DurationMinutes: activity.DurationMinutes,
+		Priority:        activity.Priority,
+		IsPrivate:       activity.IsPrivate,
+		CreatorID:       activity.CreatorID,
+		AssignedToID:    activity.AssignedToID,
+		CompanyID:       activity.CompanyID,
+	}
+
+	if activity.ScheduledAt != nil {
+		dto.ScheduledAt = activity.ScheduledAt.Format("2006-01-02T15:04:05Z")
+	}
+
+	if activity.DueDate != nil {
+		dto.DueDate = activity.DueDate.Format("2006-01-02")
+	}
+
+	if activity.CompletedAt != nil {
+		dto.CompletedAt = activity.CompletedAt.Format("2006-01-02T15:04:05Z")
+	}
+
+	return dto
+}
+
+// ToUserRoleDTO converts UserRole to UserRoleDTO
+func ToUserRoleDTO(role *domain.UserRole) domain.UserRoleDTO {
+	dto := domain.UserRoleDTO{
+		ID:        role.ID,
+		UserID:    role.UserID,
+		Role:      role.Role,
+		CompanyID: role.CompanyID,
+		GrantedBy: role.GrantedBy,
+		GrantedAt: role.GrantedAt.Format("2006-01-02T15:04:05Z"),
+		IsActive:  role.IsActive,
+	}
+
+	if role.ExpiresAt != nil {
+		dto.ExpiresAt = role.ExpiresAt.Format("2006-01-02T15:04:05Z")
+	}
+
+	return dto
+}
+
+// ToUserPermissionDTO converts UserPermission to UserPermissionDTO
+func ToUserPermissionDTO(perm *domain.UserPermission) domain.UserPermissionDTO {
+	dto := domain.UserPermissionDTO{
+		ID:         perm.ID,
+		UserID:     perm.UserID,
+		Permission: perm.Permission,
+		CompanyID:  perm.CompanyID,
+		IsGranted:  perm.IsGranted,
+		GrantedBy:  perm.GrantedBy,
+		GrantedAt:  perm.GrantedAt.Format("2006-01-02T15:04:05Z"),
+		Reason:     perm.Reason,
+	}
+
+	if perm.ExpiresAt != nil {
+		dto.ExpiresAt = perm.ExpiresAt.Format("2006-01-02T15:04:05Z")
+	}
+
+	return dto
+}
+
+// ToAuditLogDTO converts AuditLog to AuditLogDTO
+func ToAuditLogDTO(log *domain.AuditLog) domain.AuditLogDTO {
+	return domain.AuditLogDTO{
+		ID:          log.ID,
+		UserID:      log.UserID,
+		UserEmail:   log.UserEmail,
+		UserName:    log.UserName,
+		Action:      log.Action,
+		EntityType:  log.EntityType,
+		EntityID:    log.EntityID,
+		EntityName:  log.EntityName,
+		CompanyID:   log.CompanyID,
+		OldValues:   log.OldValues,
+		NewValues:   log.NewValues,
+		Changes:     log.Changes,
+		IPAddress:   log.IPAddress,
+		UserAgent:   log.UserAgent,
+		RequestID:   log.RequestID,
+		PerformedAt: log.PerformedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
 

@@ -92,7 +92,7 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeOffer,
+			TargetType:  domain.ActivityTargetOffer,
 			TargetID:    offer.ID,
 			Title:       "Offer created",
 			Body:        fmt.Sprintf("Offer '%s' was created", offer.Title),
@@ -166,7 +166,7 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeOffer,
+			TargetType:  domain.ActivityTargetOffer,
 			TargetID:    offer.ID,
 			Title:       "Offer updated",
 			Body:        fmt.Sprintf("Offer '%s' was updated", offer.Title),
@@ -235,7 +235,7 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 	// Create activity
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
-			TargetType:  domain.ActivityTypeOffer,
+			TargetType:  domain.ActivityTargetOffer,
 			TargetID:    offer.ID,
 			Title:       "Offer phase advanced",
 			Body:        fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase),
@@ -311,7 +311,7 @@ func (s *OfferService) GetFiles(ctx context.Context, offerID uuid.UUID) ([]domai
 }
 
 func (s *OfferService) GetActivities(ctx context.Context, id uuid.UUID, limit int) ([]domain.ActivityDTO, error) {
-	activities, err := s.activityRepo.ListByTarget(ctx, domain.ActivityTypeOffer, id, limit)
+	activities, err := s.activityRepo.ListByTarget(ctx, domain.ActivityTargetOffer, id, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activities: %w", err)
 	}
