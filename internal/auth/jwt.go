@@ -14,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/config"
+	"github.com/straye-as/relation-api/internal/domain"
 )
 
 var (
@@ -223,8 +224,35 @@ func extractString(claims jwt.MapClaims, keys ...string) string {
 	return ""
 }
 
-// ExtractRoles extracts roles from JWT claims
-func ExtractRoles(claims jwt.MapClaims) []string {
+// ExtractRoles extracts roles from JWT claims and returns them as UserRoleType
+func ExtractRoles(claims jwt.MapClaims) []domain.UserRoleType {
+	roles := []domain.UserRoleType{}
+
+	// Try different claim names
+	for _, key := range []string{"roles", "role"} {
+		if val, ok := claims[key]; ok {
+			switch v := val.(type) {
+			case []interface{}:
+				for _, r := range v {
+					if str, ok := r.(string); ok {
+						roles = append(roles, domain.UserRoleType(str))
+					}
+				}
+			case []string:
+				for _, str := range v {
+					roles = append(roles, domain.UserRoleType(str))
+				}
+			case string:
+				roles = append(roles, domain.UserRoleType(v))
+			}
+		}
+	}
+
+	return roles
+}
+
+// ExtractRolesAsStrings extracts roles from JWT claims as strings (for backward compatibility)
+func ExtractRolesAsStrings(claims jwt.MapClaims) []string {
 	roles := []string{}
 
 	// Try different claim names

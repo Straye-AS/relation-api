@@ -34,7 +34,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		ID:          userCtx.UserID.String(),
 		DisplayName: userCtx.DisplayName,
 		Email:       userCtx.Email,
-		Roles:       userCtx.Roles,
+		Roles:       userCtx.RolesAsStrings(),
 	}
 
 	if err := h.userRepo.Upsert(r.Context(), user); err != nil {
@@ -45,7 +45,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		ID:    userCtx.UserID.String(),
 		Name:  userCtx.DisplayName,
 		Email: userCtx.Email,
-		Roles: userCtx.Roles,
+		Roles: userCtx.RolesAsStrings(),
 	}
 
 	respondJSON(w, http.StatusOK, dto)
@@ -63,7 +63,7 @@ func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		ID:    userCtx.UserID.String(),
 		Name:  userCtx.DisplayName,
 		Email: userCtx.Email,
-		Roles: userCtx.Roles,
+		Roles: userCtx.RolesAsStrings(),
 	}}
 
 	respondJSON(w, http.StatusOK, dto)
