@@ -19,13 +19,13 @@ func TestUserContext_HasRole(t *testing.T) {
 	}{
 		{
 			name:     "has role",
-			roles:    []domain.UserRoleType{domain.RoleManager, domain.RoleSales},
+			roles:    []domain.UserRoleType{domain.RoleManager, domain.RoleMarket},
 			role:     domain.RoleManager,
 			expected: true,
 		},
 		{
 			name:     "does not have role",
-			roles:    []domain.UserRoleType{domain.RoleSales},
+			roles:    []domain.UserRoleType{domain.RoleMarket},
 			role:     domain.RoleManager,
 			expected: false,
 		},
@@ -54,19 +54,19 @@ func TestUserContext_HasAnyRole(t *testing.T) {
 	}{
 		{
 			name:     "has one of the roles",
-			roles:    []domain.UserRoleType{domain.RoleSales},
-			check:    []domain.UserRoleType{domain.RoleManager, domain.RoleSales},
+			roles:    []domain.UserRoleType{domain.RoleMarket},
+			check:    []domain.UserRoleType{domain.RoleManager, domain.RoleMarket},
 			expected: true,
 		},
 		{
 			name:     "has none of the roles",
 			roles:    []domain.UserRoleType{domain.RoleViewer},
-			check:    []domain.UserRoleType{domain.RoleManager, domain.RoleSales},
+			check:    []domain.UserRoleType{domain.RoleManager, domain.RoleMarket},
 			expected: false,
 		},
 		{
 			name:     "empty check list",
-			roles:    []domain.UserRoleType{domain.RoleSales},
+			roles:    []domain.UserRoleType{domain.RoleMarket},
 			check:    []domain.UserRoleType{},
 			expected: false,
 		},
@@ -152,7 +152,7 @@ func TestUserContext_IsGruppenUser(t *testing.T) {
 		{
 			name:      "belongs to gruppen",
 			companyID: domain.CompanyGruppen,
-			roles:     []domain.UserRoleType{domain.RoleSales},
+			roles:     []domain.UserRoleType{domain.RoleMarket},
 			expected:  true,
 		},
 		{
@@ -164,7 +164,7 @@ func TestUserContext_IsGruppenUser(t *testing.T) {
 		{
 			name:      "regular user from other company",
 			companyID: domain.CompanyStalbygg,
-			roles:     []domain.UserRoleType{domain.RoleSales},
+			roles:     []domain.UserRoleType{domain.RoleMarket},
 			expected:  false,
 		},
 	}
@@ -198,21 +198,21 @@ func TestUserContext_CanAccessCompany(t *testing.T) {
 		{
 			name:          "gruppen user can access any company",
 			userCompanyID: domain.CompanyGruppen,
-			roles:         []domain.UserRoleType{domain.RoleSales},
+			roles:         []domain.UserRoleType{domain.RoleMarket},
 			targetCompany: domain.CompanyIndustri,
 			expected:      true,
 		},
 		{
 			name:          "user can access own company",
 			userCompanyID: domain.CompanyStalbygg,
-			roles:         []domain.UserRoleType{domain.RoleSales},
+			roles:         []domain.UserRoleType{domain.RoleMarket},
 			targetCompany: domain.CompanyStalbygg,
 			expected:      true,
 		},
 		{
 			name:          "user cannot access other company",
 			userCompanyID: domain.CompanyStalbygg,
-			roles:         []domain.UserRoleType{domain.RoleSales},
+			roles:         []domain.UserRoleType{domain.RoleMarket},
 			targetCompany: domain.CompanyHybridbygg,
 			expected:      false,
 		},
@@ -246,13 +246,13 @@ func TestUserContext_GetCompanyFilter(t *testing.T) {
 		{
 			name:      "gruppen user - no filter",
 			companyID: domain.CompanyGruppen,
-			roles:     []domain.UserRoleType{domain.RoleSales},
+			roles:     []domain.UserRoleType{domain.RoleMarket},
 			expectNil: true,
 		},
 		{
 			name:          "regular user - filtered by company",
 			companyID:     domain.CompanyStalbygg,
-			roles:         []domain.UserRoleType{domain.RoleSales},
+			roles:         []domain.UserRoleType{domain.RoleMarket},
 			expectNil:     false,
 			expectedValue: domain.CompanyStalbygg,
 		},
@@ -289,14 +289,14 @@ func TestUserContext_HasPermission(t *testing.T) {
 			expected:   true,
 		},
 		{
-			name:       "sales can read customers",
-			roles:      []domain.UserRoleType{domain.RoleSales},
+			name:       "market can read customers",
+			roles:      []domain.UserRoleType{domain.RoleMarket},
 			permission: domain.PermissionCustomersRead,
 			expected:   true,
 		},
 		{
-			name:       "sales cannot delete customers",
-			roles:      []domain.UserRoleType{domain.RoleSales},
+			name:       "market cannot delete customers",
+			roles:      []domain.UserRoleType{domain.RoleMarket},
 			permission: domain.PermissionCustomersDelete,
 			expected:   false,
 		},
@@ -360,12 +360,12 @@ func TestUserContext_GetDisplayNameInitials(t *testing.T) {
 
 func TestUserContext_RolesAsStrings(t *testing.T) {
 	userCtx := &auth.UserContext{
-		Roles: []domain.UserRoleType{domain.RoleManager, domain.RoleSales},
+		Roles: []domain.UserRoleType{domain.RoleManager, domain.RoleMarket},
 	}
 
 	result := userCtx.RolesAsStrings()
 
-	assert.Equal(t, []string{"manager", "sales"}, result)
+	assert.Equal(t, []string{"manager", "market"}, result)
 }
 
 func TestWithUserContext_and_FromContext(t *testing.T) {
@@ -373,7 +373,7 @@ func TestWithUserContext_and_FromContext(t *testing.T) {
 		UserID:      uuid.New(),
 		DisplayName: "Test User",
 		Email:       "test@example.com",
-		Roles:       []domain.UserRoleType{domain.RoleSales},
+		Roles:       []domain.UserRoleType{domain.RoleMarket},
 		CompanyID:   domain.CompanyStalbygg,
 	}
 
