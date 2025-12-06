@@ -143,7 +143,15 @@ func (s *CustomerService) List(ctx context.Context, page, pageSize int, search s
 		page = 1
 	}
 
-	customers, total, err := s.customerRepo.List(ctx, page, pageSize, search)
+	// Build filters from search parameter
+	var filters *repository.CustomerFilters
+	if search != "" {
+		filters = &repository.CustomerFilters{
+			SearchQuery: &search,
+		}
+	}
+
+	customers, total, err := s.customerRepo.List(ctx, page, pageSize, filters, repository.CustomerSortByCreatedDesc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list customers: %w", err)
 	}
