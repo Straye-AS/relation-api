@@ -79,10 +79,11 @@ type DealDTO struct {
 	OwnerID           string    `json:"ownerId"`
 	OwnerName         string    `json:"ownerName,omitempty"`
 	Source            string    `json:"source,omitempty"`
-	Notes             string    `json:"notes,omitempty"`
-	LostReason        string    `json:"lostReason,omitempty"`
-	CreatedAt         string    `json:"createdAt"`
-	UpdatedAt         string    `json:"updatedAt"`
+	Notes             string     `json:"notes,omitempty"`
+	LostReason        string     `json:"lostReason,omitempty"`
+	OfferID           *uuid.UUID `json:"offerId,omitempty"`
+	CreatedAt         string     `json:"createdAt"`
+	UpdatedAt         string     `json:"updatedAt"`
 }
 
 type DealStageHistoryDTO struct {
@@ -449,6 +450,7 @@ type CreateDealRequest struct {
 	OwnerID           string     `json:"ownerId" validate:"required,max=100"`
 	Source            string     `json:"source,omitempty" validate:"max=100"`
 	Notes             string     `json:"notes,omitempty"`
+	OfferID           *uuid.UUID `json:"offerId,omitempty"`
 }
 
 type UpdateDealRequest struct {

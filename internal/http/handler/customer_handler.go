@@ -33,6 +33,8 @@ func NewCustomerHandler(customerService *service.CustomerService, contactService
 // @Param pageSize query int false "Page size" default(20)
 // @Param search query string false "Search query"
 // @Success 200 {object} domain.PaginatedResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers [get]
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -61,6 +63,8 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param request body domain.CreateCustomerRequest true "Customer data"
 // @Success 201 {object} domain.CustomerDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers [post]
 func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateCustomerRequest
@@ -90,6 +94,8 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Customer ID"
 // @Success 200 {object} domain.CustomerDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers/{id} [get]
 func (h *CustomerHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -114,6 +120,8 @@ func (h *CustomerHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Customer ID"
 // @Param request body domain.UpdateCustomerRequest true "Customer data"
 // @Success 200 {object} domain.CustomerDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers/{id} [put]
 func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -147,6 +155,8 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Tags Customers
 // @Param id path string true "Customer ID"
 // @Success 204
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers/{id} [delete]
 func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -169,6 +179,8 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Customer ID"
 // @Success 200 {array} domain.ContactDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers/{id}/contacts [get]
 func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -194,6 +206,8 @@ func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Customer ID"
 // @Param request body domain.CreateContactRequest true "Contact data"
 // @Success 201 {object} domain.ContactDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /customers/{id}/contacts [post]
 func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	customerID, err := uuid.Parse(chi.URLParam(r, "id"))

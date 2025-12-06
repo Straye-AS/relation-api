@@ -25,7 +25,6 @@ func (r *OfferRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Of
 	var offer domain.Offer
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
-		Preload("Project").
 		Preload("Items").
 		Where("id = ?", id)
 	query = ApplyCompanyFilter(ctx, query)
@@ -48,7 +47,7 @@ func (r *OfferRepository) List(ctx context.Context, page, pageSize int, customer
 	var offers []domain.Offer
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&domain.Offer{}).Preload("Customer").Preload("Project")
+	query := r.db.WithContext(ctx).Model(&domain.Offer{}).Preload("Customer")
 
 	// Apply multi-tenant company filter
 	query = ApplyCompanyFilter(ctx, query)
@@ -105,7 +104,6 @@ func (r *OfferRepository) Search(ctx context.Context, searchQuery string, limit 
 	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
-		Preload("Project").
 		Where("LOWER(title) LIKE ?", searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Limit(limit).Find(&offers).Error

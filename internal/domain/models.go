@@ -56,7 +56,7 @@ type Customer struct {
 	ContactPhone  string     `gorm:"type:varchar(50)"`
 	CompanyID     *CompanyID `gorm:"type:varchar(50);column:company_id;index"`
 	Company       *Company   `gorm:"foreignKey:CompanyID"`
-	Contacts      []Contact  `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Contacts      []Contact  `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
 	Projects      []Project  `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
 	Offers        []Offer    `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
 }
@@ -144,6 +144,8 @@ type Deal struct {
 	Source            string     `gorm:"type:varchar(100)"`
 	Notes             string     `gorm:"type:text"`
 	LostReason        string     `gorm:"type:varchar(500);column:lost_reason"`
+	OfferID           *uuid.UUID `gorm:"type:uuid;index;column:offer_id"`
+	Offer             *Offer     `gorm:"foreignKey:OfferID"`
 }
 
 // DealStageHistory tracks stage changes for audit purposes
@@ -157,6 +159,11 @@ type DealStageHistory struct {
 	ChangedByName string     `gorm:"type:varchar(200);column:changed_by_name"`
 	Notes         string     `gorm:"type:text"`
 	ChangedAt     time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP;column:changed_at"`
+}
+
+// TableName overrides the default table name to match the migration
+func (DealStageHistory) TableName() string {
+	return "deal_stage_history"
 }
 
 // ProjectStatus represents the status of a project

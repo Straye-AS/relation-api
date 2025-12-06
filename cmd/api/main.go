@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/straye-as/relation-api/docs"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
@@ -34,7 +35,7 @@ import (
 // @license.url https://opensource.org/licenses/MIT
 
 // @host localhost:8080
-// @BasePath /
+// @BasePath /api/v1
 
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -45,6 +46,8 @@ import (
 // @in header
 // @name x-api-key
 // @description API Key for system operations
+// @Security BearerAuth
+// @Security ApiKeyAuth
 
 func main() {
 	if err := run(); err != nil {
@@ -118,7 +121,7 @@ func run() error {
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, log)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, fileRepo, activityRepo, log)
-	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, log)
+	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, notificationRepo, log)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, notificationRepo, log)
 	companyService := service.NewCompanyService(log)

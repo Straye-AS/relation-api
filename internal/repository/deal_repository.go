@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // DealFilters contains all filter options for listing deals
@@ -55,7 +56,8 @@ func NewDealRepository(db *gorm.DB) *DealRepository {
 }
 
 func (r *DealRepository) Create(ctx context.Context, deal *domain.Deal) error {
-	return r.db.WithContext(ctx).Create(deal).Error
+	// Omit associations to avoid GORM trying to validate related records
+	return r.db.WithContext(ctx).Omit(clause.Associations).Create(deal).Error
 }
 
 func (r *DealRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Deal, error) {

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/straye-as/relation-api/internal/auth"
 	"go.uber.org/zap"
 )
 
@@ -46,33 +45,32 @@ func Logging(logger *zap.Logger) func(http.Handler) http.Handler {
 
 			duration := time.Since(start)
 
-			fields := []zap.Field{
-				zap.String("request_id", requestID),
-				zap.String("method", r.Method),
-				zap.String("path", r.URL.Path),
-				zap.String("remote_addr", r.RemoteAddr),
-				zap.Int("status_code", rw.statusCode),
-				zap.Int64("response_size", rw.written),
-				zap.Duration("duration", duration),
+			// Color-code status
+			statusColor := "\033[32m" // Green for 2xx
+			if rw.statusCode >= 400 && rw.statusCode < 500 {
+				statusColor = "\033[33m" // Yellow for 4xx
+			} else if rw.statusCode >= 500 {
+				statusColor = "\033[31m" // Red for 5xx
 			}
+			resetColor := "\033[0m"
 
-			// Add user context if available
-			if userCtx, ok := auth.FromContext(r.Context()); ok {
-				fields = append(fields,
-					zap.String("user_id", userCtx.UserID.String()),
-					zap.String("user_name", userCtx.DisplayName),
-				)
-			}
-
-			logger.Info(
-				fmt.Sprintf("%s %-30s -> %3d (%s)",
-					r.Method,
-					r.URL.Path,
-					rw.statusCode,
-					duration.Truncate(time.Microsecond),
-				),
-				fields...,
+			// Simple, readable log format
+			msg := fmt.Sprintf("%s%-7s%s %-40s %s%3d%s  %10s",
+				"\033[36m", r.Method, resetColor, // Cyan method
+				r.URL.Path,
+				statusColor, rw.statusCode, resetColor,
+				duration.Truncate(time.Microsecond),
 			)
+
+			// Only add extra fields for errors or slow requests
+			if rw.statusCode >= 400 || duration > 500*time.Millisecond {
+				logger.Info(msg,
+					zap.String("request_id", requestID),
+					zap.String("remote_addr", r.RemoteAddr),
+				)
+			} else {
+				logger.Info(msg)
+			}
 		})
 	}
 }

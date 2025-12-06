@@ -11,47 +11,24 @@ import (
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-func setupTestDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	// Create a simplified audit_logs table for SQLite testing
-	err = db.Exec(`
-		CREATE TABLE audit_logs (
-			id TEXT PRIMARY KEY,
-			user_id TEXT,
-			user_email TEXT,
-			user_name TEXT,
-			action TEXT NOT NULL,
-			entity_type TEXT NOT NULL,
-			entity_id TEXT,
-			entity_name TEXT,
-			company_id TEXT,
-			old_values TEXT,
-			new_values TEXT,
-			changes TEXT,
-			ip_address TEXT,
-			user_agent TEXT,
-			request_id TEXT,
-			metadata TEXT,
-			performed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`).Error
-	require.NoError(t, err)
-
+func setupAuditLogTestDB(t *testing.T) *gorm.DB {
+	db := testutil.SetupTestDB(t)
+	t.Cleanup(func() {
+		// Clean up audit logs
+		db.Exec("DELETE FROM audit_logs WHERE id IS NOT NULL")
+	})
 	return db
 }
 
 func createTestAuditLogService(t *testing.T) (*service.AuditLogService, *gorm.DB) {
-	db := setupTestDB(t)
+	db := setupAuditLogTestDB(t)
 	logger := zap.NewNop()
 	repo := repository.NewAuditLogRepository(db)
 	svc := service.NewAuditLogService(repo, logger)

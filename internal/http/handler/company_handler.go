@@ -23,6 +23,8 @@ func NewCompanyHandler(companyService *service.CompanyService, logger *zap.Logge
 // @Tags Companies
 // @Produce json
 // @Success 200 {array} domain.Company
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /companies [get]
 func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
 	companies := h.companyService.List(r.Context())

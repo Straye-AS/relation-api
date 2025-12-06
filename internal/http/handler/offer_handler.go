@@ -33,6 +33,8 @@ func NewOfferHandler(offerService *service.OfferService, logger *zap.Logger) *Of
 // @Param projectId query string false "Filter by project ID"
 // @Param phase query string false "Filter by phase"
 // @Success 200 {object} domain.PaginatedResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers [get]
 func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -78,6 +80,8 @@ func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param request body domain.CreateOfferRequest true "Offer data"
 // @Success 201 {object} domain.OfferDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers [post]
 func (h *OfferHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateOfferRequest
@@ -107,6 +111,8 @@ func (h *OfferHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Offer ID"
 // @Success 200 {object} domain.OfferWithItemsDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id} [get]
 func (h *OfferHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -131,6 +137,8 @@ func (h *OfferHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Offer ID"
 // @Param request body domain.UpdateOfferRequest true "Offer data"
 // @Success 200 {object} domain.OfferDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id} [put]
 func (h *OfferHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -167,6 +175,8 @@ func (h *OfferHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Offer ID"
 // @Param request body domain.AdvanceOfferRequest true "Phase data"
 // @Success 200 {object} domain.OfferDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id}/advance [post]
 func (h *OfferHandler) Advance(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -201,6 +211,8 @@ func (h *OfferHandler) Advance(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Offer ID"
 // @Success 200 {array} domain.OfferItemDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id}/items [get]
 func (h *OfferHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -226,6 +238,8 @@ func (h *OfferHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Offer ID"
 // @Param request body domain.CreateOfferItemRequest true "Item data"
 // @Success 201 {object} domain.OfferItemDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id}/items [post]
 func (h *OfferHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -260,6 +274,8 @@ func (h *OfferHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Offer ID"
 // @Success 200 {array} domain.FileDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id}/files [get]
 func (h *OfferHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -284,6 +300,8 @@ func (h *OfferHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Offer ID"
 // @Param limit query int false "Limit" default(50)
 // @Success 200 {array} domain.ActivityDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /offers/{id}/activities [get]
 func (h *OfferHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

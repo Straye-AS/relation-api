@@ -34,12 +34,14 @@ var stageProbabilities = map[domain.DealStage]int{
 }
 
 type DealService struct {
-	dealRepo     *repository.DealRepository
-	historyRepo  *repository.DealStageHistoryRepository
-	customerRepo *repository.CustomerRepository
-	projectRepo  *repository.ProjectRepository
-	activityRepo *repository.ActivityRepository
-	logger       *zap.Logger
+	dealRepo         *repository.DealRepository
+	historyRepo      *repository.DealStageHistoryRepository
+	customerRepo     *repository.CustomerRepository
+	projectRepo      *repository.ProjectRepository
+	activityRepo     *repository.ActivityRepository
+	offerRepo        *repository.OfferRepository
+	notificationRepo *repository.NotificationRepository
+	logger           *zap.Logger
 }
 
 func NewDealService(
@@ -48,15 +50,19 @@ func NewDealService(
 	customerRepo *repository.CustomerRepository,
 	projectRepo *repository.ProjectRepository,
 	activityRepo *repository.ActivityRepository,
+	offerRepo *repository.OfferRepository,
+	notificationRepo *repository.NotificationRepository,
 	logger *zap.Logger,
 ) *DealService {
 	return &DealService{
-		dealRepo:     dealRepo,
-		historyRepo:  historyRepo,
-		customerRepo: customerRepo,
-		projectRepo:  projectRepo,
-		activityRepo: activityRepo,
-		logger:       logger,
+		dealRepo:         dealRepo,
+		historyRepo:      historyRepo,
+		customerRepo:     customerRepo,
+		projectRepo:      projectRepo,
+		activityRepo:     activityRepo,
+		offerRepo:        offerRepo,
+		notificationRepo: notificationRepo,
+		logger:           logger,
 	}
 }
 
@@ -108,6 +114,7 @@ func (s *DealService) Create(ctx context.Context, req *domain.CreateDealRequest)
 		OwnerName:         ownerName,
 		Source:            req.Source,
 		Notes:             req.Notes,
+		OfferID:           req.OfferID,
 	}
 
 	if err := s.dealRepo.Create(ctx, deal); err != nil {
@@ -366,6 +373,23 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 	// Create project if requested
 	var projectDTO *domain.ProjectDTO
 	if createProject {
+		// Determine budget: inherit from offer if linked, otherwise use deal value
+		budget := deal.Value
+		var linkedOfferID *uuid.UUID
+
+		if deal.OfferID != nil && s.offerRepo != nil {
+			offer, err := s.offerRepo.GetByID(ctx, *deal.OfferID)
+			if err == nil && offer != nil {
+				// Use offer value as budget (offer value typically more accurate)
+				budget = offer.Value
+				linkedOfferID = deal.OfferID
+				s.logger.Info("inherited budget from linked offer",
+					zap.String("deal_id", deal.ID.String()),
+					zap.String("offer_id", deal.OfferID.String()),
+					zap.Float64("budget", budget))
+			}
+		}
+
 		project := &domain.Project{
 			Name:         deal.Title,
 			Description:  deal.Description,
@@ -374,25 +398,31 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 			CompanyID:    deal.CompanyID,
 			Status:       domain.ProjectStatusPlanning,
 			StartDate:    closeDate,
-			Budget:       deal.Value,
+			Budget:       budget,
 			ManagerID:    deal.OwnerID,
 			ManagerName:  deal.OwnerName,
 			DealID:       &deal.ID,
+			OfferID:      linkedOfferID,
 		}
 
 		if err := s.projectRepo.Create(ctx, project); err != nil {
 			s.logger.Error("failed to create project from deal", zap.Error(err))
+			return nil, nil, fmt.Errorf("failed to create project: %w", err)
 		} else {
 			dto := mapper.ToProjectDTO(project)
 			projectDTO = &dto
 
 			// Create activity for project creation
 			if changedByName != "" {
+				budgetSource := "deal value"
+				if linkedOfferID != nil {
+					budgetSource = "linked offer"
+				}
 				activity := &domain.Activity{
 					TargetType:  domain.ActivityTargetProject,
 					TargetID:    project.ID,
 					Title:       "Project created from deal",
-					Body:        fmt.Sprintf("Project '%s' created from won deal", project.Name),
+					Body:        fmt.Sprintf("Project '%s' created from won deal with budget %.2f (from %s)", project.Name, budget, budgetSource),
 					CreatorName: changedByName,
 				}
 				s.activityRepo.Create(ctx, activity)
@@ -400,7 +430,60 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 		}
 	}
 
+	// Send notifications to stakeholders about the deal win
+	s.notifyDealWon(ctx, deal, changedByID)
+
 	return &dealDTO, projectDTO, nil
+}
+
+// notifyDealWon sends notifications to relevant stakeholders when a deal is won
+func (s *DealService) notifyDealWon(ctx context.Context, deal *domain.Deal, winnerID string) {
+	if s.notificationRepo == nil {
+		return
+	}
+
+	// Parse winner ID to UUID for notifications
+	winnerUUID, err := uuid.Parse(winnerID)
+	if err != nil {
+		s.logger.Warn("invalid winner ID for notifications", zap.String("winner_id", winnerID))
+		return
+	}
+
+	// Notify the deal owner (if not the winner)
+	if deal.OwnerID != "" && deal.OwnerID != winnerID {
+		ownerUUID, err := uuid.Parse(deal.OwnerID)
+		if err == nil {
+			notification := &domain.Notification{
+				UserID:     ownerUUID,
+				Type:       "deal_won",
+				Title:      "Deal Won!",
+				Message:    fmt.Sprintf("Congratulations! Deal '%s' has been won with value %s %.2f", deal.Title, deal.Currency, deal.Value),
+				EntityID:   &deal.ID,
+				EntityType: "deal",
+			}
+			if err := s.notificationRepo.Create(ctx, notification); err != nil {
+				s.logger.Warn("failed to create notification for deal owner", zap.Error(err))
+			}
+		}
+	}
+
+	// Notify the winner themselves (confirmation notification)
+	notification := &domain.Notification{
+		UserID:     winnerUUID,
+		Type:       "deal_won_confirmation",
+		Title:      "Deal Closed Successfully",
+		Message:    fmt.Sprintf("You've successfully closed deal '%s' with value %s %.2f", deal.Title, deal.Currency, deal.Value),
+		EntityID:   &deal.ID,
+		EntityType: "deal",
+	}
+	if err := s.notificationRepo.Create(ctx, notification); err != nil {
+		s.logger.Warn("failed to create confirmation notification", zap.Error(err))
+	}
+
+	s.logger.Info("deal win notifications sent",
+		zap.String("deal_id", deal.ID.String()),
+		zap.String("deal_title", deal.Title),
+		zap.Float64("value", deal.Value))
 }
 
 // LoseDeal marks a deal as lost with a reason

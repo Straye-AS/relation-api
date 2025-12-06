@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ProjectRepository struct {
@@ -18,7 +19,8 @@ func NewProjectRepository(db *gorm.DB) *ProjectRepository {
 }
 
 func (r *ProjectRepository) Create(ctx context.Context, project *domain.Project) error {
-	return r.db.WithContext(ctx).Create(project).Error
+	// Omit associations to avoid GORM trying to validate related records
+	return r.db.WithContext(ctx).Omit(clause.Associations).Create(project).Error
 }
 
 func (r *ProjectRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Project, error) {

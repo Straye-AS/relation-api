@@ -31,6 +31,8 @@ func NewFileHandler(fileService *service.FileService, maxUploadMB int64, logger 
 // @Param file formData file true "File to upload"
 // @Param offerId formData string false "Offer ID to attach file to"
 // @Success 201 {object} domain.FileDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /files/upload [post]
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Limit request size
@@ -70,6 +72,8 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "File ID"
 // @Success 200 {object} domain.FileDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /files/{id} [get]
 func (h *FileHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -92,6 +96,8 @@ func (h *FileHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // @Produce application/octet-stream
 // @Param id path string true "File ID"
 // @Success 200
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /files/{id}/download [get]
 func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
