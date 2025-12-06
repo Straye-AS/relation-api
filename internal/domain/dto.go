@@ -736,3 +736,21 @@ type SearchResult struct {
 	Subtitle string    `json:"subtitle,omitempty"`
 	Metadata string    `json:"metadata,omitempty"`
 }
+
+// Customer Stats DTOs
+
+// CustomerStatsResponse contains aggregated statistics for a customer
+type CustomerStatsResponse struct {
+	ActiveDealsCount    int64   `json:"activeDealsCount"`
+	TotalDealsCount     int64   `json:"totalDealsCount"`
+	TotalDealValue      float64 `json:"totalDealValue"`
+	WonDealsValue       float64 `json:"wonDealsValue"`
+	ActiveProjectsCount int64   `json:"activeProjectsCount"`
+	TotalProjectsCount  int64   `json:"totalProjectsCount"`
+}
+
+// CustomerWithStatsResponse extends CustomerDTO with statistics
+type CustomerWithStatsResponse struct {
+	CustomerDTO
+	Stats CustomerStatsResponse `json:"stats"`
+}

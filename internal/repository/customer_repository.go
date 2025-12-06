@@ -262,3 +262,31 @@ func (r *CustomerRepository) GetCustomerStats(ctx context.Context, customerID uu
 
 	return stats, nil
 }
+
+// HasActiveDealsOrProjects checks if a customer has any active deals or projects
+// that would prevent deletion
+func (r *CustomerRepository) HasActiveDealsOrProjects(ctx context.Context, customerID uuid.UUID) (bool, string, error) {
+	// Check for active deals
+	var activeDealsCount int64
+	if err := r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Where("customer_id = ? AND stage NOT IN ('won', 'lost')", customerID).
+		Count(&activeDealsCount).Error; err != nil {
+		return false, "", err
+	}
+	if activeDealsCount > 0 {
+		return true, "customer has active deals", nil
+	}
+
+	// Check for active projects
+	var activeProjectsCount int64
+	if err := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ? AND status IN ('planning', 'active', 'on_hold')", customerID).
+		Count(&activeProjectsCount).Error; err != nil {
+		return false, "", err
+	}
+	if activeProjectsCount > 0 {
+		return true, "customer has active projects", nil
+	}
+
+	return false, "", nil
+}
