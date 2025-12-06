@@ -109,6 +109,7 @@ func run() error {
 	userRepo := repository.NewUserRepository(db)
 	userRoleRepo := repository.NewUserRoleRepository(db, log)
 	userPermissionRepo := repository.NewUserPermissionRepository(db, log)
+	auditLogRepo := repository.NewAuditLogRepository(db)
 
 	// Initialize services
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
@@ -119,11 +120,13 @@ func run() error {
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, notificationRepo, log)
 	companyService := service.NewCompanyService(log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
+	auditLogService := service.NewAuditLogService(auditLogRepo, log)
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, log)
 	companyFilterMiddleware := middleware.NewCompanyFilterMiddleware(log)
 	rateLimiter := middleware.NewRateLimiter(&cfg.RateLimit, log)
+	auditMiddleware := middleware.NewAuditMiddleware(auditLogService, nil, log)
 
 	// Initialize handlers
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
@@ -133,6 +136,7 @@ func run() error {
 	dashboardHandler := handler.NewDashboardHandler(dashboardService, log)
 	authHandler := handler.NewAuthHandler(userRepo, permissionService, log)
 	companyHandler := handler.NewCompanyHandler(companyService, log)
+	auditHandler := handler.NewAuditHandler(auditLogService, log)
 
 	// Setup router
 	rt := router.NewRouter(
@@ -142,6 +146,7 @@ func run() error {
 		authMiddleware,
 		companyFilterMiddleware,
 		rateLimiter,
+		auditMiddleware,
 		customerHandler,
 		projectHandler,
 		offerHandler,
@@ -149,6 +154,7 @@ func run() error {
 		dashboardHandler,
 		authHandler,
 		companyHandler,
+		auditHandler,
 	)
 
 	// Create HTTP server

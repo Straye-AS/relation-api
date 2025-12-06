@@ -41,7 +41,7 @@ func setupTestService(t *testing.T) (*service.CustomerService, context.Context) 
 		UserID:      uuid.New(),
 		DisplayName: "Test User",
 		Email:       "test@example.com",
-		Roles:       []string{"user"},
+		Roles:       []domain.UserRoleType{domain.RoleMarket},
 	})
 
 	return customerService, ctx

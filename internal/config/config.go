@@ -349,8 +349,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.maxAge", 300) // 5 minutes
 
 	// Security header defaults - secure by default
-	v.SetDefault("security.enableHSTS", false)            // Disabled by default, enable in production with HTTPS
-	v.SetDefault("security.hstsMaxAge", 31536000)         // 1 year
+	v.SetDefault("security.enableHSTS", false)    // Disabled by default, enable in production with HTTPS
+	v.SetDefault("security.hstsMaxAge", 31536000) // 1 year
 	v.SetDefault("security.hstsIncludeSubdomains", true)
 	v.SetDefault("security.hstsPreload", false)
 	v.SetDefault("security.contentSecurityPolicy", "default-src 'self'")
@@ -362,7 +362,7 @@ func setDefaults(v *viper.Viper) {
 
 	// Rate limiting defaults
 	v.SetDefault("rateLimit.enabled", true)
-	v.SetDefault("rateLimit.requestsPerMinute", 60)     // 60 requests per minute for unauthenticated
+	v.SetDefault("rateLimit.requestsPerMinute", 60)      // 60 requests per minute for unauthenticated
 	v.SetDefault("rateLimit.requestsPerMinuteAuth", 120) // 120 requests per minute for authenticated users
 	v.SetDefault("rateLimit.burstSize", 10)              // Allow burst of 10 requests
 	v.SetDefault("rateLimit.whitelistIPs", []string{"127.0.0.1", "::1"})

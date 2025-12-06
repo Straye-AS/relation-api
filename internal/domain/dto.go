@@ -28,28 +28,28 @@ type CustomerDTO struct {
 }
 
 type ContactDTO struct {
-	ID                     uuid.UUID                  `json:"id"`
-	FirstName              string                     `json:"firstName"`
-	LastName               string                     `json:"lastName"`
-	FullName               string                     `json:"fullName"`
-	Email                  string                     `json:"email,omitempty"`
-	Phone                  string                     `json:"phone,omitempty"`
-	Mobile                 string                     `json:"mobile,omitempty"`
-	Title                  string                     `json:"title,omitempty"`
-	Department             string                     `json:"department,omitempty"`
-	PrimaryCustomerID      *uuid.UUID                 `json:"primaryCustomerId,omitempty"`
-	PrimaryCustomerName    string                     `json:"primaryCustomerName,omitempty"`
-	Address                string                     `json:"address,omitempty"`
-	City                   string                     `json:"city,omitempty"`
-	PostalCode             string                     `json:"postalCode,omitempty"`
-	Country                string                     `json:"country,omitempty"`
-	LinkedInURL            string                     `json:"linkedInUrl,omitempty"`
-	PreferredContactMethod string                     `json:"preferredContactMethod,omitempty"`
-	Notes                  string                     `json:"notes,omitempty"`
-	IsActive               bool                       `json:"isActive"`
-	Relationships          []ContactRelationshipDTO   `json:"relationships,omitempty"`
-	CreatedAt              string                     `json:"createdAt"` // ISO 8601
-	UpdatedAt              string                     `json:"updatedAt"` // ISO 8601
+	ID                     uuid.UUID                `json:"id"`
+	FirstName              string                   `json:"firstName"`
+	LastName               string                   `json:"lastName"`
+	FullName               string                   `json:"fullName"`
+	Email                  string                   `json:"email,omitempty"`
+	Phone                  string                   `json:"phone,omitempty"`
+	Mobile                 string                   `json:"mobile,omitempty"`
+	Title                  string                   `json:"title,omitempty"`
+	Department             string                   `json:"department,omitempty"`
+	PrimaryCustomerID      *uuid.UUID               `json:"primaryCustomerId,omitempty"`
+	PrimaryCustomerName    string                   `json:"primaryCustomerName,omitempty"`
+	Address                string                   `json:"address,omitempty"`
+	City                   string                   `json:"city,omitempty"`
+	PostalCode             string                   `json:"postalCode,omitempty"`
+	Country                string                   `json:"country,omitempty"`
+	LinkedInURL            string                   `json:"linkedInUrl,omitempty"`
+	PreferredContactMethod string                   `json:"preferredContactMethod,omitempty"`
+	Notes                  string                   `json:"notes,omitempty"`
+	IsActive               bool                     `json:"isActive"`
+	Relationships          []ContactRelationshipDTO `json:"relationships,omitempty"`
+	CreatedAt              string                   `json:"createdAt"` // ISO 8601
+	UpdatedAt              string                   `json:"updatedAt"` // ISO 8601
 }
 
 type ContactRelationshipDTO struct {
@@ -158,13 +158,13 @@ type BudgetDimensionDTO struct {
 }
 
 type BudgetSummaryDTO struct {
-	ParentType          BudgetParentType `json:"parentType"`
-	ParentID            uuid.UUID        `json:"parentId"`
-	DimensionCount      int              `json:"dimensionCount"`
-	TotalCost           float64          `json:"totalCost"`
-	TotalRevenue        float64          `json:"totalRevenue"`
-	OverallMarginPercent float64         `json:"overallMarginPercent"`
-	TotalProfit         float64          `json:"totalProfit"`
+	ParentType           BudgetParentType `json:"parentType"`
+	ParentID             uuid.UUID        `json:"parentId"`
+	DimensionCount       int              `json:"dimensionCount"`
+	TotalCost            float64          `json:"totalCost"`
+	TotalRevenue         float64          `json:"totalRevenue"`
+	OverallMarginPercent float64          `json:"overallMarginPercent"`
+	TotalProfit          float64          `json:"totalProfit"`
 }
 
 type ProjectDTO struct {
@@ -241,14 +241,14 @@ type UserDTO struct {
 
 // AuthUserDTO represents the current authenticated user with full context
 type AuthUserDTO struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Email       string      `json:"email"`
-	Roles       []string    `json:"roles"`
-	Company     *CompanyDTO `json:"company,omitempty"`
-	Initials    string      `json:"initials"`
-	IsSuperAdmin bool       `json:"isSuperAdmin"`
-	IsCompanyAdmin bool     `json:"isCompanyAdmin"`
+	ID             string      `json:"id"`
+	Name           string      `json:"name"`
+	Email          string      `json:"email"`
+	Roles          []string    `json:"roles"`
+	Company        *CompanyDTO `json:"company,omitempty"`
+	Initials       string      `json:"initials"`
+	IsSuperAdmin   bool        `json:"isSuperAdmin"`
+	IsCompanyAdmin bool        `json:"isCompanyAdmin"`
 }
 
 // CompanyDTO represents a company in auth context
@@ -266,9 +266,9 @@ type PermissionDTO struct {
 
 // PermissionsResponseDTO represents the full permissions response
 type PermissionsResponseDTO struct {
-	Permissions []PermissionDTO `json:"permissions"`
-	Roles       []string        `json:"roles"`
-	IsSuperAdmin bool           `json:"isSuperAdmin"`
+	Permissions  []PermissionDTO `json:"permissions"`
+	Roles        []string        `json:"roles"`
+	IsSuperAdmin bool            `json:"isSuperAdmin"`
 }
 
 type NotificationDTO struct {

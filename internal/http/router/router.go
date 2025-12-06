@@ -22,6 +22,7 @@ type Router struct {
 	authMiddleware          *auth.Middleware
 	companyFilterMiddleware *middleware.CompanyFilterMiddleware
 	rateLimiter             *middleware.RateLimiter
+	auditMiddleware         *middleware.AuditMiddleware
 	customerHandler         *handler.CustomerHandler
 	projectHandler          *handler.ProjectHandler
 	offerHandler            *handler.OfferHandler
@@ -29,6 +30,7 @@ type Router struct {
 	dashboardHandler        *handler.DashboardHandler
 	authHandler             *handler.AuthHandler
 	companyHandler          *handler.CompanyHandler
+	auditHandler            *handler.AuditHandler
 }
 
 func NewRouter(
@@ -38,6 +40,7 @@ func NewRouter(
 	authMiddleware *auth.Middleware,
 	companyFilterMiddleware *middleware.CompanyFilterMiddleware,
 	rateLimiter *middleware.RateLimiter,
+	auditMiddleware *middleware.AuditMiddleware,
 	customerHandler *handler.CustomerHandler,
 	projectHandler *handler.ProjectHandler,
 	offerHandler *handler.OfferHandler,
@@ -45,6 +48,7 @@ func NewRouter(
 	dashboardHandler *handler.DashboardHandler,
 	authHandler *handler.AuthHandler,
 	companyHandler *handler.CompanyHandler,
+	auditHandler *handler.AuditHandler,
 ) *Router {
 	return &Router{
 		cfg:                     cfg,
@@ -53,6 +57,7 @@ func NewRouter(
 		authMiddleware:          authMiddleware,
 		companyFilterMiddleware: companyFilterMiddleware,
 		rateLimiter:             rateLimiter,
+		auditMiddleware:         auditMiddleware,
 		customerHandler:         customerHandler,
 		projectHandler:          projectHandler,
 		offerHandler:            offerHandler,
@@ -60,6 +65,7 @@ func NewRouter(
 		dashboardHandler:        dashboardHandler,
 		authHandler:             authHandler,
 		companyHandler:          companyHandler,
+		auditHandler:            auditHandler,
 	}
 }
 
@@ -163,11 +169,21 @@ func (rt *Router) Setup() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(rt.authMiddleware.Authenticate)
 			r.Use(rt.companyFilterMiddleware.Filter)
+			r.Use(rt.auditMiddleware.Audit) // Audit all modifications
 
 			// Auth
 			r.Get("/auth/me", rt.authHandler.Me)
 			r.Get("/auth/permissions", rt.authHandler.Permissions)
 			r.Get("/users", rt.authHandler.ListUsers)
+
+			// Audit logs (requires system:audit_logs permission)
+			r.Route("/audit", func(r chi.Router) {
+				r.Get("/", rt.auditHandler.List)
+				r.Get("/stats", rt.auditHandler.GetStats)
+				r.Get("/export", rt.auditHandler.Export)
+				r.Get("/entity/{entityType}/{entityId}", rt.auditHandler.GetByEntity)
+				r.Get("/{id}", rt.auditHandler.GetByID)
+			})
 
 			// Customers
 			r.Route("/customers", func(r chi.Router) {
