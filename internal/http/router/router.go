@@ -21,6 +21,7 @@ type Router struct {
 	db                      *gorm.DB
 	authMiddleware          *auth.Middleware
 	companyFilterMiddleware *middleware.CompanyFilterMiddleware
+	rateLimiter             *middleware.RateLimiter
 	customerHandler         *handler.CustomerHandler
 	projectHandler          *handler.ProjectHandler
 	offerHandler            *handler.OfferHandler
@@ -36,6 +37,7 @@ func NewRouter(
 	db *gorm.DB,
 	authMiddleware *auth.Middleware,
 	companyFilterMiddleware *middleware.CompanyFilterMiddleware,
+	rateLimiter *middleware.RateLimiter,
 	customerHandler *handler.CustomerHandler,
 	projectHandler *handler.ProjectHandler,
 	offerHandler *handler.OfferHandler,
@@ -50,6 +52,7 @@ func NewRouter(
 		db:                      db,
 		authMiddleware:          authMiddleware,
 		companyFilterMiddleware: companyFilterMiddleware,
+		rateLimiter:             rateLimiter,
 		customerHandler:         customerHandler,
 		projectHandler:          projectHandler,
 		offerHandler:            offerHandler,
@@ -68,6 +71,7 @@ func (rt *Router) Setup() http.Handler {
 	r.Use(middleware.Logging(rt.logger))
 	r.Use(middleware.SecurityHeaders(&rt.cfg.Security))
 	r.Use(middleware.CORS(&rt.cfg.CORS, rt.cfg.App.Environment, rt.logger))
+	r.Use(rt.rateLimiter.LimitByIP) // Apply IP-based rate limiting globally
 
 	// Health check (basic liveness probe)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

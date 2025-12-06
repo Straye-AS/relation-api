@@ -14,16 +14,17 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	App      AppConfig
-	Database DatabaseConfig
-	AzureAd  AzureAdConfig
-	ApiKey   ApiKeyConfig
-	Storage  StorageConfig
-	Secrets  SecretsConfig
-	Logging  LoggingConfig
-	Server   ServerConfig
-	CORS     CORSConfig
-	Security SecurityConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	AzureAd   AzureAdConfig
+	ApiKey    ApiKeyConfig
+	Storage   StorageConfig
+	Secrets   SecretsConfig
+	Logging   LoggingConfig
+	Server    ServerConfig
+	CORS      CORSConfig
+	Security  SecurityConfig
+	RateLimit RateLimitConfig
 }
 
 type AppConfig struct {
@@ -124,6 +125,22 @@ type SecurityConfig struct {
 	ReferrerPolicy string
 	// PermissionsPolicy sets the Permissions-Policy header
 	PermissionsPolicy string
+}
+
+// RateLimitConfig holds rate limiting configuration
+type RateLimitConfig struct {
+	// Enabled enables rate limiting
+	Enabled bool
+	// RequestsPerMinute is the default rate limit for unauthenticated requests (per IP)
+	RequestsPerMinute int
+	// RequestsPerMinuteAuth is the rate limit for authenticated requests (per user)
+	RequestsPerMinuteAuth int
+	// BurstSize is the maximum burst size allowed
+	BurstSize int
+	// WhitelistIPs is a list of IPs that bypass rate limiting
+	WhitelistIPs []string
+	// WhitelistPaths is a list of paths that bypass rate limiting (e.g., /health)
+	WhitelistPaths []string
 }
 
 // ConnectionString builds PostgreSQL connection string
@@ -342,4 +359,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("security.xssProtection", "1; mode=block")
 	v.SetDefault("security.referrerPolicy", "strict-origin-when-cross-origin")
 	v.SetDefault("security.permissionsPolicy", "geolocation=(), microphone=(), camera=()")
+
+	// Rate limiting defaults
+	v.SetDefault("rateLimit.enabled", true)
+	v.SetDefault("rateLimit.requestsPerMinute", 60)     // 60 requests per minute for unauthenticated
+	v.SetDefault("rateLimit.requestsPerMinuteAuth", 120) // 120 requests per minute for authenticated users
+	v.SetDefault("rateLimit.burstSize", 10)              // Allow burst of 10 requests
+	v.SetDefault("rateLimit.whitelistIPs", []string{"127.0.0.1", "::1"})
+	v.SetDefault("rateLimit.whitelistPaths", []string{"/health", "/health/db", "/health/ready"})
 }
