@@ -90,6 +90,18 @@ func (r *ContactRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.Contact{}, "id = ?", id).Error
 }
 
+// GetByEmail finds a contact by email address
+func (r *ContactRepository) GetByEmail(ctx context.Context, email string) (*domain.Contact, error) {
+	var contact domain.Contact
+	err := r.db.WithContext(ctx).
+		Where("LOWER(email) = LOWER(?)", email).
+		First(&contact).Error
+	if err != nil {
+		return nil, err
+	}
+	return &contact, nil
+}
+
 // Search searches contacts by name or email
 func (r *ContactRepository) Search(ctx context.Context, query string, limit int) ([]domain.Contact, error) {
 	var contacts []domain.Contact
@@ -144,10 +156,11 @@ func (r *ContactRepository) SetPrimaryRelationship(ctx context.Context, contactI
 
 // ContactFilters holds filters for listing contacts
 type ContactFilters struct {
-	Search     string
-	Title      string
-	EntityType *domain.ContactEntityType
-	EntityID   *uuid.UUID
+	Search      string
+	Title       string
+	ContactType *domain.ContactType
+	EntityType  *domain.ContactEntityType
+	EntityID    *uuid.UUID
 }
 
 // ContactSortOption defines sort options for contacts
@@ -181,6 +194,10 @@ func (r *ContactRepository) ListWithFilters(ctx context.Context, page, pageSize 
 
 		if filters.Title != "" {
 			query = query.Where("title ILIKE ?", "%"+filters.Title+"%")
+		}
+
+		if filters.ContactType != nil {
+			query = query.Where("contact_type = ?", *filters.ContactType)
 		}
 
 		if filters.EntityType != nil && filters.EntityID != nil {

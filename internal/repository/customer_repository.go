@@ -23,9 +23,12 @@ const (
 
 // CustomerFilters defines filter options for customer listing
 type CustomerFilters struct {
-	Search  string
-	City    string
-	Country string
+	Search   string
+	City     string
+	Country  string
+	Status   *domain.CustomerStatus
+	Tier     *domain.CustomerTier
+	Industry *domain.CustomerIndustry
 }
 
 type CustomerRepository struct {
@@ -85,6 +88,15 @@ func (r *CustomerRepository) ListWithFilters(ctx context.Context, page, pageSize
 		}
 		if filters.Country != "" {
 			query = query.Where("LOWER(country) = LOWER(?)", filters.Country)
+		}
+		if filters.Status != nil {
+			query = query.Where("status = ?", *filters.Status)
+		}
+		if filters.Tier != nil {
+			query = query.Where("tier = ?", *filters.Tier)
+		}
+		if filters.Industry != nil {
+			query = query.Where("industry = ?", *filters.Industry)
 		}
 	}
 

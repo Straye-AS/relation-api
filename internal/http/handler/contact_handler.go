@@ -38,6 +38,7 @@ func NewContactHandler(contactService *service.ContactService, logger *zap.Logge
 // @Param pageSize query int false "Items per page" default(20)
 // @Param search query string false "Search by name or email"
 // @Param title query string false "Filter by job title"
+// @Param contactType query string false "Filter by contact type" Enums(primary, secondary, billing, technical, executive, other)
 // @Param entityType query string false "Filter by related entity type" Enums(customer, deal, project)
 // @Param entityId query string false "Filter by related entity ID"
 // @Param sortBy query string false "Sort option" Enums(name_asc, name_desc, email_asc, created_desc)
@@ -63,6 +64,25 @@ func (h *ContactHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	filters := &repository.ContactFilters{
 		Search: r.URL.Query().Get("search"),
 		Title:  r.URL.Query().Get("title"),
+	}
+
+	// Contact type filter
+	if contactType := r.URL.Query().Get("contactType"); contactType != "" {
+		ct := domain.ContactType(contactType)
+		// Validate contact type
+		validTypes := map[domain.ContactType]bool{
+			domain.ContactTypePrimary:   true,
+			domain.ContactTypeSecondary: true,
+			domain.ContactTypeBilling:   true,
+			domain.ContactTypeTechnical: true,
+			domain.ContactTypeExecutive: true,
+			domain.ContactTypeOther:     true,
+		}
+		if !validTypes[ct] {
+			http.Error(w, "Invalid contactType. Must be one of: primary, secondary, billing, technical, executive, other", http.StatusBadRequest)
+			return
+		}
+		filters.ContactType = &ct
 	}
 
 	// Entity type filter
@@ -156,6 +176,13 @@ func (h *ContactHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
 
 	contact, err := h.contactService.Create(r.Context(), &req)
 	if err != nil {
+		if strings.Contains(err.Error(), "email already exists") {
+			respondJSON(w, http.StatusConflict, map[string]string{
+				"error":   "Conflict",
+				"message": "A contact with this email already exists",
+			})
+			return
+		}
 		h.logger.Error("failed to create contact", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -202,6 +229,13 @@ func (h *ContactHandler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, "Contact not found", http.StatusNotFound)
+			return
+		}
+		if strings.Contains(err.Error(), "email already exists") {
+			respondJSON(w, http.StatusConflict, map[string]string{
+				"error":   "Conflict",
+				"message": "A contact with this email already exists",
+			})
 			return
 		}
 		h.logger.Error("failed to update contact", zap.Error(err))
