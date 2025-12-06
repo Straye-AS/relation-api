@@ -9,6 +9,25 @@ import (
 	"gorm.io/gorm"
 )
 
+// CustomerSortOption defines sorting options for customer listing
+type CustomerSortOption string
+
+const (
+	CustomerSortByNameAsc     CustomerSortOption = "name_asc"
+	CustomerSortByNameDesc    CustomerSortOption = "name_desc"
+	CustomerSortByCreatedDesc CustomerSortOption = "created_desc"
+	CustomerSortByCreatedAsc  CustomerSortOption = "created_asc"
+	CustomerSortByCityAsc     CustomerSortOption = "city_asc"
+	CustomerSortByCityDesc    CustomerSortOption = "city_desc"
+)
+
+// CustomerFilters defines filter options for customer listing
+type CustomerFilters struct {
+	Search  string
+	City    string
+	Country string
+}
+
 type CustomerRepository struct {
 	db *gorm.DB
 }
@@ -41,6 +60,12 @@ func (r *CustomerRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *CustomerRepository) List(ctx context.Context, page, pageSize int, search string) ([]domain.Customer, int64, error) {
+	filters := &CustomerFilters{Search: search}
+	return r.ListWithFilters(ctx, page, pageSize, filters, CustomerSortByCreatedDesc)
+}
+
+// ListWithFilters returns a paginated list of customers with filter and sort options
+func (r *CustomerRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *CustomerFilters, sortBy CustomerSortOption) ([]domain.Customer, int64, error) {
 	var customers []domain.Customer
 	var total int64
 
@@ -49,19 +74,51 @@ func (r *CustomerRepository) List(ctx context.Context, page, pageSize int, searc
 	// Apply multi-tenant company filter
 	query = ApplyCompanyFilter(ctx, query)
 
-	if search != "" {
-		searchPattern := "%" + strings.ToLower(search) + "%"
-		query = query.Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern)
+	// Apply filters
+	if filters != nil {
+		if filters.Search != "" {
+			searchPattern := "%" + strings.ToLower(filters.Search) + "%"
+			query = query.Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern)
+		}
+		if filters.City != "" {
+			query = query.Where("LOWER(city) = LOWER(?)", filters.City)
+		}
+		if filters.Country != "" {
+			query = query.Where("LOWER(country) = LOWER(?)", filters.Country)
+		}
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// Apply sorting
+	orderClause := r.getSortClause(sortBy)
+
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&customers).Error
+	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&customers).Error
 
 	return customers, total, err
+}
+
+// getSortClause returns the SQL ORDER BY clause for the given sort option
+func (r *CustomerRepository) getSortClause(sortBy CustomerSortOption) string {
+	switch sortBy {
+	case CustomerSortByNameAsc:
+		return "name ASC"
+	case CustomerSortByNameDesc:
+		return "name DESC"
+	case CustomerSortByCreatedAsc:
+		return "created_at ASC"
+	case CustomerSortByCityAsc:
+		return "city ASC"
+	case CustomerSortByCityDesc:
+		return "city DESC"
+	case CustomerSortByCreatedDesc:
+		fallthrough
+	default:
+		return "created_at DESC"
+	}
 }
 
 func (r *CustomerRepository) GetContactsCount(ctx context.Context, customerID uuid.UUID) (int, error) {
@@ -98,4 +155,134 @@ func (r *CustomerRepository) Search(ctx context.Context, searchQuery string, lim
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Limit(limit).Find(&customers).Error
 	return customers, err
+}
+
+// GetByOrgNumber finds a customer by organization number
+func (r *CustomerRepository) GetByOrgNumber(ctx context.Context, orgNumber string) (*domain.Customer, error) {
+	var customer domain.Customer
+	query := r.db.WithContext(ctx).Where("org_number = ?", orgNumber)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&customer).Error
+	if err != nil {
+		return nil, err
+	}
+	return &customer, nil
+}
+
+// CustomerStats holds aggregated statistics for a customer
+type CustomerStats struct {
+	TotalValue     float64 `json:"totalValue"`
+	ActiveOffers   int     `json:"activeOffers"`
+	ActiveDeals    int     `json:"activeDeals"`
+	ActiveProjects int     `json:"activeProjects"`
+	TotalContacts  int     `json:"totalContacts"`
+}
+
+// GetCustomerStats returns aggregated statistics for a customer
+func (r *CustomerRepository) GetCustomerStats(ctx context.Context, customerID uuid.UUID) (*CustomerStats, error) {
+	stats := &CustomerStats{}
+
+	// Get active offers count and total value
+	var offerStats struct {
+		Count      int64
+		TotalValue float64
+	}
+	err := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Select("COUNT(*) as count, COALESCE(SUM(value), 0) as total_value").
+		Where("customer_id = ? AND status = ?", customerID, domain.OfferStatusActive).
+		Scan(&offerStats).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.ActiveOffers = int(offerStats.Count)
+	stats.TotalValue = offerStats.TotalValue
+
+	// Get active deals count
+	var dealsCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Where("customer_id = ? AND stage NOT IN (?, ?)", customerID, domain.DealStageWon, domain.DealStageLost).
+		Count(&dealsCount).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.ActiveDeals = int(dealsCount)
+
+	// Get active projects count
+	var projectsCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ? AND status IN (?, ?)", customerID, domain.ProjectStatusPlanning, domain.ProjectStatusActive).
+		Count(&projectsCount).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.ActiveProjects = int(projectsCount)
+
+	// Get total contacts count
+	var contactsCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Contact{}).
+		Where("primary_customer_id = ?", customerID).
+		Count(&contactsCount).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.TotalContacts = int(contactsCount)
+
+	return stats, nil
+}
+
+// GetCustomerWithRelations returns a customer with preloaded contacts
+func (r *CustomerRepository) GetCustomerWithRelations(ctx context.Context, id uuid.UUID) (*domain.Customer, error) {
+	var customer domain.Customer
+	query := r.db.WithContext(ctx).
+		Preload("Contacts", func(db *gorm.DB) *gorm.DB {
+			return db.Where("is_active = ?", true).Limit(10)
+		}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&customer).Error
+	if err != nil {
+		return nil, err
+	}
+	return &customer, nil
+}
+
+// HasActiveRelations checks if a customer has active projects, offers, or deals
+func (r *CustomerRepository) HasActiveRelations(ctx context.Context, customerID uuid.UUID) (bool, string, error) {
+	// Check for active projects
+	var projectCount int64
+	err := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ? AND status IN (?, ?)", customerID, domain.ProjectStatusPlanning, domain.ProjectStatusActive).
+		Count(&projectCount).Error
+	if err != nil {
+		return false, "", err
+	}
+	if projectCount > 0 {
+		return true, "customer has active projects", nil
+	}
+
+	// Check for active deals
+	var dealCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Where("customer_id = ? AND stage NOT IN (?, ?)", customerID, domain.DealStageWon, domain.DealStageLost).
+		Count(&dealCount).Error
+	if err != nil {
+		return false, "", err
+	}
+	if dealCount > 0 {
+		return true, "customer has active deals", nil
+	}
+
+	// Check for active offers
+	var offerCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("customer_id = ? AND status = ?", customerID, domain.OfferStatusActive).
+		Count(&offerCount).Error
+	if err != nil {
+		return false, "", err
+	}
+	if offerCount > 0 {
+		return true, "customer has active offers", nil
+	}
+
+	return false, "", nil
 }

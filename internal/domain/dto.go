@@ -27,6 +27,31 @@ type CustomerDTO struct {
 	ActiveOffers  int       `json:"activeOffers,omitempty"`
 }
 
+// CustomerWithDetailsDTO includes customer data with related entities and statistics
+type CustomerWithDetailsDTO struct {
+	CustomerDTO
+	Stats          *CustomerStatsDTO `json:"stats,omitempty"`
+	Contacts       []ContactDTO      `json:"contacts,omitempty"`
+	ActiveDeals    []DealDTO         `json:"activeDeals,omitempty"`
+	ActiveProjects []ProjectDTO      `json:"activeProjects,omitempty"`
+}
+
+// CustomerStatsDTO holds aggregated statistics for a customer
+type CustomerStatsDTO struct {
+	TotalValue     float64 `json:"totalValue"`
+	ActiveOffers   int     `json:"activeOffers"`
+	ActiveDeals    int     `json:"activeDeals"`
+	ActiveProjects int     `json:"activeProjects"`
+	TotalContacts  int     `json:"totalContacts"`
+}
+
+// ErrorResponse represents an API error response
+type ErrorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
+	Code    int    `json:"code,omitempty"`
+}
+
 type ContactDTO struct {
 	ID                     uuid.UUID                `json:"id"`
 	FirstName              string                   `json:"firstName"`
@@ -63,22 +88,22 @@ type ContactRelationshipDTO struct {
 }
 
 type DealDTO struct {
-	ID                uuid.UUID `json:"id"`
-	Title             string    `json:"title"`
-	Description       string    `json:"description,omitempty"`
-	CustomerID        uuid.UUID `json:"customerId"`
-	CustomerName      string    `json:"customerName,omitempty"`
-	CompanyID         CompanyID `json:"companyId"`
-	Stage             DealStage `json:"stage"`
-	Probability       int       `json:"probability"`
-	Value             float64   `json:"value"`
-	WeightedValue     float64   `json:"weightedValue"`
-	Currency          string    `json:"currency"`
-	ExpectedCloseDate *string   `json:"expectedCloseDate,omitempty"`
-	ActualCloseDate   *string   `json:"actualCloseDate,omitempty"`
-	OwnerID           string    `json:"ownerId"`
-	OwnerName         string    `json:"ownerName,omitempty"`
-	Source            string    `json:"source,omitempty"`
+	ID                uuid.UUID  `json:"id"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description,omitempty"`
+	CustomerID        uuid.UUID  `json:"customerId"`
+	CustomerName      string     `json:"customerName,omitempty"`
+	CompanyID         CompanyID  `json:"companyId"`
+	Stage             DealStage  `json:"stage"`
+	Probability       int        `json:"probability"`
+	Value             float64    `json:"value"`
+	WeightedValue     float64    `json:"weightedValue"`
+	Currency          string     `json:"currency"`
+	ExpectedCloseDate *string    `json:"expectedCloseDate,omitempty"`
+	ActualCloseDate   *string    `json:"actualCloseDate,omitempty"`
+	OwnerID           string     `json:"ownerId"`
+	OwnerName         string     `json:"ownerName,omitempty"`
+	Source            string     `json:"source,omitempty"`
 	Notes             string     `json:"notes,omitempty"`
 	LostReason        string     `json:"lostReason,omitempty"`
 	OfferID           *uuid.UUID `json:"offerId,omitempty"`
