@@ -55,7 +55,7 @@ func TestApplyCompanyFilter_WithoutFilter(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 	ctx := auth.WithUserContext(context.Background(), userCtx)
 
@@ -124,7 +124,7 @@ func TestMustHaveCompanyAccess_NoFilter(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 	ctx := auth.WithUserContext(context.Background(), userCtx)
 
@@ -143,7 +143,7 @@ func TestGetEffectiveCompanyFilter_Priority(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyStalbygg,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 	ctx := auth.WithUserContext(context.Background(), userCtx)
 
@@ -169,7 +169,7 @@ func TestGetEffectiveCompanyFilter_GruppenUser(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 	ctx := auth.WithUserContext(context.Background(), userCtx)
 

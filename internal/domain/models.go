@@ -442,15 +442,16 @@ type Activity struct {
 	Company         *Company           `gorm:"foreignKey:CompanyID"`
 }
 
-// UserRole represents a role a user can have
+// UserRoleType represents a role a user can have
 type UserRoleType string
 
 const (
 	RoleSuperAdmin     UserRoleType = "super_admin"
 	RoleCompanyAdmin   UserRoleType = "company_admin"
 	RoleManager        UserRoleType = "manager"
-	RoleSales          UserRoleType = "sales"
+	RoleMarket         UserRoleType = "market"
 	RoleProjectManager UserRoleType = "project_manager"
+	RoleProjectLeader  UserRoleType = "project_leader"
 	RoleViewer         UserRoleType = "viewer"
 	RoleAPIService     UserRoleType = "api_service"
 )

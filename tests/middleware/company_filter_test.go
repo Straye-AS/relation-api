@@ -21,7 +21,7 @@ func TestCompanyFilterMiddleware_GruppenUser_NoFilter(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	var capturedFilter *auth.CompanyFilter
@@ -49,7 +49,7 @@ func TestCompanyFilterMiddleware_GruppenUser_WithFilter(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	var capturedFilter *auth.CompanyFilter
@@ -79,7 +79,7 @@ func TestCompanyFilterMiddleware_SubsidiaryUser_AutoFilter(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyStalbygg,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	var capturedFilter *auth.CompanyFilter
@@ -109,7 +109,7 @@ func TestCompanyFilterMiddleware_SubsidiaryUser_DeniedAccessToOtherCompany(t *te
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyStalbygg,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	handler := m.Filter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +134,7 @@ func TestCompanyFilterMiddleware_SubsidiaryUser_CanAccessOwnCompany(t *testing.T
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyStalbygg,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	var capturedFilter *auth.CompanyFilter
@@ -164,7 +164,7 @@ func TestCompanyFilterMiddleware_InvalidCompanyID(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	handler := m.Filter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +239,7 @@ func TestCompanyFilterMiddleware_AllCompaniesValid(t *testing.T) {
 	userCtx := &auth.UserContext{
 		UserID:    uuid.New(),
 		CompanyID: domain.CompanyGruppen,
-		Roles:     []domain.UserRoleType{domain.RoleSales},
+		Roles:     []domain.UserRoleType{domain.RoleMarket},
 	}
 
 	validCompanies := []domain.CompanyID{
