@@ -249,6 +249,8 @@ definitions:
         type: string
       city:
         type: string
+      contactType:
+        $ref: '#/definitions/domain.ContactType'
       country:
         type: string
       createdAt:
@@ -321,6 +323,22 @@ definitions:
       role:
         type: string
     type: object
+  domain.ContactType:
+    enum:
+    - primary
+    - secondary
+    - billing
+    - technical
+    - executive
+    - other
+    type: string
+    x-enum-varnames:
+    - ContactTypePrimary
+    - ContactTypeSecondary
+    - ContactTypeBilling
+    - ContactTypeTechnical
+    - ContactTypeExecutive
+    - ContactTypeOther
   domain.CreateContactRequest:
     properties:
       address:
@@ -329,6 +347,8 @@ definitions:
       city:
         maxLength: 100
         type: string
+      contactType:
+        $ref: '#/definitions/domain.ContactType'
       country:
         maxLength: 100
         type: string
@@ -391,6 +411,8 @@ definitions:
         type: string
       email:
         type: string
+      industry:
+        $ref: '#/definitions/domain.CustomerIndustry'
       name:
         maxLength: 200
         type: string
@@ -403,6 +425,10 @@ definitions:
       postalCode:
         maxLength: 20
         type: string
+      status:
+        $ref: '#/definitions/domain.CustomerStatus'
+      tier:
+        $ref: '#/definitions/domain.CustomerTier'
     required:
     - country
     - email
@@ -591,6 +617,8 @@ definitions:
         type: string
       id:
         type: string
+      industry:
+        $ref: '#/definitions/domain.CustomerIndustry'
       name:
         type: string
       orgNumber:
@@ -599,6 +627,126 @@ definitions:
         type: string
       postalCode:
         type: string
+      status:
+        $ref: '#/definitions/domain.CustomerStatus'
+      tier:
+        $ref: '#/definitions/domain.CustomerTier'
+      totalValue:
+        type: number
+      updatedAt:
+        description: ISO 8601
+        type: string
+    type: object
+  domain.CustomerIndustry:
+    enum:
+    - construction
+    - manufacturing
+    - retail
+    - logistics
+    - agriculture
+    - energy
+    - public_sector
+    - real_estate
+    - other
+    type: string
+    x-enum-varnames:
+    - CustomerIndustryConstruction
+    - CustomerIndustryManufacturing
+    - CustomerIndustryRetail
+    - CustomerIndustryLogistics
+    - CustomerIndustryAgriculture
+    - CustomerIndustryEnergy
+    - CustomerIndustryPublicSector
+    - CustomerIndustryRealEstate
+    - CustomerIndustryOther
+  domain.CustomerStatsDTO:
+    properties:
+      activeDeals:
+        type: integer
+      activeOffers:
+        type: integer
+      activeProjects:
+        type: integer
+      totalContacts:
+        type: integer
+      totalValue:
+        type: number
+    type: object
+  domain.CustomerStatus:
+    enum:
+    - active
+    - inactive
+    - lead
+    - churned
+    type: string
+    x-enum-varnames:
+    - CustomerStatusActive
+    - CustomerStatusInactive
+    - CustomerStatusLead
+    - CustomerStatusChurned
+  domain.CustomerTier:
+    enum:
+    - bronze
+    - silver
+    - gold
+    - platinum
+    type: string
+    x-enum-varnames:
+    - CustomerTierBronze
+    - CustomerTierSilver
+    - CustomerTierGold
+    - CustomerTierPlatinum
+  domain.CustomerWithDetailsDTO:
+    properties:
+      activeDeals:
+        items:
+          $ref: '#/definitions/domain.DealDTO'
+        type: array
+      activeOffers:
+        type: integer
+      activeProjects:
+        items:
+          $ref: '#/definitions/domain.ProjectDTO'
+        type: array
+      address:
+        type: string
+      city:
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        type: string
+      contactPhone:
+        type: string
+      contacts:
+        items:
+          $ref: '#/definitions/domain.ContactDTO'
+        type: array
+      country:
+        type: string
+      createdAt:
+        description: ISO 8601
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      industry:
+        $ref: '#/definitions/domain.CustomerIndustry'
+      name:
+        type: string
+      orgNumber:
+        type: string
+      phone:
+        type: string
+      postalCode:
+        type: string
+      stats:
+        $ref: '#/definitions/domain.CustomerStatsDTO'
+      status:
+        $ref: '#/definitions/domain.CustomerStatus'
+      tier:
+        $ref: '#/definitions/domain.CustomerTier'
       totalValue:
         type: number
       updatedAt:
@@ -758,6 +906,15 @@ definitions:
         type: integer
       totalValue:
         type: number
+    type: object
+  domain.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      error:
+        type: string
+      message:
+        type: string
     type: object
   domain.FileDTO:
     properties:
@@ -1098,6 +1255,8 @@ definitions:
       city:
         maxLength: 100
         type: string
+      contactType:
+        $ref: '#/definitions/domain.ContactType'
       country:
         maxLength: 100
         type: string
@@ -1162,6 +1321,8 @@ definitions:
         type: string
       email:
         type: string
+      industry:
+        $ref: '#/definitions/domain.CustomerIndustry'
       name:
         maxLength: 200
         type: string
@@ -1174,6 +1335,10 @@ definitions:
       postalCode:
         maxLength: 20
         type: string
+      status:
+        $ref: '#/definitions/domain.CustomerStatus'
+      tier:
+        $ref: '#/definitions/domain.CustomerTier'
     required:
     - country
     - email
@@ -1837,6 +2002,17 @@ paths:
         in: query
         name: title
         type: string
+      - description: Filter by contact type
+        enum:
+        - primary
+        - secondary
+        - billing
+        - technical
+        - executive
+        - other
+        in: query
+        name: contactType
+        type: string
       - description: Filter by related entity type
         enum:
         - customer
@@ -2114,6 +2290,9 @@ paths:
       - Contacts
   /customers:
     get:
+      consumes:
+      - application/json
+      description: Get paginated list of customers with optional filters
       parameters:
       - default: 1
         description: Page number
@@ -2121,13 +2300,64 @@ paths:
         name: page
         type: integer
       - default: 20
-        description: Page size
+        description: Items per page (max 200)
         in: query
         name: pageSize
         type: integer
-      - description: Search query
+      - description: Search by name or organization number
         in: query
         name: search
+        type: string
+      - description: Filter by city
+        in: query
+        name: city
+        type: string
+      - description: Filter by country
+        in: query
+        name: country
+        type: string
+      - description: Filter by status
+        enum:
+        - active
+        - inactive
+        - lead
+        - churned
+        in: query
+        name: status
+        type: string
+      - description: Filter by tier
+        enum:
+        - bronze
+        - silver
+        - gold
+        - platinum
+        in: query
+        name: tier
+        type: string
+      - description: Filter by industry
+        enum:
+        - construction
+        - manufacturing
+        - retail
+        - logistics
+        - agriculture
+        - energy
+        - public_sector
+        - real_estate
+        - other
+        in: query
+        name: industry
+        type: string
+      - description: Sort option
+        enum:
+        - name_asc
+        - name_desc
+        - created_desc
+        - created_asc
+        - city_asc
+        - city_desc
+        in: query
+        name: sortBy
         type: string
       produces:
       - application/json
@@ -2135,7 +2365,26 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.PaginatedResponse'
+            allOf:
+            - $ref: '#/definitions/domain.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.CustomerDTO'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -2145,6 +2394,7 @@ paths:
     post:
       consumes:
       - application/json
+      description: Create a new customer
       parameters:
       - description: Customer data
         in: body
@@ -2159,6 +2409,22 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Duplicate organization number
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -2167,15 +2433,42 @@ paths:
       - Customers
   /customers/{id}:
     delete:
+      consumes:
+      - application/json
+      description: Soft delete a customer. Cannot delete customers with active projects,
+        deals, or offers.
       parameters:
       - description: Customer ID
+        format: uuid
         in: path
         name: id
         required: true
         type: string
+      produces:
+      - application/json
       responses:
         "204":
           description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Customer has active dependencies
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -2183,8 +2476,13 @@ paths:
       tags:
       - Customers
     get:
+      consumes:
+      - application/json
+      description: Get a customer with full details including stats, contacts, active
+        deals, and projects
       parameters:
       - description: Customer ID
+        format: uuid
         in: path
         name: id
         required: true
@@ -2195,18 +2493,32 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.CustomerDTO'
+            $ref: '#/definitions/domain.CustomerWithDetailsDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
-      summary: Get customer
+      summary: Get customer by ID
       tags:
       - Customers
     put:
       consumes:
       - application/json
+      description: Update an existing customer
       parameters:
       - description: Customer ID
+        format: uuid
         in: path
         name: id
         required: true
@@ -2224,6 +2536,26 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Duplicate organization number
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -2232,8 +2564,12 @@ paths:
       - Customers
   /customers/{id}/contacts:
     get:
+      consumes:
+      - application/json
+      description: Get all contacts associated with a customer
       parameters:
       - description: Customer ID
+        format: uuid
         in: path
         name: id
         required: true
@@ -2247,6 +2583,18 @@ paths:
             items:
               $ref: '#/definitions/domain.ContactDTO'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -2256,8 +2604,10 @@ paths:
     post:
       consumes:
       - application/json
+      description: Create a new contact and associate it with the specified customer
       parameters:
       - description: Customer ID
+        format: uuid
         in: path
         name: id
         required: true
@@ -2275,6 +2625,22 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/domain.ContactDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []

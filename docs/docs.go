@@ -553,6 +553,20 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
+                            "primary",
+                            "secondary",
+                            "billing",
+                            "technical",
+                            "executive",
+                            "other"
+                        ],
+                        "type": "string",
+                        "description": "Filter by contact type",
+                        "name": "contactType",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
                             "customer",
                             "deal",
                             "project"
@@ -974,6 +988,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get paginated list of customers with optional filters",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -992,14 +1010,81 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "Page size",
+                        "description": "Items per page (max 200)",
                         "name": "pageSize",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Search query",
+                        "description": "Search by name or organization number",
                         "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by city",
+                        "name": "city",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by country",
+                        "name": "country",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "lead",
+                            "churned"
+                        ],
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "bronze",
+                            "silver",
+                            "gold",
+                            "platinum"
+                        ],
+                        "type": "string",
+                        "description": "Filter by tier",
+                        "name": "tier",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "construction",
+                            "manufacturing",
+                            "retail",
+                            "logistics",
+                            "agriculture",
+                            "energy",
+                            "public_sector",
+                            "real_estate",
+                            "other"
+                        ],
+                        "type": "string",
+                        "description": "Filter by industry",
+                        "name": "industry",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "name_asc",
+                            "name_desc",
+                            "created_desc",
+                            "created_asc",
+                            "city_asc",
+                            "city_desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort option",
+                        "name": "sortBy",
                         "in": "query"
                     }
                 ],
@@ -1007,7 +1092,40 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.PaginatedResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.CustomerDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -1021,6 +1139,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Create a new customer",
                 "consumes": [
                     "application/json"
                 ],
@@ -1048,6 +1167,30 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/domain.CustomerDTO"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate organization number",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -1062,16 +1205,21 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get a customer with full details including stats, contacts, active deals, and projects",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Get customer",
+                "summary": "Get customer by ID",
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Customer ID",
                         "name": "id",
                         "in": "path",
@@ -1082,7 +1230,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.CustomerDTO"
+                            "$ref": "#/definitions/domain.CustomerWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -1096,6 +1262,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Update an existing customer",
                 "consumes": [
                     "application/json"
                 ],
@@ -1109,6 +1276,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Customer ID",
                         "name": "id",
                         "in": "path",
@@ -1130,6 +1298,36 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/domain.CustomerDTO"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate organization number",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -1142,6 +1340,13 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Soft delete a customer. Cannot delete customers with active projects, deals, or offers.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "Customers"
                 ],
@@ -1149,6 +1354,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Customer ID",
                         "name": "id",
                         "in": "path",
@@ -1158,6 +1364,36 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Customer has active dependencies",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -1172,6 +1408,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get all contacts associated with a customer",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1182,6 +1422,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Customer ID",
                         "name": "id",
                         "in": "path",
@@ -1197,6 +1438,24 @@ const docTemplate = `{
                                 "$ref": "#/definitions/domain.ContactDTO"
                             }
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -1209,6 +1468,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Create a new contact and associate it with the specified customer",
                 "consumes": [
                     "application/json"
                 ],
@@ -1222,6 +1482,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Customer ID",
                         "name": "id",
                         "in": "path",
@@ -1242,6 +1503,30 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.ContactDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -3166,6 +3451,9 @@ const docTemplate = `{
                 "city": {
                     "type": "string"
                 },
+                "contactType": {
+                    "$ref": "#/definitions/domain.ContactType"
+                },
                 "country": {
                     "type": "string"
                 },
@@ -3272,6 +3560,25 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.ContactType": {
+            "type": "string",
+            "enum": [
+                "primary",
+                "secondary",
+                "billing",
+                "technical",
+                "executive",
+                "other"
+            ],
+            "x-enum-varnames": [
+                "ContactTypePrimary",
+                "ContactTypeSecondary",
+                "ContactTypeBilling",
+                "ContactTypeTechnical",
+                "ContactTypeExecutive",
+                "ContactTypeOther"
+            ]
+        },
         "domain.CreateContactRequest": {
             "type": "object",
             "required": [
@@ -3286,6 +3593,9 @@ const docTemplate = `{
                 "city": {
                     "type": "string",
                     "maxLength": 100
+                },
+                "contactType": {
+                    "$ref": "#/definitions/domain.ContactType"
                 },
                 "country": {
                     "type": "string",
@@ -3375,6 +3685,9 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "industry": {
+                    "$ref": "#/definitions/domain.CustomerIndustry"
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
@@ -3390,6 +3703,12 @@ const docTemplate = `{
                 "postalCode": {
                     "type": "string",
                     "maxLength": 20
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.CustomerStatus"
+                },
+                "tier": {
+                    "$ref": "#/definitions/domain.CustomerTier"
                 }
             }
         },
@@ -3647,6 +3966,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "industry": {
+                    "$ref": "#/definitions/domain.CustomerIndustry"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3658,6 +3980,172 @@ const docTemplate = `{
                 },
                 "postalCode": {
                     "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.CustomerStatus"
+                },
+                "tier": {
+                    "$ref": "#/definitions/domain.CustomerTier"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.CustomerIndustry": {
+            "type": "string",
+            "enum": [
+                "construction",
+                "manufacturing",
+                "retail",
+                "logistics",
+                "agriculture",
+                "energy",
+                "public_sector",
+                "real_estate",
+                "other"
+            ],
+            "x-enum-varnames": [
+                "CustomerIndustryConstruction",
+                "CustomerIndustryManufacturing",
+                "CustomerIndustryRetail",
+                "CustomerIndustryLogistics",
+                "CustomerIndustryAgriculture",
+                "CustomerIndustryEnergy",
+                "CustomerIndustryPublicSector",
+                "CustomerIndustryRealEstate",
+                "CustomerIndustryOther"
+            ]
+        },
+        "domain.CustomerStatsDTO": {
+            "type": "object",
+            "properties": {
+                "activeDeals": {
+                    "type": "integer"
+                },
+                "activeOffers": {
+                    "type": "integer"
+                },
+                "activeProjects": {
+                    "type": "integer"
+                },
+                "totalContacts": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.CustomerStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "inactive",
+                "lead",
+                "churned"
+            ],
+            "x-enum-varnames": [
+                "CustomerStatusActive",
+                "CustomerStatusInactive",
+                "CustomerStatusLead",
+                "CustomerStatusChurned"
+            ]
+        },
+        "domain.CustomerTier": {
+            "type": "string",
+            "enum": [
+                "bronze",
+                "silver",
+                "gold",
+                "platinum"
+            ],
+            "x-enum-varnames": [
+                "CustomerTierBronze",
+                "CustomerTierSilver",
+                "CustomerTierGold",
+                "CustomerTierPlatinum"
+            ]
+        },
+        "domain.CustomerWithDetailsDTO": {
+            "type": "object",
+            "properties": {
+                "activeDeals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.DealDTO"
+                    }
+                },
+                "activeOffers": {
+                    "type": "integer"
+                },
+                "activeProjects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ProjectDTO"
+                    }
+                },
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "contactEmail": {
+                    "type": "string"
+                },
+                "contactPerson": {
+                    "type": "string"
+                },
+                "contactPhone": {
+                    "type": "string"
+                },
+                "contacts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ContactDTO"
+                    }
+                },
+                "country": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "industry": {
+                    "$ref": "#/definitions/domain.CustomerIndustry"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgNumber": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "postalCode": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/domain.CustomerStatsDTO"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.CustomerStatus"
+                },
+                "tier": {
+                    "$ref": "#/definitions/domain.CustomerTier"
                 },
                 "totalValue": {
                     "type": "number"
@@ -3893,6 +4381,20 @@ const docTemplate = `{
                 },
                 "totalValue": {
                     "type": "number"
+                }
+            }
+        },
+        "domain.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
                 }
             }
         },
@@ -4396,6 +4898,9 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "contactType": {
+                    "$ref": "#/definitions/domain.ContactType"
+                },
                 "country": {
                     "type": "string",
                     "maxLength": 100
@@ -4487,6 +4992,9 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "industry": {
+                    "$ref": "#/definitions/domain.CustomerIndustry"
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
@@ -4502,6 +5010,12 @@ const docTemplate = `{
                 "postalCode": {
                     "type": "string",
                     "maxLength": 20
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.CustomerStatus"
+                },
+                "tier": {
+                    "$ref": "#/definitions/domain.CustomerTier"
                 }
             }
         },

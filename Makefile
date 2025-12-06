@@ -16,7 +16,7 @@ build: ## Build the application binaries
 	$(GO) build -o $(BIN_DIR)/api $(APP_CMD)
 	$(GO) build -o $(BIN_DIR)/migrate $(MIGRATE_CMD)
 
-run: ## Run the application locally (single run)
+run: swagger ## Run the application locally (single run, regenerates Swagger docs)
 	$(GO) run $(APP_CMD)
 
 dev: ## Run the API with Air hot reload
@@ -49,10 +49,10 @@ lint: ## Run linters
 swagger: ## Generate Swagger documentation
 	swag init -g cmd/api/main.go -o ./docs
 
-docker-build: ## Build Docker images
+docker-build: swagger ## Build Docker images (regenerates Swagger docs first)
 	docker compose build
 
-docker-up: ## Start all services with Docker Compose
+docker-up: swagger ## Start all services with Docker Compose (regenerates Swagger docs first)
 	docker compose up -d
 
 docker-down: ## Stop all services

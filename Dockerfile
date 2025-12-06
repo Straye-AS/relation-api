@@ -1,8 +1,9 @@
 # Build stage
 FROM golang:1.23-alpine AS builder
 
-# Install build dependencies
+# Install build dependencies including swag for Swagger generation
 RUN apk add --no-cache git ca-certificates tzdata
+RUN go install github.com/swaggo/swag/cmd/swag@latest
 
 WORKDIR /app
 
@@ -12,6 +13,9 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Generate Swagger documentation
+RUN swag init -g cmd/api/main.go -o ./docs
 
 # Build application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o /bin/api ./cmd/api
@@ -31,6 +35,7 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /bin/api /app/api
 COPY --from=builder /app/config.json /app/config.json
+COPY --from=builder /app/docs /app/docs
 
 # Create storage directory
 RUN mkdir -p /app/storage && \
