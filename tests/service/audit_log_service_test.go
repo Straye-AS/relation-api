@@ -118,16 +118,22 @@ func TestAuditLogService_List(t *testing.T) {
 	svc, db := createTestAuditLogService(t)
 	ctx := context.Background()
 
-	// Create multiple logs
+	// Create multiple logs with valid JSONB values and IP address
 	userID := "test-user-123"
 	for i := 0; i < 5; i++ {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      userID,
 			Action:      domain.AuditActionCreate,
 			EntityType:  "Customer",
 			PerformedAt: time.Now(),
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
 	// List all
@@ -163,15 +169,21 @@ func TestAuditLogService_ListWithPagination(t *testing.T) {
 	svc, db := createTestAuditLogService(t)
 	ctx := context.Background()
 
-	// Create 15 logs
+	// Create 15 logs with valid JSONB values and IP address
 	for i := 0; i < 15; i++ {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      "test-user",
 			Action:      domain.AuditActionCreate,
 			EntityType:  "Customer",
 			PerformedAt: time.Now().Add(time.Duration(-i) * time.Minute),
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
 	// Get first page
@@ -207,28 +219,40 @@ func TestAuditLogService_GetByEntity(t *testing.T) {
 
 	entityID := uuid.New()
 
-	// Create logs for specific entity
+	// Create logs for specific entity with valid JSONB values and IP address
 	for i := 0; i < 3; i++ {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      "test-user",
 			Action:      domain.AuditActionUpdate,
 			EntityType:  "Customer",
 			EntityID:    &entityID,
 			PerformedAt: time.Now(),
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
 	// Create logs for other entity
 	otherID := uuid.New()
-	db.Create(&domain.AuditLog{
+	err := db.Create(&domain.AuditLog{
 		ID:          uuid.New(),
 		UserID:      "test-user",
 		Action:      domain.AuditActionCreate,
 		EntityType:  "Customer",
 		EntityID:    &otherID,
 		PerformedAt: time.Now(),
-	})
+		OldValues:   "null",
+		NewValues:   "null",
+		Changes:     "null",
+		Metadata:    "null",
+		IPAddress:   "127.0.0.1",
+	}).Error
+	require.NoError(t, err)
 
 	logs, err := svc.GetByEntity(ctx, "Customer", entityID, 10)
 	require.NoError(t, err)
@@ -239,26 +263,38 @@ func TestAuditLogService_GetByUser(t *testing.T) {
 	svc, db := createTestAuditLogService(t)
 	ctx := context.Background()
 
-	// Create logs for specific user
+	// Create logs for specific user with valid JSONB values and IP address
 	userID := "user-123"
 	for i := 0; i < 4; i++ {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      userID,
 			Action:      domain.AuditActionCreate,
 			EntityType:  "Project",
 			PerformedAt: time.Now(),
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
 	// Create logs for other user
-	db.Create(&domain.AuditLog{
+	err := db.Create(&domain.AuditLog{
 		ID:          uuid.New(),
 		UserID:      "other-user",
 		Action:      domain.AuditActionCreate,
 		EntityType:  "Project",
 		PerformedAt: time.Now(),
-	})
+		OldValues:   "null",
+		NewValues:   "null",
+		Changes:     "null",
+		Metadata:    "null",
+		IPAddress:   "127.0.0.1",
+	}).Error
+	require.NoError(t, err)
 
 	logs, err := svc.GetByUser(ctx, userID, 10)
 	require.NoError(t, err)
@@ -273,7 +309,7 @@ func TestAuditLogService_GetStats(t *testing.T) {
 	start := now.Add(-1 * time.Hour)
 	end := now.Add(1 * time.Hour)
 
-	// Create logs with different actions
+	// Create logs with different actions, valid JSONB values and IP address
 	actions := []domain.AuditAction{
 		domain.AuditActionCreate,
 		domain.AuditActionCreate,
@@ -284,13 +320,19 @@ func TestAuditLogService_GetStats(t *testing.T) {
 	}
 
 	for _, action := range actions {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      "test-user",
 			Action:      action,
 			EntityType:  "Customer",
 			PerformedAt: now,
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
 	stats, err := svc.GetStats(ctx, start, end)
@@ -306,26 +348,38 @@ func TestAuditLogService_CleanupOldLogs(t *testing.T) {
 
 	now := time.Now()
 
-	// Create old logs (> 30 days)
+	// Create old logs (> 30 days) with valid JSONB values and IP address
 	for i := 0; i < 3; i++ {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      "test-user",
 			Action:      domain.AuditActionCreate,
 			EntityType:  "Customer",
 			PerformedAt: now.AddDate(0, 0, -60), // 60 days ago
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
-	// Create recent logs
+	// Create recent logs with valid JSONB values and IP address
 	for i := 0; i < 2; i++ {
-		db.Create(&domain.AuditLog{
+		err := db.Create(&domain.AuditLog{
 			ID:          uuid.New(),
 			UserID:      "test-user",
 			Action:      domain.AuditActionCreate,
 			EntityType:  "Customer",
 			PerformedAt: now,
-		})
+			OldValues:   "null",
+			NewValues:   "null",
+			Changes:     "null",
+			Metadata:    "null",
+			IPAddress:   "127.0.0.1",
+		}).Error
+		require.NoError(t, err)
 	}
 
 	// Cleanup logs older than 30 days

@@ -66,18 +66,26 @@ func (s *AuditLogService) Log(ctx context.Context, r *http.Request, entry LogEnt
 		auditLog.RequestID = r.Header.Get("X-Request-ID")
 	}
 
-	// Serialize old values
+	// Serialize old values (use "null" for JSONB compatibility when no value)
 	if entry.OldValues != nil {
 		if oldJSON, err := json.Marshal(entry.OldValues); err == nil {
 			auditLog.OldValues = string(oldJSON)
+		} else {
+			auditLog.OldValues = "null"
 		}
+	} else {
+		auditLog.OldValues = "null"
 	}
 
-	// Serialize new values
+	// Serialize new values (use "null" for JSONB compatibility when no value)
 	if entry.NewValues != nil {
 		if newJSON, err := json.Marshal(entry.NewValues); err == nil {
 			auditLog.NewValues = string(newJSON)
+		} else {
+			auditLog.NewValues = "null"
 		}
+	} else {
+		auditLog.NewValues = "null"
 	}
 
 	// Calculate changes if both old and new values exist
@@ -85,14 +93,22 @@ func (s *AuditLogService) Log(ctx context.Context, r *http.Request, entry LogEnt
 		changes := s.calculateChanges(entry.OldValues, entry.NewValues)
 		if changesJSON, err := json.Marshal(changes); err == nil {
 			auditLog.Changes = string(changesJSON)
+		} else {
+			auditLog.Changes = "null"
 		}
+	} else {
+		auditLog.Changes = "null"
 	}
 
-	// Serialize metadata
+	// Serialize metadata (use "null" for JSONB compatibility when no value)
 	if entry.Metadata != nil {
 		if metaJSON, err := json.Marshal(entry.Metadata); err == nil {
 			auditLog.Metadata = string(metaJSON)
+		} else {
+			auditLog.Metadata = "null"
 		}
+	} else {
+		auditLog.Metadata = "null"
 	}
 
 	err := s.auditRepo.Create(ctx, auditLog)

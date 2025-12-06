@@ -6,29 +6,22 @@ import (
 
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
+	"github.com/straye-as/relation-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-func setupTestDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	err = db.AutoMigrate(
-		&domain.Customer{},
-		&domain.Contact{},
-		&domain.Project{},
-		&domain.Offer{},
-	)
-	require.NoError(t, err)
-
+func setupCustomerTestDB(t *testing.T) *gorm.DB {
+	db := testutil.SetupTestDB(t)
+	t.Cleanup(func() {
+		testutil.CleanupTestData(t, db)
+	})
 	return db
 }
 
 func TestCustomerRepository_Create(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupCustomerTestDB(t)
 	repo := repository.NewCustomerRepository(db)
 
 	customer := &domain.Customer{
@@ -51,7 +44,7 @@ func TestCustomerRepository_Create(t *testing.T) {
 }
 
 func TestCustomerRepository_GetByID(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupCustomerTestDB(t)
 	repo := repository.NewCustomerRepository(db)
 
 	customer := &domain.Customer{
@@ -87,14 +80,14 @@ func TestCustomerRepository_GetByID(t *testing.T) {
 }
 
 func TestCustomerRepository_List(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupCustomerTestDB(t)
 	repo := repository.NewCustomerRepository(db)
 
-	// Create test customers
+	// Create test customers with unique OrgNumbers
 	customers := []*domain.Customer{
-		{Name: "Tech Corp", OrgNumber: "1234567890", Email: "test@example.com", Phone: "1234567890", Address: "123 Main St", City: "Anytown", PostalCode: "12345", Country: "Norway", ContactPerson: "John Doe", ContactEmail: "john.doe@example.com", ContactPhone: "+1234567890"},
-		{Name: "Finance Inc", OrgNumber: "1234567890", Email: "test@example.com", Phone: "1234567890", Address: "123 Main St", City: "Anytown", PostalCode: "12345", Country: "Norway", ContactPerson: "John Doe", ContactEmail: "john.doe@example.com", ContactPhone: "+1234567890"},
-		{Name: "Tech Solutions", OrgNumber: "1234567890", Email: "test@example.com", Phone: "1234567890", Address: "123 Main St", City: "Anytown", PostalCode: "12345", Country: "Norway", ContactPerson: "John Doe", ContactEmail: "john.doe@example.com", ContactPhone: "+1234567890"},
+		{Name: "Tech Corp", OrgNumber: "123456001", Email: "test@example.com", Phone: "1234567890", Address: "123 Main St", City: "Anytown", PostalCode: "12345", Country: "Norway", ContactPerson: "John Doe", ContactEmail: "john.doe@example.com", ContactPhone: "+1234567890"},
+		{Name: "Finance Inc", OrgNumber: "123456002", Email: "test@example.com", Phone: "1234567890", Address: "123 Main St", City: "Anytown", PostalCode: "12345", Country: "Norway", ContactPerson: "John Doe", ContactEmail: "john.doe@example.com", ContactPhone: "+1234567890"},
+		{Name: "Tech Solutions", OrgNumber: "123456003", Email: "test@example.com", Phone: "1234567890", Address: "123 Main St", City: "Anytown", PostalCode: "12345", Country: "Norway", ContactPerson: "John Doe", ContactEmail: "john.doe@example.com", ContactPhone: "+1234567890"},
 	}
 
 	for _, c := range customers {
@@ -122,7 +115,7 @@ func TestCustomerRepository_List(t *testing.T) {
 }
 
 func TestCustomerRepository_Update(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupCustomerTestDB(t)
 	repo := repository.NewCustomerRepository(db)
 
 	customer := &domain.Customer{
@@ -173,7 +166,7 @@ func TestCustomerRepository_Update(t *testing.T) {
 }
 
 func TestCustomerRepository_Delete(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupCustomerTestDB(t)
 	repo := repository.NewCustomerRepository(db)
 
 	customer := &domain.Customer{

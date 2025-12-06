@@ -33,14 +33,15 @@ test: ## Run fast unit tests (no database required)
 	$(GO) test -v -race -cover ./tests/auth ./tests/mapper
 
 test-all: ## Run all tests including integration tests
-	$(GO) test -v -race -cover ./tests/...
+	$(GO) test -v -race -cover ./tests/auth ./tests/mapper
+	$(GO) test -v -p 1 -cover ./tests/repository ./tests/service ./tests/handler ./tests/middleware
 
 test-coverage: ## Run tests with coverage report
 	$(GO) test -v -race -coverprofile=coverage.out ./tests/auth ./tests/mapper
 	$(GO) tool cover -html=coverage.out -o coverage.html
 
 test-integration: ## Run integration tests (requires database)
-	$(GO) test -v -race -cover ./tests/repository ./tests/service
+	$(GO) test -v -p 1 -cover ./tests/repository ./tests/service
 
 lint: ## Run linters
 	golangci-lint run ./...
