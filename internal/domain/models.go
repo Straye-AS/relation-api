@@ -449,8 +449,9 @@ const (
 	RoleSuperAdmin     UserRoleType = "super_admin"
 	RoleCompanyAdmin   UserRoleType = "company_admin"
 	RoleManager        UserRoleType = "manager"
-	RoleSales          UserRoleType = "sales"
+	RoleMarket         UserRoleType = "market"
 	RoleProjectManager UserRoleType = "project_manager"
+	RoleProjectLeader  UserRoleType = "project_leader"
 	RoleViewer         UserRoleType = "viewer"
 	RoleAPIService     UserRoleType = "api_service"
 )

@@ -182,7 +182,7 @@ func getRolePermissions(roles []domain.UserRoleType) []domain.PermissionType {
 			domain.PermissionUsersRead,
 			domain.PermissionReportsView, domain.PermissionReportsExport,
 		},
-		domain.RoleSales: {
+		domain.RoleMarket: {
 			domain.PermissionCustomersRead, domain.PermissionCustomersWrite,
 			domain.PermissionContactsRead, domain.PermissionContactsWrite,
 			domain.PermissionDealsRead, domain.PermissionDealsWrite,
@@ -193,6 +193,16 @@ func getRolePermissions(roles []domain.UserRoleType) []domain.PermissionType {
 			domain.PermissionReportsView,
 		},
 		domain.RoleProjectManager: {
+			domain.PermissionCustomersRead,
+			domain.PermissionContactsRead, domain.PermissionContactsWrite,
+			domain.PermissionDealsRead,
+			domain.PermissionOffersRead,
+			domain.PermissionProjectsRead, domain.PermissionProjectsWrite,
+			domain.PermissionBudgetsRead, domain.PermissionBudgetsWrite,
+			domain.PermissionActivitiesRead, domain.PermissionActivitiesWrite,
+			domain.PermissionReportsView,
+		},
+		domain.RoleProjectLeader: {
 			domain.PermissionCustomersRead,
 			domain.PermissionContactsRead, domain.PermissionContactsWrite,
 			domain.PermissionDealsRead,
