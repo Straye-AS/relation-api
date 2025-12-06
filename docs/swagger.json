@@ -1,0 +1,4297 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "CRM Relation API for customer, project, and sales pipeline management",
+        "title": "Straye Relation API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "email": "support@straye.io"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/audit": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of audit log entries with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "List audit logs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default: 20, max: 100)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by user ID",
+                        "name": "userId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by action type",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by entity type",
+                        "name": "entityType",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by entity ID",
+                        "name": "entityId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by start time (RFC3339)",
+                        "name": "startTime",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by end time (RFC3339)",
+                        "name": "endTime",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuditLogListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/audit/entity/{entityType}/{entityId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns audit logs for a specific entity",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Get audit logs for an entity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Entity type (e.g., Customer, Project)",
+                        "name": "entityType",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Entity ID",
+                        "name": "entityId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of entries (default: 50)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.AuditLogDTO"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/audit/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Exports audit logs for a time range as JSON",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Export audit logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "startTime",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "endTime",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.AuditLog"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/audit/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns statistics about audit log actions for a time range",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Get audit log statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "startTime",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "endTime",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuditStatsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/audit/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a specific audit log entry",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Get audit log by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Audit log ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuditLogDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current authenticated user with roles, company, and permissions info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Get current authenticated user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AuthUserDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/permissions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the full list of permissions for the current authenticated user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Get current user's permissions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PermissionsResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/companies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Companies"
+                ],
+                "summary": "Get all companies",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.Company"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/customers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customers",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PaginatedResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Create customer",
+                "parameters": [
+                    {
+                        "description": "Customer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateCustomerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Get customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Customer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Delete customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/customers/{id}/contacts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customer contacts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.ContactDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Create contact for customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Contact data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateContactRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ContactDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/metrics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get dashboard metrics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DashboardMetrics"
+                        }
+                    }
+                }
+            }
+        },
+        "/deals": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List deals with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "List deals",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by stage (lead, qualified, proposal, negotiation, won, lost)",
+                        "name": "stage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by owner ID",
+                        "name": "ownerId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by customer ID",
+                        "name": "customerId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by company ID",
+                        "name": "companyId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by source",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Minimum value",
+                        "name": "minValue",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Maximum value",
+                        "name": "maxValue",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created after date (YYYY-MM-DD)",
+                        "name": "createdAfter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created before date (YYYY-MM-DD)",
+                        "name": "createdBefore",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Expected close after date (YYYY-MM-DD)",
+                        "name": "closeAfter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Expected close before date (YYYY-MM-DD)",
+                        "name": "closeBefore",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort by (created_desc, created_asc, value_desc, value_asc, probability_desc, probability_asc, close_date_desc, close_date_asc, weighted_desc, weighted_asc)",
+                        "name": "sort",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PaginatedResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new deal in the sales pipeline",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Create deal",
+                "parameters": [
+                    {
+                        "description": "Deal data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateDealRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DealDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/forecast": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get forecast data for upcoming months",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get pipeline forecast",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Number of months to forecast",
+                        "name": "months",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repository.ForecastPeriod"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/pipeline": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all deals grouped by stage for pipeline view",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get pipeline overview",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/domain.DealDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get aggregated statistics for the sales pipeline",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get pipeline statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repository.PipelineStats"
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a deal by ID with full details including stage history",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.DealWithHistoryResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update an existing deal",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Update deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Deal data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateDealRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DealDTO"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a deal",
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Delete deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/deals/{id}/activities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get activities for a deal",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get deal activities",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Limit results",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.ActivityDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/{id}/advance": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Advance a deal to the next stage in the pipeline",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Advance deal stage",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Stage data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateDealStageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DealDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/{id}/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the stage history for a deal",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get deal stage history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.DealStageHistoryDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/{id}/lose": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Mark a deal as lost with a reason",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Lose deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lost reason",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.LoseDealRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DealDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/{id}/reopen": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reopen a lost deal as a new lead",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Reopen deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DealDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/deals/{id}/win": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Mark a deal as won and optionally create a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Win deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Create a project from the deal",
+                        "name": "createProject",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.WinDealResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/files/upload": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Files"
+                ],
+                "summary": "Upload file",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "File to upload",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Offer ID to attach file to",
+                        "name": "offerId",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.FileDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/files/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Files"
+                ],
+                "summary": "Get file metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.FileDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/files/{id}/download": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Files"
+                ],
+                "summary": "Download file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/offers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "List offers",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by customer ID",
+                        "name": "customerId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by project ID",
+                        "name": "projectId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PaginatedResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Create offer",
+                "parameters": [
+                    {
+                        "description": "Offer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferWithItemsDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Offer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/activities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer activities",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.ActivityDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/advance": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Advance offer phase",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phase data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AdvanceOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer files",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.FileDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer items",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.OfferItemDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Add offer item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Item data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateOfferItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferItemDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "List projects",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by customer ID",
+                        "name": "customerId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PaginatedResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Create project",
+                "parameters": [
+                    {
+                        "description": "Project data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Get project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Project data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/activities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Get project activities",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.ActivityDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/budget": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Get project budget",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectBudgetDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Search"
+                ],
+                "summary": "Global search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SearchResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a list of users (currently only returns the authenticated user)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List users",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.UserDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "domain.ActivityDTO": {
+            "type": "object",
+            "properties": {
+                "activityType": {
+                    "$ref": "#/definitions/domain.ActivityType"
+                },
+                "assignedToId": {
+                    "type": "string"
+                },
+                "body": {
+                    "type": "string"
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "completedAt": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "creatorId": {
+                    "type": "string"
+                },
+                "creatorName": {
+                    "type": "string"
+                },
+                "dueDate": {
+                    "type": "string"
+                },
+                "durationMinutes": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isPrivate": {
+                    "type": "boolean"
+                },
+                "occurredAt": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scheduledAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.ActivityStatus"
+                },
+                "targetId": {
+                    "type": "string"
+                },
+                "targetType": {
+                    "$ref": "#/definitions/domain.ActivityTargetType"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ActivityStatus": {
+            "type": "string",
+            "enum": [
+                "planned",
+                "in_progress",
+                "completed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ActivityStatusPlanned",
+                "ActivityStatusInProgress",
+                "ActivityStatusCompleted",
+                "ActivityStatusCancelled"
+            ]
+        },
+        "domain.ActivityTargetType": {
+            "type": "string",
+            "enum": [
+                "Customer",
+                "Contact",
+                "Project",
+                "Offer",
+                "Deal",
+                "File",
+                "Notification"
+            ],
+            "x-enum-varnames": [
+                "ActivityTargetCustomer",
+                "ActivityTargetContact",
+                "ActivityTargetProject",
+                "ActivityTargetOffer",
+                "ActivityTargetDeal",
+                "ActivityTargetFile",
+                "ActivityTargetNotification"
+            ]
+        },
+        "domain.ActivityType": {
+            "type": "string",
+            "enum": [
+                "meeting",
+                "call",
+                "email",
+                "task",
+                "note",
+                "system"
+            ],
+            "x-enum-varnames": [
+                "ActivityTypeMeeting",
+                "ActivityTypeCall",
+                "ActivityTypeEmail",
+                "ActivityTypeTask",
+                "ActivityTypeNote",
+                "ActivityTypeSystem"
+            ]
+        },
+        "domain.AdvanceOfferRequest": {
+            "type": "object",
+            "required": [
+                "phase"
+            ],
+            "properties": {
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                }
+            }
+        },
+        "domain.AuditAction": {
+            "type": "string",
+            "enum": [
+                "create",
+                "update",
+                "delete",
+                "login",
+                "logout",
+                "permission_grant",
+                "permission_revoke",
+                "role_assign",
+                "role_remove",
+                "export",
+                "import",
+                "api_call"
+            ],
+            "x-enum-varnames": [
+                "AuditActionCreate",
+                "AuditActionUpdate",
+                "AuditActionDelete",
+                "AuditActionLogin",
+                "AuditActionLogout",
+                "AuditActionPermissionGrant",
+                "AuditActionPermissionRevoke",
+                "AuditActionRoleAssign",
+                "AuditActionRoleRemove",
+                "AuditActionExport",
+                "AuditActionImport",
+                "AuditActionAPICall"
+            ]
+        },
+        "domain.AuditLog": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/domain.AuditAction"
+                },
+                "changes": {
+                    "type": "string"
+                },
+                "companyID": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "entityID": {
+                    "type": "string"
+                },
+                "entityName": {
+                    "type": "string"
+                },
+                "entityType": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ipaddress": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "string"
+                },
+                "newValues": {
+                    "type": "string"
+                },
+                "oldValues": {
+                    "type": "string"
+                },
+                "performedAt": {
+                    "type": "string"
+                },
+                "requestID": {
+                    "type": "string"
+                },
+                "userAgent": {
+                    "type": "string"
+                },
+                "userEmail": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "userName": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.AuthUserDTO": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "$ref": "#/definitions/domain.CompanyDTO"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initials": {
+                    "type": "string"
+                },
+                "isCompanyAdmin": {
+                    "type": "boolean"
+                },
+                "isSuperAdmin": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.Company": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "logo": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgNumber": {
+                    "type": "string"
+                },
+                "shortName": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.CompanyDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.CompanyID": {
+            "type": "string",
+            "enum": [
+                "all",
+                "gruppen",
+                "stalbygg",
+                "hybridbygg",
+                "industri",
+                "tak",
+                "montasje"
+            ],
+            "x-enum-varnames": [
+                "CompanyAll",
+                "CompanyGruppen",
+                "CompanyStalbygg",
+                "CompanyHybridbygg",
+                "CompanyIndustri",
+                "CompanyTak",
+                "CompanyMontasje"
+            ]
+        },
+        "domain.ContactDTO": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string"
+                },
+                "fullName": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "linkedInUrl": {
+                    "type": "string"
+                },
+                "mobile": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "postalCode": {
+                    "type": "string"
+                },
+                "preferredContactMethod": {
+                    "type": "string"
+                },
+                "primaryCustomerId": {
+                    "type": "string"
+                },
+                "primaryCustomerName": {
+                    "type": "string"
+                },
+                "relationships": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ContactRelationshipDTO"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ContactEntityType": {
+            "type": "string",
+            "enum": [
+                "customer",
+                "project",
+                "deal"
+            ],
+            "x-enum-varnames": [
+                "ContactEntityCustomer",
+                "ContactEntityProject",
+                "ContactEntityDeal"
+            ]
+        },
+        "domain.ContactRelationshipDTO": {
+            "type": "object",
+            "properties": {
+                "contactId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "entityId": {
+                    "type": "string"
+                },
+                "entityType": {
+                    "$ref": "#/definitions/domain.ContactEntityType"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isPrimary": {
+                    "type": "boolean"
+                },
+                "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.CreateContactRequest": {
+            "type": "object",
+            "required": [
+                "firstName",
+                "lastName"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "department": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "firstName": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "lastName": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "linkedInUrl": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "mobile": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "preferredContactMethod": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "primaryCustomerId": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "domain.CreateCustomerRequest": {
+            "type": "object",
+            "required": [
+                "country",
+                "email",
+                "name",
+                "orgNumber",
+                "phone"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "contactEmail": {
+                    "type": "string"
+                },
+                "contactPerson": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "contactPhone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "orgNumber": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                }
+            }
+        },
+        "domain.CreateDealRequest": {
+            "type": "object",
+            "required": [
+                "companyId",
+                "customerId",
+                "ownerId",
+                "title"
+            ],
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "currency": {
+                    "type": "string",
+                    "maxLength": 3
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "expectedCloseDate": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "ownerId": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "probability": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "source": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "stage": {
+                    "$ref": "#/definitions/domain.DealStage"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "value": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "domain.CreateOfferItemRequest": {
+            "type": "object",
+            "required": [
+                "cost",
+                "discipline",
+                "revenue"
+            ],
+            "properties": {
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "description": {
+                    "type": "string"
+                },
+                "discipline": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "revenue": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "unit": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
+        "domain.CreateOfferRequest": {
+            "type": "object",
+            "required": [
+                "companyId",
+                "customerId",
+                "items",
+                "phase",
+                "responsibleUserId",
+                "status",
+                "title"
+            ],
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/domain.CreateOfferItemRequest"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "probability": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "responsibleUserId": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "domain.CreateProjectRequest": {
+            "type": "object",
+            "required": [
+                "companyId",
+                "customerId",
+                "managerId",
+                "name",
+                "startDate",
+                "status"
+            ],
+            "properties": {
+                "budget": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "completionPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "dealId": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "endDate": {
+                    "type": "string"
+                },
+                "estimatedCompletionDate": {
+                    "type": "string"
+                },
+                "hasDetailedBudget": {
+                    "type": "boolean"
+                },
+                "health": {
+                    "$ref": "#/definitions/domain.ProjectHealth"
+                },
+                "managerId": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "spent": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "startDate": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.ProjectStatus"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.CustomerDTO": {
+            "type": "object",
+            "properties": {
+                "activeOffers": {
+                    "type": "integer"
+                },
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "contactEmail": {
+                    "type": "string"
+                },
+                "contactPerson": {
+                    "type": "string"
+                },
+                "contactPhone": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgNumber": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "postalCode": {
+                    "type": "string"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.DashboardMetrics": {
+            "type": "object",
+            "properties": {
+                "activeOffers": {
+                    "type": "integer"
+                },
+                "activeProjects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ProjectDTO"
+                    }
+                },
+                "averageProbability": {
+                    "type": "number"
+                },
+                "lostOffers": {
+                    "type": "integer"
+                },
+                "offerReserve": {
+                    "type": "number"
+                },
+                "offersByPhase": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "pipeline": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PipelinePhaseData"
+                    }
+                },
+                "recentActivities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.NotificationDTO"
+                    }
+                },
+                "recentOffers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferDTO"
+                    }
+                },
+                "recentProjects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ProjectDTO"
+                    }
+                },
+                "revenueForecast30Days": {
+                    "type": "number"
+                },
+                "revenueForecast90Days": {
+                    "type": "number"
+                },
+                "teamPerformance": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.TeamMemberStats"
+                    }
+                },
+                "topCustomers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.CustomerDTO"
+                    }
+                },
+                "topDisciplines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.DisciplineStats"
+                    }
+                },
+                "totalOffers": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "weightedValue": {
+                    "type": "number"
+                },
+                "winRate": {
+                    "type": "number"
+                },
+                "wonOffers": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.DealDTO": {
+            "type": "object",
+            "properties": {
+                "actualCloseDate": {
+                    "type": "string"
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "customerName": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "expectedCloseDate": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lostReason": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "ownerId": {
+                    "type": "string"
+                },
+                "ownerName": {
+                    "type": "string"
+                },
+                "probability": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "stage": {
+                    "$ref": "#/definitions/domain.DealStage"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "weightedValue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.DealStage": {
+            "type": "string",
+            "enum": [
+                "lead",
+                "qualified",
+                "proposal",
+                "negotiation",
+                "won",
+                "lost"
+            ],
+            "x-enum-varnames": [
+                "DealStageLead",
+                "DealStageQualified",
+                "DealStageProposal",
+                "DealStageNegotiation",
+                "DealStageWon",
+                "DealStageLost"
+            ]
+        },
+        "domain.DealStageHistoryDTO": {
+            "type": "object",
+            "properties": {
+                "changedAt": {
+                    "type": "string"
+                },
+                "changedById": {
+                    "type": "string"
+                },
+                "changedByName": {
+                    "type": "string"
+                },
+                "dealId": {
+                    "type": "string"
+                },
+                "fromStage": {
+                    "$ref": "#/definitions/domain.DealStage"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "toStage": {
+                    "$ref": "#/definitions/domain.DealStage"
+                }
+            }
+        },
+        "domain.DisciplineStats": {
+            "type": "object",
+            "properties": {
+                "avgMargin": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "offerCount": {
+                    "type": "integer"
+                },
+                "projectCount": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.FileDTO": {
+            "type": "object",
+            "properties": {
+                "contentType": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.NotificationDTO": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "entityId": {
+                    "type": "string"
+                },
+                "entityType": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "read": {
+                    "type": "boolean"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.OfferDTO": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "customerName": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferItemDTO"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "probability": {
+                    "type": "integer"
+                },
+                "responsibleUserId": {
+                    "type": "string"
+                },
+                "responsibleUserName": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.OfferItemDTO": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "discipline": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "margin": {
+                    "type": "number"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "revenue": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.OfferPhase": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "in_progress",
+                "sent",
+                "won",
+                "lost",
+                "expired"
+            ],
+            "x-enum-varnames": [
+                "OfferPhaseDraft",
+                "OfferPhaseInProgress",
+                "OfferPhaseSent",
+                "OfferPhaseWon",
+                "OfferPhaseLost",
+                "OfferPhaseExpired"
+            ]
+        },
+        "domain.OfferStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "inactive",
+                "archived"
+            ],
+            "x-enum-varnames": [
+                "OfferStatusActive",
+                "OfferStatusInactive",
+                "OfferStatusArchived"
+            ]
+        },
+        "domain.OfferWithItemsDTO": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "customerName": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferItemDTO"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "probability": {
+                    "type": "integer"
+                },
+                "responsibleUserId": {
+                    "type": "string"
+                },
+                "responsibleUserName": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.PaginatedResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "page": {
+                    "type": "integer"
+                },
+                "pageSize": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.PermissionDTO": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "allowed": {
+                    "type": "boolean"
+                },
+                "resource": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PermissionsResponseDTO": {
+            "type": "object",
+            "properties": {
+                "isSuperAdmin": {
+                    "type": "boolean"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PermissionDTO"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.PipelinePhaseData": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "offers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferDTO"
+                    }
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "weightedValue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.ProjectBudgetDTO": {
+            "type": "object",
+            "properties": {
+                "budget": {
+                    "type": "number"
+                },
+                "percentUsed": {
+                    "type": "number"
+                },
+                "remaining": {
+                    "type": "number"
+                },
+                "spent": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.ProjectDTO": {
+            "type": "object",
+            "properties": {
+                "budget": {
+                    "type": "number"
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "completionPercent": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "customerName": {
+                    "type": "string"
+                },
+                "dealId": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "endDate": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "estimatedCompletionDate": {
+                    "type": "string"
+                },
+                "hasDetailedBudget": {
+                    "type": "boolean"
+                },
+                "health": {
+                    "$ref": "#/definitions/domain.ProjectHealth"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "managerId": {
+                    "type": "string"
+                },
+                "managerName": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "projectNumber": {
+                    "type": "string"
+                },
+                "spent": {
+                    "type": "number"
+                },
+                "startDate": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.ProjectStatus"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ProjectHealth": {
+            "type": "string",
+            "enum": [
+                "on_track",
+                "at_risk",
+                "delayed",
+                "over_budget"
+            ],
+            "x-enum-varnames": [
+                "ProjectHealthOnTrack",
+                "ProjectHealthAtRisk",
+                "ProjectHealthDelayed",
+                "ProjectHealthOverBudget"
+            ]
+        },
+        "domain.ProjectStatus": {
+            "type": "string",
+            "enum": [
+                "planning",
+                "active",
+                "on_hold",
+                "completed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ProjectStatusPlanning",
+                "ProjectStatusActive",
+                "ProjectStatusOnHold",
+                "ProjectStatusCompleted",
+                "ProjectStatusCancelled"
+            ]
+        },
+        "domain.SearchResult": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "string"
+                },
+                "subtitle": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.TeamMemberStats": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "offerCount": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "userId": {
+                    "type": "string"
+                },
+                "winRate": {
+                    "type": "number"
+                },
+                "wonCount": {
+                    "type": "integer"
+                },
+                "wonValue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.UpdateCustomerRequest": {
+            "type": "object",
+            "required": [
+                "country",
+                "email",
+                "name",
+                "orgNumber",
+                "phone"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "contactEmail": {
+                    "type": "string"
+                },
+                "contactPerson": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "contactPhone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "orgNumber": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                }
+            }
+        },
+        "domain.UpdateDealRequest": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "actualCloseDate": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string",
+                    "maxLength": 3
+                },
+                "description": {
+                    "type": "string"
+                },
+                "expectedCloseDate": {
+                    "type": "string"
+                },
+                "lostReason": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "ownerId": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "probability": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "source": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "stage": {
+                    "$ref": "#/definitions/domain.DealStage"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "value": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "domain.UpdateDealStageRequest": {
+            "type": "object",
+            "required": [
+                "stage"
+            ],
+            "properties": {
+                "notes": {
+                    "type": "string"
+                },
+                "stage": {
+                    "$ref": "#/definitions/domain.DealStage"
+                }
+            }
+        },
+        "domain.UpdateOfferRequest": {
+            "type": "object",
+            "required": [
+                "phase",
+                "responsibleUserId",
+                "status",
+                "title"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "probability": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "responsibleUserId": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "domain.UpdateProjectRequest": {
+            "type": "object",
+            "required": [
+                "companyId",
+                "managerId",
+                "name",
+                "startDate",
+                "status"
+            ],
+            "properties": {
+                "budget": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "completionPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "dealId": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "endDate": {
+                    "type": "string"
+                },
+                "estimatedCompletionDate": {
+                    "type": "string"
+                },
+                "hasDetailedBudget": {
+                    "type": "boolean"
+                },
+                "health": {
+                    "$ref": "#/definitions/domain.ProjectHealth"
+                },
+                "managerId": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "spent": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "startDate": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.ProjectStatus"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.UserDTO": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handler.AuditLogDTO": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "changes": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "companyId": {
+                    "type": "string"
+                },
+                "entityId": {
+                    "type": "string"
+                },
+                "entityName": {
+                    "type": "string"
+                },
+                "entityType": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ipAddress": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "newValues": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "oldValues": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "performedAt": {
+                    "type": "string"
+                },
+                "requestId": {
+                    "type": "string"
+                },
+                "userAgent": {
+                    "type": "string"
+                },
+                "userEmail": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                },
+                "userName": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.AuditLogListResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.AuditLogDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pageSize": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.AuditStatsResponse": {
+            "type": "object",
+            "properties": {
+                "actionCounts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "endTime": {
+                    "type": "string"
+                },
+                "startTime": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.DealWithHistoryResponse": {
+            "type": "object",
+            "properties": {
+                "deal": {
+                    "$ref": "#/definitions/domain.DealDTO"
+                },
+                "stageHistory": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.DealStageHistoryDTO"
+                    }
+                }
+            }
+        },
+        "handler.LoseDealRequest": {
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.WinDealResponse": {
+            "type": "object",
+            "properties": {
+                "deal": {
+                    "$ref": "#/definitions/domain.DealDTO"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
+                }
+            }
+        },
+        "repository.ForecastPeriod": {
+            "type": "object",
+            "properties": {
+                "dealCount": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "periodEnd": {
+                    "type": "string"
+                },
+                "periodStart": {
+                    "type": "string"
+                },
+                "totalValue": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "weightedValue": {
+                    "type": "number",
+                    "format": "float64"
+                }
+            }
+        },
+        "repository.PipelineStats": {
+            "type": "object",
+            "properties": {
+                "byStage": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/repository.StageStats"
+                    }
+                },
+                "totalCount": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "totalValue": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "weightedValue": {
+                    "type": "number",
+                    "format": "float64"
+                }
+            }
+        },
+        "repository.StageStats": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "totalValue": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "weightedValue": {
+                    "type": "number",
+                    "format": "float64"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "description": "API Key for system operations",
+            "type": "apiKey",
+            "name": "x-api-key",
+            "in": "header"
+        },
+        "BearerAuth": {
+            "description": "JWT Bearer token",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

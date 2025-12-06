@@ -32,6 +32,8 @@ func NewProjectHandler(projectService *service.ProjectService, logger *zap.Logge
 // @Param customerId query string false "Filter by customer ID"
 // @Param status query string false "Filter by status"
 // @Success 200 {object} domain.PaginatedResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /projects [get]
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -72,6 +74,8 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param request body domain.CreateProjectRequest true "Project data"
 // @Success 201 {object} domain.ProjectDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /projects [post]
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateProjectRequest
@@ -101,6 +105,8 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Project ID"
 // @Success 200 {object} domain.ProjectDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /projects/{id} [get]
 func (h *ProjectHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -125,6 +131,8 @@ func (h *ProjectHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Project ID"
 // @Param request body domain.UpdateProjectRequest true "Project data"
 // @Success 200 {object} domain.ProjectDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /projects/{id} [put]
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -159,6 +167,8 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Project ID"
 // @Success 200 {object} domain.ProjectBudgetDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /projects/{id}/budget [get]
 func (h *ProjectHandler) GetBudget(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -182,6 +192,8 @@ func (h *ProjectHandler) GetBudget(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Project ID"
 // @Param limit query int false "Limit" default(50)
 // @Success 200 {array} domain.ActivityDTO
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /projects/{id}/activities [get]
 func (h *ProjectHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

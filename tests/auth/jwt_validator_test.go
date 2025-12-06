@@ -88,13 +88,13 @@ func TestJWTValidator_ValidateToken_ValidToken(t *testing.T) {
 	validator := auth.NewJWTValidator(cfg)
 
 	claims := jwt.MapClaims{
-		"aud":  "test-client-id",
-		"iss":  "https://login.microsoftonline.com/test-tenant-id/v2.0",
-		"exp":  time.Now().Add(time.Hour).Unix(),
-		"nbf":  time.Now().Add(-time.Minute).Unix(),
-		"iat":  time.Now().Unix(),
-		"oid":  "12345678-1234-1234-1234-123456789012",
-		"name": "Test User",
+		"aud":   "test-client-id",
+		"iss":   "https://login.microsoftonline.com/test-tenant-id/v2.0",
+		"exp":   time.Now().Add(time.Hour).Unix(),
+		"nbf":   time.Now().Add(-time.Minute).Unix(),
+		"iat":   time.Now().Unix(),
+		"oid":   "12345678-1234-1234-1234-123456789012",
+		"name":  "Test User",
 		"email": "test@example.com",
 		"roles": []interface{}{"admin", "user"},
 	}

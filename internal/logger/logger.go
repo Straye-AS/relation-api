@@ -16,7 +16,13 @@ func NewLogger(cfg *config.LoggingConfig, appCfg *config.AppConfig) (*zap.Logger
 		zapCfg = zap.NewProductionConfig()
 	} else {
 		zapCfg = zap.NewDevelopmentConfig()
+		// Configure a cleaner console output
 		zapCfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		zapCfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("15:04:05")
+		zapCfg.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
+		zapCfg.EncoderConfig.EncodeCaller = nil // Hide caller info for cleaner output
+		zapCfg.DisableCaller = true
+		zapCfg.DisableStacktrace = true
 	}
 
 	// Set log level
@@ -26,10 +32,12 @@ func NewLogger(cfg *config.LoggingConfig, appCfg *config.AppConfig) (*zap.Logger
 	}
 	zapCfg.Level = zap.NewAtomicLevelAt(level)
 
-	// Add initial fields
-	zapCfg.InitialFields = map[string]interface{}{
-		"app":         appCfg.Name,
-		"environment": appCfg.Environment,
+	// Only add initial fields in production (JSON format)
+	if cfg.Format == "json" || appCfg.Environment == "production" {
+		zapCfg.InitialFields = map[string]interface{}{
+			"app":         appCfg.Name,
+			"environment": appCfg.Environment,
+		}
 	}
 
 	logger, err := zapCfg.Build(zap.AddCallerSkip(0))

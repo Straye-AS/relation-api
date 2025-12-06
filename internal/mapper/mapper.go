@@ -97,6 +97,7 @@ func ToDealDTO(deal *domain.Deal) domain.DealDTO {
 		Source:        deal.Source,
 		Notes:         deal.Notes,
 		LostReason:    deal.LostReason,
+		OfferID:       deal.OfferID,
 		CreatedAt:     deal.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:     deal.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
@@ -138,6 +139,7 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 	dto := domain.ProjectDTO{
 		ID:                project.ID,
 		Name:              project.Name,
+		ProjectNumber:     project.ProjectNumber,
 		Summary:           project.Summary,
 		Description:       project.Description,
 		CustomerID:        project.CustomerID,

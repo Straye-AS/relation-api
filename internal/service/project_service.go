@@ -40,17 +40,18 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 	}
 
 	project := &domain.Project{
-		CustomerID:  req.CustomerID,
-		Name:        req.Name,
-		Summary:     req.Summary,
-		Description: req.Description,
-		Budget:      req.Budget,
-		Spent:       req.Spent,
-		Status:      req.Status,
-		StartDate:   req.StartDate,
-		EndDate:     req.EndDate,
-		CompanyID:   req.CompanyID,
-		ManagerID:   req.ManagerID,
+		CustomerID:    req.CustomerID,
+		Name:          req.Name,
+		ProjectNumber: req.ProjectNumber,
+		Summary:       req.Summary,
+		Description:   req.Description,
+		Budget:        req.Budget,
+		Spent:         req.Spent,
+		Status:        req.Status,
+		StartDate:     req.StartDate,
+		EndDate:       req.EndDate,
+		CompanyID:     req.CompanyID,
+		ManagerID:     req.ManagerID,
 	}
 
 	if err := s.projectRepo.Create(ctx, project); err != nil {
@@ -93,6 +94,7 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	}
 
 	project.Name = req.Name
+	project.ProjectNumber = req.ProjectNumber
 	project.Summary = req.Summary
 	project.Description = req.Description
 	project.Budget = req.Budget

@@ -1,0 +1,2797 @@
+basePath: /api/v1
+definitions:
+  domain.ActivityDTO:
+    properties:
+      activityType:
+        $ref: '#/definitions/domain.ActivityType'
+      assignedToId:
+        type: string
+      body:
+        type: string
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      creatorId:
+        type: string
+      creatorName:
+        type: string
+      dueDate:
+        type: string
+      durationMinutes:
+        type: integer
+      id:
+        type: string
+      isPrivate:
+        type: boolean
+      occurredAt:
+        type: string
+      priority:
+        type: integer
+      scheduledAt:
+        type: string
+      status:
+        $ref: '#/definitions/domain.ActivityStatus'
+      targetId:
+        type: string
+      targetType:
+        $ref: '#/definitions/domain.ActivityTargetType'
+      title:
+        type: string
+    type: object
+  domain.ActivityStatus:
+    enum:
+    - planned
+    - in_progress
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ActivityStatusPlanned
+    - ActivityStatusInProgress
+    - ActivityStatusCompleted
+    - ActivityStatusCancelled
+  domain.ActivityTargetType:
+    enum:
+    - Customer
+    - Contact
+    - Project
+    - Offer
+    - Deal
+    - File
+    - Notification
+    type: string
+    x-enum-varnames:
+    - ActivityTargetCustomer
+    - ActivityTargetContact
+    - ActivityTargetProject
+    - ActivityTargetOffer
+    - ActivityTargetDeal
+    - ActivityTargetFile
+    - ActivityTargetNotification
+  domain.ActivityType:
+    enum:
+    - meeting
+    - call
+    - email
+    - task
+    - note
+    - system
+    type: string
+    x-enum-varnames:
+    - ActivityTypeMeeting
+    - ActivityTypeCall
+    - ActivityTypeEmail
+    - ActivityTypeTask
+    - ActivityTypeNote
+    - ActivityTypeSystem
+  domain.AdvanceOfferRequest:
+    properties:
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+    required:
+    - phase
+    type: object
+  domain.AuditAction:
+    enum:
+    - create
+    - update
+    - delete
+    - login
+    - logout
+    - permission_grant
+    - permission_revoke
+    - role_assign
+    - role_remove
+    - export
+    - import
+    - api_call
+    type: string
+    x-enum-varnames:
+    - AuditActionCreate
+    - AuditActionUpdate
+    - AuditActionDelete
+    - AuditActionLogin
+    - AuditActionLogout
+    - AuditActionPermissionGrant
+    - AuditActionPermissionRevoke
+    - AuditActionRoleAssign
+    - AuditActionRoleRemove
+    - AuditActionExport
+    - AuditActionImport
+    - AuditActionAPICall
+  domain.AuditLog:
+    properties:
+      action:
+        $ref: '#/definitions/domain.AuditAction'
+      changes:
+        type: string
+      companyID:
+        $ref: '#/definitions/domain.CompanyID'
+      createdAt:
+        type: string
+      entityID:
+        type: string
+      entityName:
+        type: string
+      entityType:
+        type: string
+      id:
+        type: string
+      ipaddress:
+        type: string
+      metadata:
+        type: string
+      newValues:
+        type: string
+      oldValues:
+        type: string
+      performedAt:
+        type: string
+      requestID:
+        type: string
+      userAgent:
+        type: string
+      userEmail:
+        type: string
+      userID:
+        type: string
+      userName:
+        type: string
+    type: object
+  domain.AuthUserDTO:
+    properties:
+      company:
+        $ref: '#/definitions/domain.CompanyDTO'
+      email:
+        type: string
+      id:
+        type: string
+      initials:
+        type: string
+      isCompanyAdmin:
+        type: boolean
+      isSuperAdmin:
+        type: boolean
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.Company:
+    properties:
+      color:
+        type: string
+      createdAt:
+        type: string
+      id:
+        $ref: '#/definitions/domain.CompanyID'
+      isActive:
+        type: boolean
+      logo:
+        type: string
+      name:
+        type: string
+      orgNumber:
+        type: string
+      shortName:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  domain.CompanyDTO:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  domain.CompanyID:
+    enum:
+    - all
+    - gruppen
+    - stalbygg
+    - hybridbygg
+    - industri
+    - tak
+    - montasje
+    type: string
+    x-enum-varnames:
+    - CompanyAll
+    - CompanyGruppen
+    - CompanyStalbygg
+    - CompanyHybridbygg
+    - CompanyIndustri
+    - CompanyTak
+    - CompanyMontasje
+  domain.ContactDTO:
+    properties:
+      address:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
+      createdAt:
+        description: ISO 8601
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      fullName:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      lastName:
+        type: string
+      linkedInUrl:
+        type: string
+      mobile:
+        type: string
+      notes:
+        type: string
+      phone:
+        type: string
+      postalCode:
+        type: string
+      preferredContactMethod:
+        type: string
+      primaryCustomerId:
+        type: string
+      primaryCustomerName:
+        type: string
+      relationships:
+        items:
+          $ref: '#/definitions/domain.ContactRelationshipDTO'
+        type: array
+      title:
+        type: string
+      updatedAt:
+        description: ISO 8601
+        type: string
+    type: object
+  domain.ContactEntityType:
+    enum:
+    - customer
+    - project
+    - deal
+    type: string
+    x-enum-varnames:
+    - ContactEntityCustomer
+    - ContactEntityProject
+    - ContactEntityDeal
+  domain.ContactRelationshipDTO:
+    properties:
+      contactId:
+        type: string
+      createdAt:
+        type: string
+      entityId:
+        type: string
+      entityType:
+        $ref: '#/definitions/domain.ContactEntityType'
+      id:
+        type: string
+      isPrimary:
+        type: boolean
+      role:
+        type: string
+    type: object
+  domain.CreateContactRequest:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      city:
+        maxLength: 100
+        type: string
+      country:
+        maxLength: 100
+        type: string
+      department:
+        maxLength: 100
+        type: string
+      email:
+        maxLength: 255
+        type: string
+      firstName:
+        maxLength: 100
+        type: string
+      lastName:
+        maxLength: 100
+        type: string
+      linkedInUrl:
+        maxLength: 500
+        type: string
+      mobile:
+        maxLength: 50
+        type: string
+      notes:
+        type: string
+      phone:
+        maxLength: 50
+        type: string
+      postalCode:
+        maxLength: 20
+        type: string
+      preferredContactMethod:
+        maxLength: 50
+        type: string
+      primaryCustomerId:
+        type: string
+      title:
+        maxLength: 100
+        type: string
+    required:
+    - firstName
+    - lastName
+    type: object
+  domain.CreateCustomerRequest:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      city:
+        maxLength: 100
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        maxLength: 200
+        type: string
+      contactPhone:
+        maxLength: 50
+        type: string
+      country:
+        maxLength: 100
+        type: string
+      email:
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      orgNumber:
+        maxLength: 20
+        type: string
+      phone:
+        maxLength: 50
+        type: string
+      postalCode:
+        maxLength: 20
+        type: string
+    required:
+    - country
+    - email
+    - name
+    - orgNumber
+    - phone
+    type: object
+  domain.CreateDealRequest:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      currency:
+        maxLength: 3
+        type: string
+      customerId:
+        type: string
+      description:
+        type: string
+      expectedCloseDate:
+        type: string
+      notes:
+        type: string
+      offerId:
+        type: string
+      ownerId:
+        maxLength: 100
+        type: string
+      probability:
+        maximum: 100
+        minimum: 0
+        type: integer
+      source:
+        maxLength: 100
+        type: string
+      stage:
+        $ref: '#/definitions/domain.DealStage'
+      title:
+        maxLength: 200
+        type: string
+      value:
+        minimum: 0
+        type: number
+    required:
+    - companyId
+    - customerId
+    - ownerId
+    - title
+    type: object
+  domain.CreateOfferItemRequest:
+    properties:
+      cost:
+        minimum: 0
+        type: number
+      description:
+        type: string
+      discipline:
+        maxLength: 200
+        type: string
+      quantity:
+        minimum: 0
+        type: number
+      revenue:
+        minimum: 0
+        type: number
+      unit:
+        maxLength: 50
+        type: string
+    required:
+    - cost
+    - discipline
+    - revenue
+    type: object
+  domain.CreateOfferRequest:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      customerId:
+        type: string
+      description:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/domain.CreateOfferItemRequest'
+        minItems: 1
+        type: array
+      notes:
+        type: string
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+      probability:
+        maximum: 100
+        minimum: 0
+        type: integer
+      responsibleUserId:
+        type: string
+      status:
+        $ref: '#/definitions/domain.OfferStatus'
+      title:
+        maxLength: 200
+        type: string
+    required:
+    - companyId
+    - customerId
+    - items
+    - phase
+    - responsibleUserId
+    - status
+    - title
+    type: object
+  domain.CreateProjectRequest:
+    properties:
+      budget:
+        minimum: 0
+        type: number
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      completionPercent:
+        maximum: 100
+        minimum: 0
+        type: number
+      customerId:
+        type: string
+      dealId:
+        type: string
+      description:
+        type: string
+      endDate:
+        type: string
+      estimatedCompletionDate:
+        type: string
+      hasDetailedBudget:
+        type: boolean
+      health:
+        $ref: '#/definitions/domain.ProjectHealth'
+      managerId:
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      offerId:
+        type: string
+      projectNumber:
+        maxLength: 50
+        type: string
+      spent:
+        minimum: 0
+        type: number
+      startDate:
+        type: string
+      status:
+        $ref: '#/definitions/domain.ProjectStatus'
+      summary:
+        type: string
+      teamMembers:
+        items:
+          type: string
+        type: array
+    required:
+    - companyId
+    - customerId
+    - managerId
+    - name
+    - startDate
+    - status
+    type: object
+  domain.CustomerDTO:
+    properties:
+      activeOffers:
+        type: integer
+      address:
+        type: string
+      city:
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        type: string
+      contactPhone:
+        type: string
+      country:
+        type: string
+      createdAt:
+        description: ISO 8601
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      orgNumber:
+        type: string
+      phone:
+        type: string
+      postalCode:
+        type: string
+      totalValue:
+        type: number
+      updatedAt:
+        description: ISO 8601
+        type: string
+    type: object
+  domain.DashboardMetrics:
+    properties:
+      activeOffers:
+        type: integer
+      activeProjects:
+        items:
+          $ref: '#/definitions/domain.ProjectDTO'
+        type: array
+      averageProbability:
+        type: number
+      lostOffers:
+        type: integer
+      offerReserve:
+        type: number
+      offersByPhase:
+        additionalProperties:
+          type: integer
+        type: object
+      pipeline:
+        items:
+          $ref: '#/definitions/domain.PipelinePhaseData'
+        type: array
+      recentActivities:
+        items:
+          $ref: '#/definitions/domain.NotificationDTO'
+        type: array
+      recentOffers:
+        items:
+          $ref: '#/definitions/domain.OfferDTO'
+        type: array
+      recentProjects:
+        items:
+          $ref: '#/definitions/domain.ProjectDTO'
+        type: array
+      revenueForecast30Days:
+        type: number
+      revenueForecast90Days:
+        type: number
+      teamPerformance:
+        items:
+          $ref: '#/definitions/domain.TeamMemberStats'
+        type: array
+      topCustomers:
+        items:
+          $ref: '#/definitions/domain.CustomerDTO'
+        type: array
+      topDisciplines:
+        items:
+          $ref: '#/definitions/domain.DisciplineStats'
+        type: array
+      totalOffers:
+        type: integer
+      totalValue:
+        type: number
+      weightedValue:
+        type: number
+      winRate:
+        type: number
+      wonOffers:
+        type: integer
+    type: object
+  domain.DealDTO:
+    properties:
+      actualCloseDate:
+        type: string
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      createdAt:
+        type: string
+      currency:
+        type: string
+      customerId:
+        type: string
+      customerName:
+        type: string
+      description:
+        type: string
+      expectedCloseDate:
+        type: string
+      id:
+        type: string
+      lostReason:
+        type: string
+      notes:
+        type: string
+      offerId:
+        type: string
+      ownerId:
+        type: string
+      ownerName:
+        type: string
+      probability:
+        type: integer
+      source:
+        type: string
+      stage:
+        $ref: '#/definitions/domain.DealStage'
+      title:
+        type: string
+      updatedAt:
+        type: string
+      value:
+        type: number
+      weightedValue:
+        type: number
+    type: object
+  domain.DealStage:
+    enum:
+    - lead
+    - qualified
+    - proposal
+    - negotiation
+    - won
+    - lost
+    type: string
+    x-enum-varnames:
+    - DealStageLead
+    - DealStageQualified
+    - DealStageProposal
+    - DealStageNegotiation
+    - DealStageWon
+    - DealStageLost
+  domain.DealStageHistoryDTO:
+    properties:
+      changedAt:
+        type: string
+      changedById:
+        type: string
+      changedByName:
+        type: string
+      dealId:
+        type: string
+      fromStage:
+        $ref: '#/definitions/domain.DealStage'
+      id:
+        type: string
+      notes:
+        type: string
+      toStage:
+        $ref: '#/definitions/domain.DealStage'
+    type: object
+  domain.DisciplineStats:
+    properties:
+      avgMargin:
+        type: number
+      name:
+        type: string
+      offerCount:
+        type: integer
+      projectCount:
+        type: integer
+      totalValue:
+        type: number
+    type: object
+  domain.FileDTO:
+    properties:
+      contentType:
+        type: string
+      createdAt:
+        type: string
+      filename:
+        type: string
+      id:
+        type: string
+      offerId:
+        type: string
+      size:
+        type: integer
+    type: object
+  domain.NotificationDTO:
+    properties:
+      createdAt:
+        description: ISO 8601
+        type: string
+      entityId:
+        type: string
+      entityType:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      read:
+        type: boolean
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  domain.OfferDTO:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      createdAt:
+        description: ISO 8601
+        type: string
+      customerId:
+        type: string
+      customerName:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/domain.OfferItemDTO'
+        type: array
+      notes:
+        type: string
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+      probability:
+        type: integer
+      responsibleUserId:
+        type: string
+      responsibleUserName:
+        type: string
+      status:
+        $ref: '#/definitions/domain.OfferStatus'
+      title:
+        type: string
+      updatedAt:
+        description: ISO 8601
+        type: string
+      value:
+        type: number
+    type: object
+  domain.OfferItemDTO:
+    properties:
+      cost:
+        type: number
+      description:
+        type: string
+      discipline:
+        type: string
+      id:
+        type: string
+      margin:
+        type: number
+      quantity:
+        type: number
+      revenue:
+        type: number
+      unit:
+        type: string
+    type: object
+  domain.OfferPhase:
+    enum:
+    - draft
+    - in_progress
+    - sent
+    - won
+    - lost
+    - expired
+    type: string
+    x-enum-varnames:
+    - OfferPhaseDraft
+    - OfferPhaseInProgress
+    - OfferPhaseSent
+    - OfferPhaseWon
+    - OfferPhaseLost
+    - OfferPhaseExpired
+  domain.OfferStatus:
+    enum:
+    - active
+    - inactive
+    - archived
+    type: string
+    x-enum-varnames:
+    - OfferStatusActive
+    - OfferStatusInactive
+    - OfferStatusArchived
+  domain.OfferWithItemsDTO:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      createdAt:
+        type: string
+      customerId:
+        type: string
+      customerName:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/domain.OfferItemDTO'
+        type: array
+      notes:
+        type: string
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+      probability:
+        type: integer
+      responsibleUserId:
+        type: string
+      responsibleUserName:
+        type: string
+      status:
+        $ref: '#/definitions/domain.OfferStatus'
+      title:
+        type: string
+      updatedAt:
+        type: string
+      value:
+        type: number
+    type: object
+  domain.PaginatedResponse:
+    properties:
+      data: {}
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  domain.PermissionDTO:
+    properties:
+      action:
+        type: string
+      allowed:
+        type: boolean
+      resource:
+        type: string
+    type: object
+  domain.PermissionsResponseDTO:
+    properties:
+      isSuperAdmin:
+        type: boolean
+      permissions:
+        items:
+          $ref: '#/definitions/domain.PermissionDTO'
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.PipelinePhaseData:
+    properties:
+      count:
+        type: integer
+      offers:
+        items:
+          $ref: '#/definitions/domain.OfferDTO'
+        type: array
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+      totalValue:
+        type: number
+      weightedValue:
+        type: number
+    type: object
+  domain.ProjectBudgetDTO:
+    properties:
+      budget:
+        type: number
+      percentUsed:
+        type: number
+      remaining:
+        type: number
+      spent:
+        type: number
+    type: object
+  domain.ProjectDTO:
+    properties:
+      budget:
+        type: number
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      completionPercent:
+        type: number
+      createdAt:
+        description: ISO 8601
+        type: string
+      customerId:
+        type: string
+      customerName:
+        type: string
+      dealId:
+        type: string
+      description:
+        type: string
+      endDate:
+        description: ISO 8601
+        type: string
+      estimatedCompletionDate:
+        type: string
+      hasDetailedBudget:
+        type: boolean
+      health:
+        $ref: '#/definitions/domain.ProjectHealth'
+      id:
+        type: string
+      managerId:
+        type: string
+      managerName:
+        type: string
+      name:
+        type: string
+      offerId:
+        type: string
+      projectNumber:
+        type: string
+      spent:
+        type: number
+      startDate:
+        description: ISO 8601
+        type: string
+      status:
+        $ref: '#/definitions/domain.ProjectStatus'
+      summary:
+        type: string
+      teamMembers:
+        items:
+          type: string
+        type: array
+      updatedAt:
+        description: ISO 8601
+        type: string
+    type: object
+  domain.ProjectHealth:
+    enum:
+    - on_track
+    - at_risk
+    - delayed
+    - over_budget
+    type: string
+    x-enum-varnames:
+    - ProjectHealthOnTrack
+    - ProjectHealthAtRisk
+    - ProjectHealthDelayed
+    - ProjectHealthOverBudget
+  domain.ProjectStatus:
+    enum:
+    - planning
+    - active
+    - on_hold
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ProjectStatusPlanning
+    - ProjectStatusActive
+    - ProjectStatusOnHold
+    - ProjectStatusCompleted
+    - ProjectStatusCancelled
+  domain.SearchResult:
+    properties:
+      id:
+        type: string
+      metadata:
+        type: string
+      subtitle:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  domain.TeamMemberStats:
+    properties:
+      avatar:
+        type: string
+      name:
+        type: string
+      offerCount:
+        type: integer
+      totalValue:
+        type: number
+      userId:
+        type: string
+      winRate:
+        type: number
+      wonCount:
+        type: integer
+      wonValue:
+        type: number
+    type: object
+  domain.UpdateCustomerRequest:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      city:
+        maxLength: 100
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        maxLength: 200
+        type: string
+      contactPhone:
+        maxLength: 50
+        type: string
+      country:
+        maxLength: 100
+        type: string
+      email:
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      orgNumber:
+        maxLength: 20
+        type: string
+      phone:
+        maxLength: 50
+        type: string
+      postalCode:
+        maxLength: 20
+        type: string
+    required:
+    - country
+    - email
+    - name
+    - orgNumber
+    - phone
+    type: object
+  domain.UpdateDealRequest:
+    properties:
+      actualCloseDate:
+        type: string
+      currency:
+        maxLength: 3
+        type: string
+      description:
+        type: string
+      expectedCloseDate:
+        type: string
+      lostReason:
+        maxLength: 500
+        type: string
+      notes:
+        type: string
+      ownerId:
+        maxLength: 100
+        type: string
+      probability:
+        maximum: 100
+        minimum: 0
+        type: integer
+      source:
+        maxLength: 100
+        type: string
+      stage:
+        $ref: '#/definitions/domain.DealStage'
+      title:
+        maxLength: 200
+        type: string
+      value:
+        minimum: 0
+        type: number
+    required:
+    - title
+    type: object
+  domain.UpdateDealStageRequest:
+    properties:
+      notes:
+        type: string
+      stage:
+        $ref: '#/definitions/domain.DealStage'
+    required:
+    - stage
+    type: object
+  domain.UpdateOfferRequest:
+    properties:
+      description:
+        type: string
+      notes:
+        type: string
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+      probability:
+        maximum: 100
+        minimum: 0
+        type: integer
+      responsibleUserId:
+        type: string
+      status:
+        $ref: '#/definitions/domain.OfferStatus'
+      title:
+        maxLength: 200
+        type: string
+    required:
+    - phase
+    - responsibleUserId
+    - status
+    - title
+    type: object
+  domain.UpdateProjectRequest:
+    properties:
+      budget:
+        minimum: 0
+        type: number
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      completionPercent:
+        maximum: 100
+        minimum: 0
+        type: number
+      dealId:
+        type: string
+      description:
+        type: string
+      endDate:
+        type: string
+      estimatedCompletionDate:
+        type: string
+      hasDetailedBudget:
+        type: boolean
+      health:
+        $ref: '#/definitions/domain.ProjectHealth'
+      managerId:
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      projectNumber:
+        maxLength: 50
+        type: string
+      spent:
+        minimum: 0
+        type: number
+      startDate:
+        type: string
+      status:
+        $ref: '#/definitions/domain.ProjectStatus'
+      summary:
+        type: string
+      teamMembers:
+        items:
+          type: string
+        type: array
+    required:
+    - companyId
+    - managerId
+    - name
+    - startDate
+    - status
+    type: object
+  domain.UserDTO:
+    properties:
+      avatar:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  handler.AuditLogDTO:
+    properties:
+      action:
+        type: string
+      changes:
+        additionalProperties: true
+        type: object
+      companyId:
+        type: string
+      entityId:
+        type: string
+      entityName:
+        type: string
+      entityType:
+        type: string
+      id:
+        type: string
+      ipAddress:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      newValues:
+        additionalProperties: true
+        type: object
+      oldValues:
+        additionalProperties: true
+        type: object
+      performedAt:
+        type: string
+      requestId:
+        type: string
+      userAgent:
+        type: string
+      userEmail:
+        type: string
+      userId:
+        type: string
+      userName:
+        type: string
+    type: object
+  handler.AuditLogListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handler.AuditLogDTO'
+        type: array
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  handler.AuditStatsResponse:
+    properties:
+      actionCounts:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      endTime:
+        type: string
+      startTime:
+        type: string
+    type: object
+  handler.DealWithHistoryResponse:
+    properties:
+      deal:
+        $ref: '#/definitions/domain.DealDTO'
+      stageHistory:
+        items:
+          $ref: '#/definitions/domain.DealStageHistoryDTO'
+        type: array
+    type: object
+  handler.LoseDealRequest:
+    properties:
+      reason:
+        type: string
+    required:
+    - reason
+    type: object
+  handler.WinDealResponse:
+    properties:
+      deal:
+        $ref: '#/definitions/domain.DealDTO'
+      project:
+        $ref: '#/definitions/domain.ProjectDTO'
+    type: object
+  repository.ForecastPeriod:
+    properties:
+      dealCount:
+        format: int64
+        type: integer
+      periodEnd:
+        type: string
+      periodStart:
+        type: string
+      totalValue:
+        format: float64
+        type: number
+      weightedValue:
+        format: float64
+        type: number
+    type: object
+  repository.PipelineStats:
+    properties:
+      byStage:
+        additionalProperties:
+          $ref: '#/definitions/repository.StageStats'
+        type: object
+      totalCount:
+        format: int64
+        type: integer
+      totalValue:
+        format: float64
+        type: number
+      weightedValue:
+        format: float64
+        type: number
+    type: object
+  repository.StageStats:
+    properties:
+      count:
+        format: int64
+        type: integer
+      totalValue:
+        format: float64
+        type: number
+      weightedValue:
+        format: float64
+        type: number
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@straye.io
+    name: API Support
+  description: CRM Relation API for customer, project, and sales pipeline management
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Straye Relation API
+  version: "1.0"
+paths:
+  /audit:
+    get:
+      description: Returns a paginated list of audit log entries with optional filters
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by user ID
+        in: query
+        name: userId
+        type: string
+      - description: Filter by action type
+        in: query
+        name: action
+        type: string
+      - description: Filter by entity type
+        in: query
+        name: entityType
+        type: string
+      - description: Filter by entity ID
+        in: query
+        name: entityId
+        type: string
+      - description: Filter by start time (RFC3339)
+        in: query
+        name: startTime
+        type: string
+      - description: Filter by end time (RFC3339)
+        in: query
+        name: endTime
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.AuditLogListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List audit logs
+      tags:
+      - Audit
+  /audit/{id}:
+    get:
+      description: Returns a specific audit log entry
+      parameters:
+      - description: Audit log ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.AuditLogDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get audit log by ID
+      tags:
+      - Audit
+  /audit/entity/{entityType}/{entityId}:
+    get:
+      description: Returns audit logs for a specific entity
+      parameters:
+      - description: Entity type (e.g., Customer, Project)
+        in: path
+        name: entityType
+        required: true
+        type: string
+      - description: Entity ID
+        in: path
+        name: entityId
+        required: true
+        type: string
+      - description: 'Maximum number of entries (default: 50)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.AuditLogDTO'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get audit logs for an entity
+      tags:
+      - Audit
+  /audit/export:
+    get:
+      description: Exports audit logs for a time range as JSON
+      parameters:
+      - description: Start time (RFC3339)
+        in: query
+        name: startTime
+        required: true
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: endTime
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.AuditLog'
+            type: array
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Export audit logs
+      tags:
+      - Audit
+  /audit/stats:
+    get:
+      description: Returns statistics about audit log actions for a time range
+      parameters:
+      - description: Start time (RFC3339)
+        in: query
+        name: startTime
+        required: true
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: endTime
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.AuditStatsResponse'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get audit log statistics
+      tags:
+      - Audit
+  /auth/me:
+    get:
+      description: Returns the current authenticated user with roles, company, and
+        permissions info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AuthUserDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get current authenticated user
+      tags:
+      - Auth
+  /auth/permissions:
+    get:
+      description: Returns the full list of permissions for the current authenticated
+        user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PermissionsResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get current user's permissions
+      tags:
+      - Auth
+  /companies:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Company'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get all companies
+      tags:
+      - Companies
+  /customers:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Search query
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List customers
+      tags:
+      - Customers
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Customer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateCustomerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create customer
+      tags:
+      - Customers
+  /customers/{id}:
+    delete:
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete customer
+      tags:
+      - Customers
+    get:
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get customer
+      tags:
+      - Customers
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Customer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer
+      tags:
+      - Customers
+  /customers/{id}/contacts:
+    get:
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.ContactDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List customer contacts
+      tags:
+      - Customers
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Contact data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateContactRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.ContactDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create contact for customer
+      tags:
+      - Customers
+  /dashboard/metrics:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DashboardMetrics'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get dashboard metrics
+      tags:
+      - Dashboard
+  /deals:
+    get:
+      description: List deals with optional filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by stage (lead, qualified, proposal, negotiation, won,
+          lost)
+        in: query
+        name: stage
+        type: string
+      - description: Filter by owner ID
+        in: query
+        name: ownerId
+        type: string
+      - description: Filter by customer ID
+        in: query
+        name: customerId
+        type: string
+      - description: Filter by company ID
+        in: query
+        name: companyId
+        type: string
+      - description: Filter by source
+        in: query
+        name: source
+        type: string
+      - description: Minimum value
+        in: query
+        name: minValue
+        type: number
+      - description: Maximum value
+        in: query
+        name: maxValue
+        type: number
+      - description: Created after date (YYYY-MM-DD)
+        in: query
+        name: createdAfter
+        type: string
+      - description: Created before date (YYYY-MM-DD)
+        in: query
+        name: createdBefore
+        type: string
+      - description: Expected close after date (YYYY-MM-DD)
+        in: query
+        name: closeAfter
+        type: string
+      - description: Expected close before date (YYYY-MM-DD)
+        in: query
+        name: closeBefore
+        type: string
+      - description: Sort by (created_desc, created_asc, value_desc, value_asc, probability_desc,
+          probability_asc, close_date_desc, close_date_asc, weighted_desc, weighted_asc)
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List deals
+      tags:
+      - Deals
+    post:
+      consumes:
+      - application/json
+      description: Create a new deal in the sales pipeline
+      parameters:
+      - description: Deal data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateDealRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.DealDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create deal
+      tags:
+      - Deals
+  /deals/{id}:
+    delete:
+      description: Delete a deal
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete deal
+      tags:
+      - Deals
+    get:
+      description: Get a deal by ID with full details including stage history
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.DealWithHistoryResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get deal
+      tags:
+      - Deals
+    put:
+      consumes:
+      - application/json
+      description: Update an existing deal
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deal data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateDealRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DealDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update deal
+      tags:
+      - Deals
+  /deals/{id}/activities:
+    get:
+      description: Get activities for a deal
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 50
+        description: Limit results
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.ActivityDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get deal activities
+      tags:
+      - Deals
+  /deals/{id}/advance:
+    post:
+      consumes:
+      - application/json
+      description: Advance a deal to the next stage in the pipeline
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Stage data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateDealStageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DealDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Advance deal stage
+      tags:
+      - Deals
+  /deals/{id}/history:
+    get:
+      description: Get the stage history for a deal
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.DealStageHistoryDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get deal stage history
+      tags:
+      - Deals
+  /deals/{id}/lose:
+    post:
+      consumes:
+      - application/json
+      description: Mark a deal as lost with a reason
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Lost reason
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.LoseDealRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DealDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Lose deal
+      tags:
+      - Deals
+  /deals/{id}/reopen:
+    post:
+      description: Reopen a lost deal as a new lead
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DealDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Reopen deal
+      tags:
+      - Deals
+  /deals/{id}/win:
+    post:
+      consumes:
+      - application/json
+      description: Mark a deal as won and optionally create a project
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: true
+        description: Create a project from the deal
+        in: query
+        name: createProject
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.WinDealResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Win deal
+      tags:
+      - Deals
+  /deals/forecast:
+    get:
+      description: Get forecast data for upcoming months
+      parameters:
+      - default: 3
+        description: Number of months to forecast
+        in: query
+        name: months
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repository.ForecastPeriod'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get pipeline forecast
+      tags:
+      - Deals
+  /deals/pipeline:
+    get:
+      description: Get all deals grouped by stage for pipeline view
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/domain.DealDTO'
+              type: array
+            type: object
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get pipeline overview
+      tags:
+      - Deals
+  /deals/stats:
+    get:
+      description: Get aggregated statistics for the sales pipeline
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repository.PipelineStats'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get pipeline statistics
+      tags:
+      - Deals
+  /files/{id}:
+    get:
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get file metadata
+      tags:
+      - Files
+  /files/{id}/download:
+    get:
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Download file
+      tags:
+      - Files
+  /files/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Offer ID to attach file to
+        in: formData
+        name: offerId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Upload file
+      tags:
+      - Files
+  /offers:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by customer ID
+        in: query
+        name: customerId
+        type: string
+      - description: Filter by project ID
+        in: query
+        name: projectId
+        type: string
+      - description: Filter by phase
+        in: query
+        name: phase
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List offers
+      tags:
+      - Offers
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Offer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create offer
+      tags:
+      - Offers
+  /offers/{id}:
+    get:
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferWithItemsDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offer
+      tags:
+      - Offers
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Offer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer
+      tags:
+      - Offers
+  /offers/{id}/activities:
+    get:
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 50
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.ActivityDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offer activities
+      tags:
+      - Offers
+  /offers/{id}/advance:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Phase data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.AdvanceOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Advance offer phase
+      tags:
+      - Offers
+  /offers/{id}/files:
+    get:
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offer files
+      tags:
+      - Offers
+  /offers/{id}/items:
+    get:
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.OfferItemDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offer items
+      tags:
+      - Offers
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Item data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateOfferItemRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.OfferItemDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Add offer item
+      tags:
+      - Offers
+  /projects:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by customer ID
+        in: query
+        name: customerId
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List projects
+      tags:
+      - Projects
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create project
+      tags:
+      - Projects
+  /projects/{id}:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get project
+      tags:
+      - Projects
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Project data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project
+      tags:
+      - Projects
+  /projects/{id}/activities:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 50
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.ActivityDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get project activities
+      tags:
+      - Projects
+  /projects/{id}/budget:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectBudgetDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get project budget
+      tags:
+      - Projects
+  /search:
+    get:
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SearchResult'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Global search
+      tags:
+      - Search
+  /users:
+    get:
+      description: Returns a list of users (currently only returns the authenticated
+        user)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.UserDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List users
+      tags:
+      - Users
+securityDefinitions:
+  ApiKeyAuth:
+    description: API Key for system operations
+    in: header
+    name: x-api-key
+    type: apiKey
+  BearerAuth:
+    description: JWT Bearer token
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -23,6 +23,8 @@ func NewDashboardHandler(dashboardService *service.DashboardService, logger *zap
 // @Tags Dashboard
 // @Produce json
 // @Success 200 {object} domain.DashboardMetrics
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /dashboard/metrics [get]
 func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics, err := h.dashboardService.GetMetrics(r.Context())
@@ -40,6 +42,8 @@ func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param q query string true "Search query"
 // @Success 200 {object} domain.SearchResult
+// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Router /search [get]
 func (h *DashboardHandler) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
