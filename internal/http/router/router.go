@@ -13,6 +13,8 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	_ "github.com/straye-as/relation-api/docs" // Import generated swagger docs
 )
 
 type Router struct {
