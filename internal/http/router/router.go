@@ -172,6 +172,7 @@ func (rt *Router) Setup() http.Handler {
 
 			// Auth
 			r.Get("/auth/me", rt.authHandler.Me)
+			r.Get("/auth/permissions", rt.authHandler.Permissions)
 			r.Get("/users", rt.authHandler.ListUsers)
 
 			// Customers

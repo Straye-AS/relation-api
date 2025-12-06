@@ -237,6 +237,40 @@ type UserDTO struct {
 	Avatar     string   `json:"avatar,omitempty"`
 }
 
+// Auth DTOs
+
+// AuthUserDTO represents the current authenticated user with full context
+type AuthUserDTO struct {
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Email       string      `json:"email"`
+	Roles       []string    `json:"roles"`
+	Company     *CompanyDTO `json:"company,omitempty"`
+	Initials    string      `json:"initials"`
+	IsSuperAdmin bool       `json:"isSuperAdmin"`
+	IsCompanyAdmin bool     `json:"isCompanyAdmin"`
+}
+
+// CompanyDTO represents a company in auth context
+type CompanyDTO struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// PermissionDTO represents a single permission
+type PermissionDTO struct {
+	Resource string `json:"resource"`
+	Action   string `json:"action"`
+	Allowed  bool   `json:"allowed"`
+}
+
+// PermissionsResponseDTO represents the full permissions response
+type PermissionsResponseDTO struct {
+	Permissions []PermissionDTO `json:"permissions"`
+	Roles       []string        `json:"roles"`
+	IsSuperAdmin bool           `json:"isSuperAdmin"`
+}
+
 type NotificationDTO struct {
 	ID         uuid.UUID  `json:"id"`
 	Type       string     `json:"type"`
