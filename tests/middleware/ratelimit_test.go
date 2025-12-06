@@ -225,7 +225,7 @@ func TestRateLimiter_XForwardedFor(t *testing.T) {
 	// Request with whitelisted IP in X-Forwarded-For
 	for i := 0; i < 20; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.RemoteAddr = "192.168.1.1:12345" // Proxy IP
+		req.RemoteAddr = "192.168.1.1:12345"          // Proxy IP
 		req.Header.Set("X-Forwarded-For", "10.0.0.1") // Real client IP (whitelisted)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -255,7 +255,7 @@ func TestRateLimiter_XRealIP(t *testing.T) {
 	// Request with whitelisted IP in X-Real-IP
 	for i := 0; i < 20; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.RemoteAddr = "192.168.1.1:12345" // Proxy IP
+		req.RemoteAddr = "192.168.1.1:12345"    // Proxy IP
 		req.Header.Set("X-Real-IP", "10.0.0.2") // Real client IP (whitelisted)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -268,7 +268,7 @@ func TestRateLimiter_XRealIP(t *testing.T) {
 func TestRateLimiter_AuthenticatedUserLimit(t *testing.T) {
 	cfg := &config.RateLimitConfig{
 		Enabled:               true,
-		RequestsPerMinute:     2, // Low limit for unauthenticated
+		RequestsPerMinute:     2,  // Low limit for unauthenticated
 		RequestsPerMinuteAuth: 10, // Higher limit for authenticated
 		BurstSize:             2,
 		WhitelistIPs:          []string{},

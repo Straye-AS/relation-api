@@ -34,3 +34,8 @@ func respondValidationError(w http.ResponseWriter, err error) {
 		"errors": errors,
 	})
 }
+
+// parseJSON parses a JSON string into the target interface
+func parseJSON(data string, target interface{}) error {
+	return json.Unmarshal([]byte(data), target)
+}

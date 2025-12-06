@@ -212,24 +212,24 @@ type Project struct {
 type ERPSource string
 
 const (
-	ERPSourceManual     ERPSource = "manual"
-	ERPSourceTripletex  ERPSource = "tripletex"
-	ERPSourceVisma      ERPSource = "visma"
+	ERPSourceManual      ERPSource = "manual"
+	ERPSourceTripletex   ERPSource = "tripletex"
+	ERPSourceVisma       ERPSource = "visma"
 	ERPSourcePowerOffice ERPSource = "poweroffice"
-	ERPSourceOther      ERPSource = "other"
+	ERPSourceOther       ERPSource = "other"
 )
 
 // CostType represents the type of cost entry
 type CostType string
 
 const (
-	CostTypeLabor        CostType = "labor"
-	CostTypeMaterials    CostType = "materials"
-	CostTypeEquipment    CostType = "equipment"
+	CostTypeLabor         CostType = "labor"
+	CostTypeMaterials     CostType = "materials"
+	CostTypeEquipment     CostType = "equipment"
 	CostTypeSubcontractor CostType = "subcontractor"
-	CostTypeTravel       CostType = "travel"
-	CostTypeOverhead     CostType = "overhead"
-	CostTypeOther        CostType = "other"
+	CostTypeTravel        CostType = "travel"
+	CostTypeOverhead      CostType = "overhead"
+	CostTypeOther         CostType = "other"
 )
 
 // ProjectActualCost represents an actual cost entry for a project (from ERP or manual)
