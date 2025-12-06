@@ -139,6 +139,7 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 	dto := domain.ProjectDTO{
 		ID:                project.ID,
 		Name:              project.Name,
+		ProjectNumber:     project.ProjectNumber,
 		Summary:           project.Summary,
 		Description:       project.Description,
 		CustomerID:        project.CustomerID,

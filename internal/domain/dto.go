@@ -171,6 +171,7 @@ type BudgetSummaryDTO struct {
 type ProjectDTO struct {
 	ID                      uuid.UUID      `json:"id"`
 	Name                    string         `json:"name"`
+	ProjectNumber           string         `json:"projectNumber,omitempty"`
 	Summary                 string         `json:"summary,omitempty"`
 	Description             string         `json:"description,omitempty"`
 	CustomerID              uuid.UUID      `json:"customerId"`
@@ -475,6 +476,7 @@ type UpdateDealStageRequest struct {
 
 type CreateProjectRequest struct {
 	Name                    string         `json:"name" validate:"required,max=200"`
+	ProjectNumber           string         `json:"projectNumber,omitempty" validate:"max=50"`
 	Summary                 string         `json:"summary,omitempty"`
 	Description             string         `json:"description,omitempty"`
 	CustomerID              uuid.UUID      `json:"customerId" validate:"required"`
@@ -496,6 +498,7 @@ type CreateProjectRequest struct {
 
 type UpdateProjectRequest struct {
 	Name                    string         `json:"name" validate:"required,max=200"`
+	ProjectNumber           string         `json:"projectNumber,omitempty" validate:"max=50"`
 	Summary                 string         `json:"summary,omitempty"`
 	Description             string         `json:"description,omitempty"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`

@@ -3033,6 +3033,10 @@
                 "offerId": {
                     "type": "string"
                 },
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
+                },
                 "spent": {
                     "type": "number",
                     "minimum": 0
@@ -3713,6 +3717,9 @@
                 "offerId": {
                     "type": "string"
                 },
+                "projectNumber": {
+                    "type": "string"
+                },
                 "spent": {
                     "type": "number"
                 },
@@ -4020,6 +4027,10 @@
                 "name": {
                     "type": "string",
                     "maxLength": 200
+                },
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
                 },
                 "spent": {
                     "type": "number",

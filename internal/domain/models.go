@@ -191,6 +191,7 @@ const (
 type Project struct {
 	BaseModel
 	Name                    string         `gorm:"type:varchar(200);not null;index"`
+	ProjectNumber           string         `gorm:"type:varchar(50);unique;index;column:project_number"` // External reference number for ERP/accounting systems
 	Summary                 string         `gorm:"type:varchar(500)"`
 	Description             string         `gorm:"type:text"`
 	CustomerID              uuid.UUID      `gorm:"type:uuid;not null;index"`

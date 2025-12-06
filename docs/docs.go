@@ -3039,6 +3039,10 @@ const docTemplate = `{
                 "offerId": {
                     "type": "string"
                 },
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
+                },
                 "spent": {
                     "type": "number",
                     "minimum": 0
@@ -3719,6 +3723,9 @@ const docTemplate = `{
                 "offerId": {
                     "type": "string"
                 },
+                "projectNumber": {
+                    "type": "string"
+                },
                 "spent": {
                     "type": "number"
                 },
@@ -4026,6 +4033,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string",
                     "maxLength": 200
+                },
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
                 },
                 "spent": {
                     "type": "number",
