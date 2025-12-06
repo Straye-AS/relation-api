@@ -39,6 +39,9 @@ func NewCustomerHandler(customerService *service.CustomerService, contactService
 // @Param search query string false "Search by name or organization number"
 // @Param city query string false "Filter by city"
 // @Param country query string false "Filter by country"
+// @Param status query string false "Filter by status" Enums(active, inactive, lead, churned)
+// @Param tier query string false "Filter by tier" Enums(bronze, silver, gold, platinum)
+// @Param industry query string false "Filter by industry" Enums(construction, manufacturing, retail, logistics, agriculture, energy, public_sector, real_estate, other)
 // @Param sortBy query string false "Sort option" Enums(name_asc, name_desc, created_desc, created_asc, city_asc, city_desc)
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.CustomerDTO}
 // @Failure 400 {object} domain.ErrorResponse
@@ -62,6 +65,24 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 		Search:  r.URL.Query().Get("search"),
 		City:    r.URL.Query().Get("city"),
 		Country: r.URL.Query().Get("country"),
+	}
+
+	// Parse optional status filter
+	if status := r.URL.Query().Get("status"); status != "" {
+		s := domain.CustomerStatus(status)
+		filters.Status = &s
+	}
+
+	// Parse optional tier filter
+	if tier := r.URL.Query().Get("tier"); tier != "" {
+		t := domain.CustomerTier(tier)
+		filters.Tier = &t
+	}
+
+	// Parse optional industry filter
+	if industry := r.URL.Query().Get("industry"); industry != "" {
+		i := domain.CustomerIndustry(industry)
+		filters.Industry = &i
 	}
 
 	// Parse sort option

@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -10,7 +12,11 @@ import (
 	"github.com/straye-as/relation-api/internal/mapper"
 	"github.com/straye-as/relation-api/internal/repository"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
+
+// ErrDuplicateContactEmail is returned when trying to create a contact with an existing email
+var ErrDuplicateContactEmail = errors.New("contact with this email already exists")
 
 type ContactService struct {
 	contactRepo  *repository.ContactRepository
@@ -34,6 +40,24 @@ func NewContactService(
 }
 
 func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRequest) (*domain.ContactDTO, error) {
+	// Check for duplicate email if provided
+	if req.Email != "" {
+		existing, err := s.contactRepo.GetByEmail(ctx, req.Email)
+		if err == nil && existing != nil {
+			return nil, ErrDuplicateContactEmail
+		}
+		// Only non-not-found errors are actual errors
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("failed to check email uniqueness: %w", err)
+		}
+	}
+
+	// Set default contact type if not provided
+	contactType := req.ContactType
+	if contactType == "" {
+		contactType = domain.ContactTypePrimary
+	}
+
 	contact := &domain.Contact{
 		FirstName:              req.FirstName,
 		LastName:               req.LastName,
@@ -42,6 +66,7 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 		Mobile:                 req.Mobile,
 		Title:                  req.Title,
 		Department:             req.Department,
+		ContactType:            contactType,
 		PrimaryCustomerID:      req.PrimaryCustomerID,
 		Address:                req.Address,
 		City:                   req.City,
@@ -64,6 +89,10 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 	}
 
 	if err := s.contactRepo.Create(ctx, contact); err != nil {
+		// Check for unique constraint violation on email
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			return nil, ErrDuplicateContactEmail
+		}
 		return nil, fmt.Errorf("failed to create contact: %w", err)
 	}
 
@@ -127,6 +156,14 @@ func (s *ContactService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 		return nil, fmt.Errorf("contact not found: %w", err)
 	}
 
+	// Check for duplicate email if it's being changed
+	if req.Email != "" && req.Email != contact.Email {
+		existing, err := s.contactRepo.GetByEmail(ctx, req.Email)
+		if err == nil && existing != nil && existing.ID != id {
+			return nil, ErrDuplicateContactEmail
+		}
+	}
+
 	contact.FirstName = req.FirstName
 	contact.LastName = req.LastName
 	contact.Email = req.Email
@@ -142,6 +179,11 @@ func (s *ContactService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	contact.LinkedInURL = req.LinkedInURL
 	contact.PreferredContactMethod = req.PreferredContactMethod
 	contact.Notes = req.Notes
+
+	// Update contact type if provided, keep existing if empty
+	if req.ContactType != "" {
+		contact.ContactType = req.ContactType
+	}
 
 	if req.IsActive != nil {
 		contact.IsActive = *req.IsActive

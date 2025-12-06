@@ -9,22 +9,25 @@ import (
 // DTOs for API responses matching Norwegian spec
 
 type CustomerDTO struct {
-	ID            uuid.UUID `json:"id"`
-	Name          string    `json:"name"`
-	OrgNumber     string    `json:"orgNumber"`
-	Email         string    `json:"email"`
-	Phone         string    `json:"phone"`
-	Address       string    `json:"address,omitempty"`
-	City          string    `json:"city,omitempty"`
-	PostalCode    string    `json:"postalCode,omitempty"`
-	Country       string    `json:"country"`
-	ContactPerson string    `json:"contactPerson,omitempty"`
-	ContactEmail  string    `json:"contactEmail,omitempty"`
-	ContactPhone  string    `json:"contactPhone,omitempty"`
-	CreatedAt     string    `json:"createdAt"` // ISO 8601
-	UpdatedAt     string    `json:"updatedAt"` // ISO 8601
-	TotalValue    float64   `json:"totalValue,omitempty"`
-	ActiveOffers  int       `json:"activeOffers,omitempty"`
+	ID            uuid.UUID        `json:"id"`
+	Name          string           `json:"name"`
+	OrgNumber     string           `json:"orgNumber"`
+	Email         string           `json:"email"`
+	Phone         string           `json:"phone"`
+	Address       string           `json:"address,omitempty"`
+	City          string           `json:"city,omitempty"`
+	PostalCode    string           `json:"postalCode,omitempty"`
+	Country       string           `json:"country"`
+	ContactPerson string           `json:"contactPerson,omitempty"`
+	ContactEmail  string           `json:"contactEmail,omitempty"`
+	ContactPhone  string           `json:"contactPhone,omitempty"`
+	Status        CustomerStatus   `json:"status"`
+	Tier          CustomerTier     `json:"tier"`
+	Industry      CustomerIndustry `json:"industry,omitempty"`
+	CreatedAt     string           `json:"createdAt"` // ISO 8601
+	UpdatedAt     string           `json:"updatedAt"` // ISO 8601
+	TotalValue    float64          `json:"totalValue,omitempty"`
+	ActiveOffers  int              `json:"activeOffers,omitempty"`
 }
 
 // CustomerWithDetailsDTO includes customer data with related entities and statistics
@@ -62,6 +65,7 @@ type ContactDTO struct {
 	Mobile                 string                   `json:"mobile,omitempty"`
 	Title                  string                   `json:"title,omitempty"`
 	Department             string                   `json:"department,omitempty"`
+	ContactType            ContactType              `json:"contactType"`
 	PrimaryCustomerID      *uuid.UUID               `json:"primaryCustomerId,omitempty"`
 	PrimaryCustomerName    string                   `json:"primaryCustomerName,omitempty"`
 	Address                string                   `json:"address,omitempty"`
@@ -390,68 +394,76 @@ type APIResponse struct {
 // Request DTOs
 
 type CreateCustomerRequest struct {
-	Name          string `json:"name" validate:"required,max=200"`
-	OrgNumber     string `json:"orgNumber" validate:"required,max=20"`
-	Email         string `json:"email" validate:"required,email"`
-	Phone         string `json:"phone" validate:"required,max=50"`
-	Address       string `json:"address,omitempty" validate:"max=500"`
-	City          string `json:"city,omitempty" validate:"max=100"`
-	PostalCode    string `json:"postalCode,omitempty" validate:"max=20"`
-	Country       string `json:"country" validate:"required,max=100"`
-	ContactPerson string `json:"contactPerson,omitempty" validate:"max=200"`
-	ContactEmail  string `json:"contactEmail,omitempty" validate:"omitempty,email"`
-	ContactPhone  string `json:"contactPhone,omitempty" validate:"max=50"`
+	Name          string           `json:"name" validate:"required,max=200"`
+	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
+	Email         string           `json:"email" validate:"required,email"`
+	Phone         string           `json:"phone" validate:"required,max=50"`
+	Address       string           `json:"address,omitempty" validate:"max=500"`
+	City          string           `json:"city,omitempty" validate:"max=100"`
+	PostalCode    string           `json:"postalCode,omitempty" validate:"max=20"`
+	Country       string           `json:"country" validate:"required,max=100"`
+	ContactPerson string           `json:"contactPerson,omitempty" validate:"max=200"`
+	ContactEmail  string           `json:"contactEmail,omitempty" validate:"omitempty,email"`
+	ContactPhone  string           `json:"contactPhone,omitempty" validate:"max=50"`
+	Status        CustomerStatus   `json:"status,omitempty"`
+	Tier          CustomerTier     `json:"tier,omitempty"`
+	Industry      CustomerIndustry `json:"industry,omitempty"`
 }
 
 type UpdateCustomerRequest struct {
-	Name          string `json:"name" validate:"required,max=200"`
-	OrgNumber     string `json:"orgNumber" validate:"required,max=20"`
-	Email         string `json:"email" validate:"required,email"`
-	Phone         string `json:"phone" validate:"required,max=50"`
-	Address       string `json:"address,omitempty" validate:"max=500"`
-	City          string `json:"city,omitempty" validate:"max=100"`
-	PostalCode    string `json:"postalCode,omitempty" validate:"max=20"`
-	Country       string `json:"country" validate:"required,max=100"`
-	ContactPerson string `json:"contactPerson,omitempty" validate:"max=200"`
-	ContactEmail  string `json:"contactEmail,omitempty" validate:"omitempty,email"`
-	ContactPhone  string `json:"contactPhone,omitempty" validate:"max=50"`
+	Name          string           `json:"name" validate:"required,max=200"`
+	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
+	Email         string           `json:"email" validate:"required,email"`
+	Phone         string           `json:"phone" validate:"required,max=50"`
+	Address       string           `json:"address,omitempty" validate:"max=500"`
+	City          string           `json:"city,omitempty" validate:"max=100"`
+	PostalCode    string           `json:"postalCode,omitempty" validate:"max=20"`
+	Country       string           `json:"country" validate:"required,max=100"`
+	ContactPerson string           `json:"contactPerson,omitempty" validate:"max=200"`
+	ContactEmail  string           `json:"contactEmail,omitempty" validate:"omitempty,email"`
+	ContactPhone  string           `json:"contactPhone,omitempty" validate:"max=50"`
+	Status        CustomerStatus   `json:"status,omitempty"`
+	Tier          CustomerTier     `json:"tier,omitempty"`
+	Industry      CustomerIndustry `json:"industry,omitempty"`
 }
 
 type CreateContactRequest struct {
-	FirstName              string     `json:"firstName" validate:"required,max=100"`
-	LastName               string     `json:"lastName" validate:"required,max=100"`
-	Email                  string     `json:"email,omitempty" validate:"omitempty,email,max=255"`
-	Phone                  string     `json:"phone,omitempty" validate:"max=50"`
-	Mobile                 string     `json:"mobile,omitempty" validate:"max=50"`
-	Title                  string     `json:"title,omitempty" validate:"max=100"`
-	Department             string     `json:"department,omitempty" validate:"max=100"`
-	PrimaryCustomerID      *uuid.UUID `json:"primaryCustomerId,omitempty"`
-	Address                string     `json:"address,omitempty" validate:"max=500"`
-	City                   string     `json:"city,omitempty" validate:"max=100"`
-	PostalCode             string     `json:"postalCode,omitempty" validate:"max=20"`
-	Country                string     `json:"country,omitempty" validate:"max=100"`
-	LinkedInURL            string     `json:"linkedInUrl,omitempty" validate:"max=500"`
-	PreferredContactMethod string     `json:"preferredContactMethod,omitempty" validate:"max=50"`
-	Notes                  string     `json:"notes,omitempty"`
+	FirstName              string      `json:"firstName" validate:"required,max=100"`
+	LastName               string      `json:"lastName" validate:"required,max=100"`
+	Email                  string      `json:"email,omitempty" validate:"omitempty,email,max=255"`
+	Phone                  string      `json:"phone,omitempty" validate:"max=50"`
+	Mobile                 string      `json:"mobile,omitempty" validate:"max=50"`
+	Title                  string      `json:"title,omitempty" validate:"max=100"`
+	Department             string      `json:"department,omitempty" validate:"max=100"`
+	ContactType            ContactType `json:"contactType,omitempty"`
+	PrimaryCustomerID      *uuid.UUID  `json:"primaryCustomerId,omitempty"`
+	Address                string      `json:"address,omitempty" validate:"max=500"`
+	City                   string      `json:"city,omitempty" validate:"max=100"`
+	PostalCode             string      `json:"postalCode,omitempty" validate:"max=20"`
+	Country                string      `json:"country,omitempty" validate:"max=100"`
+	LinkedInURL            string      `json:"linkedInUrl,omitempty" validate:"max=500"`
+	PreferredContactMethod string      `json:"preferredContactMethod,omitempty" validate:"max=50"`
+	Notes                  string      `json:"notes,omitempty"`
 }
 
 type UpdateContactRequest struct {
-	FirstName              string     `json:"firstName" validate:"required,max=100"`
-	LastName               string     `json:"lastName" validate:"required,max=100"`
-	Email                  string     `json:"email,omitempty" validate:"omitempty,email,max=255"`
-	Phone                  string     `json:"phone,omitempty" validate:"max=50"`
-	Mobile                 string     `json:"mobile,omitempty" validate:"max=50"`
-	Title                  string     `json:"title,omitempty" validate:"max=100"`
-	Department             string     `json:"department,omitempty" validate:"max=100"`
-	PrimaryCustomerID      *uuid.UUID `json:"primaryCustomerId,omitempty"`
-	Address                string     `json:"address,omitempty" validate:"max=500"`
-	City                   string     `json:"city,omitempty" validate:"max=100"`
-	PostalCode             string     `json:"postalCode,omitempty" validate:"max=20"`
-	Country                string     `json:"country,omitempty" validate:"max=100"`
-	LinkedInURL            string     `json:"linkedInUrl,omitempty" validate:"max=500"`
-	PreferredContactMethod string     `json:"preferredContactMethod,omitempty" validate:"max=50"`
-	Notes                  string     `json:"notes,omitempty"`
-	IsActive               *bool      `json:"isActive,omitempty"`
+	FirstName              string      `json:"firstName" validate:"required,max=100"`
+	LastName               string      `json:"lastName" validate:"required,max=100"`
+	Email                  string      `json:"email,omitempty" validate:"omitempty,email,max=255"`
+	Phone                  string      `json:"phone,omitempty" validate:"max=50"`
+	Mobile                 string      `json:"mobile,omitempty" validate:"max=50"`
+	Title                  string      `json:"title,omitempty" validate:"max=100"`
+	Department             string      `json:"department,omitempty" validate:"max=100"`
+	ContactType            ContactType `json:"contactType,omitempty"`
+	PrimaryCustomerID      *uuid.UUID  `json:"primaryCustomerId,omitempty"`
+	Address                string      `json:"address,omitempty" validate:"max=500"`
+	City                   string      `json:"city,omitempty" validate:"max=100"`
+	PostalCode             string      `json:"postalCode,omitempty" validate:"max=20"`
+	Country                string      `json:"country,omitempty" validate:"max=100"`
+	LinkedInURL            string      `json:"linkedInUrl,omitempty" validate:"max=500"`
+	PreferredContactMethod string      `json:"preferredContactMethod,omitempty" validate:"max=50"`
+	Notes                  string      `json:"notes,omitempty"`
+	IsActive               *bool       `json:"isActive,omitempty"`
 }
 
 // Contact relationship request DTOs

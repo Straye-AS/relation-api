@@ -118,7 +118,7 @@ func run() error {
 
 	// Initialize services
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
-	contactService := service.NewContactService(contactRepo, customerRepo, dealRepo, projectRepo, activityRepo, log)
+	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, log)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, fileRepo, activityRepo, log)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, notificationRepo, log)

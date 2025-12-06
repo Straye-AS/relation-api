@@ -14,6 +14,41 @@ type BaseModel struct {
 	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
+// CustomerStatus represents the status of a customer
+type CustomerStatus string
+
+const (
+	CustomerStatusActive   CustomerStatus = "active"
+	CustomerStatusInactive CustomerStatus = "inactive"
+	CustomerStatusLead     CustomerStatus = "lead"
+	CustomerStatusChurned  CustomerStatus = "churned"
+)
+
+// CustomerTier represents the tier/importance level of a customer
+type CustomerTier string
+
+const (
+	CustomerTierBronze   CustomerTier = "bronze"
+	CustomerTierSilver   CustomerTier = "silver"
+	CustomerTierGold     CustomerTier = "gold"
+	CustomerTierPlatinum CustomerTier = "platinum"
+)
+
+// CustomerIndustry represents the industry sector of a customer
+type CustomerIndustry string
+
+const (
+	CustomerIndustryConstruction  CustomerIndustry = "construction"
+	CustomerIndustryManufacturing CustomerIndustry = "manufacturing"
+	CustomerIndustryRetail        CustomerIndustry = "retail"
+	CustomerIndustryLogistics     CustomerIndustry = "logistics"
+	CustomerIndustryAgriculture   CustomerIndustry = "agriculture"
+	CustomerIndustryEnergy        CustomerIndustry = "energy"
+	CustomerIndustryPublicSector  CustomerIndustry = "public_sector"
+	CustomerIndustryRealEstate    CustomerIndustry = "real_estate"
+	CustomerIndustryOther         CustomerIndustry = "other"
+)
+
 // CompanyID represents Straye group companies
 type CompanyID string
 
@@ -43,34 +78,50 @@ type Company struct {
 // Customer represents an organization in the CRM
 type Customer struct {
 	BaseModel
-	Name          string     `gorm:"type:varchar(200);not null;index"`
-	OrgNumber     string     `gorm:"type:varchar(20);unique;index"`
-	Email         string     `gorm:"type:varchar(255);not null"`
-	Phone         string     `gorm:"type:varchar(50);not null"`
-	Address       string     `gorm:"type:varchar(500)"`
-	City          string     `gorm:"type:varchar(100)"`
-	PostalCode    string     `gorm:"type:varchar(20)"`
-	Country       string     `gorm:"type:varchar(100);not null;default:'Norway'"`
-	ContactPerson string     `gorm:"type:varchar(200)"`
-	ContactEmail  string     `gorm:"type:varchar(255)"`
-	ContactPhone  string     `gorm:"type:varchar(50)"`
-	CompanyID     *CompanyID `gorm:"type:varchar(50);column:company_id;index"`
-	Company       *Company   `gorm:"foreignKey:CompanyID"`
-	Contacts      []Contact  `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
-	Projects      []Project  `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
-	Offers        []Offer    `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Name          string           `gorm:"type:varchar(200);not null;index"`
+	OrgNumber     string           `gorm:"type:varchar(20);unique;index"`
+	Email         string           `gorm:"type:varchar(255);not null"`
+	Phone         string           `gorm:"type:varchar(50);not null"`
+	Address       string           `gorm:"type:varchar(500)"`
+	City          string           `gorm:"type:varchar(100)"`
+	PostalCode    string           `gorm:"type:varchar(20)"`
+	Country       string           `gorm:"type:varchar(100);not null;default:'Norway'"`
+	ContactPerson string           `gorm:"type:varchar(200)"`
+	ContactEmail  string           `gorm:"type:varchar(255)"`
+	ContactPhone  string           `gorm:"type:varchar(50)"`
+	Status        CustomerStatus   `gorm:"type:varchar(50);not null;default:'active';index"`
+	Tier          CustomerTier     `gorm:"type:varchar(50);not null;default:'bronze';index"`
+	Industry      CustomerIndustry `gorm:"type:varchar(50);index"`
+	CompanyID     *CompanyID       `gorm:"type:varchar(50);column:company_id;index"`
+	Company       *Company         `gorm:"foreignKey:CompanyID"`
+	Contacts      []Contact        `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
+	Projects      []Project        `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Offers        []Offer          `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
 }
+
+// ContactType represents the classification of a contact
+type ContactType string
+
+const (
+	ContactTypePrimary   ContactType = "primary"
+	ContactTypeSecondary ContactType = "secondary"
+	ContactTypeBilling   ContactType = "billing"
+	ContactTypeTechnical ContactType = "technical"
+	ContactTypeExecutive ContactType = "executive"
+	ContactTypeOther     ContactType = "other"
+)
 
 // Contact represents an individual person
 type Contact struct {
 	BaseModel
 	FirstName              string                `gorm:"type:varchar(100);not null;column:first_name"`
 	LastName               string                `gorm:"type:varchar(100);not null;column:last_name"`
-	Email                  string                `gorm:"type:varchar(255)"`
+	Email                  string                `gorm:"type:varchar(255);uniqueIndex"`
 	Phone                  string                `gorm:"type:varchar(50)"`
 	Mobile                 string                `gorm:"type:varchar(50)"`
 	Title                  string                `gorm:"type:varchar(100)"`
 	Department             string                `gorm:"type:varchar(100)"`
+	ContactType            ContactType           `gorm:"type:varchar(50);not null;default:'primary';column:contact_type;index"`
 	PrimaryCustomerID      *uuid.UUID            `gorm:"type:uuid;column:primary_customer_id"`
 	PrimaryCustomer        *Customer             `gorm:"foreignKey:PrimaryCustomerID"`
 	Address                string                `gorm:"type:varchar(500)"`

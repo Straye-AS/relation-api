@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -23,6 +24,62 @@ var ErrDuplicateOrgNumber = errors.New("customer with this organization number a
 
 // ErrCustomerHasActiveDependencies is returned when trying to delete a customer with active relations
 var ErrCustomerHasActiveDependencies = errors.New("cannot delete customer with active projects, deals, or offers")
+
+// ErrInvalidEmailFormat is returned when an email address has invalid format
+var ErrInvalidEmailFormat = errors.New("invalid email format")
+
+// ErrInvalidPhoneFormat is returned when a phone number has invalid format
+var ErrInvalidPhoneFormat = errors.New("invalid phone format")
+
+// Email and phone validation patterns
+var (
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	// Norwegian phone pattern: allows +47 prefix, spaces, and common formats
+	phoneRegex = regexp.MustCompile(`^(\+47\s?)?[\d\s\-]{8,15}$`)
+)
+
+// validateEmail checks if the email has a valid format
+func validateEmail(email string) error {
+	if email == "" {
+		return nil // Empty emails are allowed (optional fields may have empty email)
+	}
+	if !emailRegex.MatchString(email) {
+		return ErrInvalidEmailFormat
+	}
+	return nil
+}
+
+// validatePhone checks if the phone number has a valid format
+func validatePhone(phone string) error {
+	if phone == "" {
+		return nil // Empty phones are allowed
+	}
+	// Remove common formatting characters for validation
+	cleaned := strings.ReplaceAll(strings.ReplaceAll(phone, " ", ""), "-", "")
+	if len(cleaned) < 8 || !phoneRegex.MatchString(phone) {
+		return ErrInvalidPhoneFormat
+	}
+	return nil
+}
+
+// calculateTierFromValue determines the customer tier based on total business value
+// Thresholds (in NOK):
+// - Platinum: >= 10,000,000 (10M)
+// - Gold: >= 1,000,000 (1M)
+// - Silver: >= 100,000 (100K)
+// - Bronze: < 100,000
+func calculateTierFromValue(totalValue float64) domain.CustomerTier {
+	switch {
+	case totalValue >= 10_000_000:
+		return domain.CustomerTierPlatinum
+	case totalValue >= 1_000_000:
+		return domain.CustomerTierGold
+	case totalValue >= 100_000:
+		return domain.CustomerTierSilver
+	default:
+		return domain.CustomerTierBronze
+	}
+}
 
 type CustomerService struct {
 	customerRepo *repository.CustomerRepository
@@ -62,6 +119,22 @@ func NewCustomerServiceWithDeps(
 }
 
 func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomerRequest) (*domain.CustomerDTO, error) {
+	// Validate email format
+	if err := validateEmail(req.Email); err != nil {
+		return nil, fmt.Errorf("%w: email", ErrInvalidEmailFormat)
+	}
+	if err := validateEmail(req.ContactEmail); err != nil {
+		return nil, fmt.Errorf("%w: contactEmail", ErrInvalidEmailFormat)
+	}
+
+	// Validate phone format
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, fmt.Errorf("%w: phone", ErrInvalidPhoneFormat)
+	}
+	if err := validatePhone(req.ContactPhone); err != nil {
+		return nil, fmt.Errorf("%w: contactPhone", ErrInvalidPhoneFormat)
+	}
+
 	// Check for duplicate org number
 	if req.OrgNumber != "" {
 		existing, err := s.customerRepo.GetByOrgNumber(ctx, req.OrgNumber)
@@ -72,6 +145,18 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("failed to check org number: %w", err)
 		}
+	}
+
+	// Set default status if not provided
+	status := req.Status
+	if status == "" {
+		status = domain.CustomerStatusActive
+	}
+
+	// Set default tier if not provided
+	tier := req.Tier
+	if tier == "" {
+		tier = domain.CustomerTierBronze
 	}
 
 	customer := &domain.Customer{
@@ -86,6 +171,9 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 		ContactPerson: req.ContactPerson,
 		ContactEmail:  req.ContactEmail,
 		ContactPhone:  req.ContactPhone,
+		Status:        status,
+		Tier:          tier,
+		Industry:      req.Industry,
 	}
 
 	if err := s.customerRepo.Create(ctx, customer); err != nil {
@@ -128,8 +216,40 @@ func (s *CustomerService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Cu
 		stats = &repository.CustomerStats{}
 	}
 
+	// Auto-update tier based on total value
+	s.updateTierIfNeeded(ctx, customer, stats.TotalValue)
+
 	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
 	return &dto, nil
+}
+
+// updateTierIfNeeded checks if the customer tier should be updated based on total value
+// and updates it if the calculated tier is higher than the current tier
+func (s *CustomerService) updateTierIfNeeded(ctx context.Context, customer *domain.Customer, totalValue float64) {
+	calculatedTier := calculateTierFromValue(totalValue)
+
+	// Only upgrade tiers, never downgrade automatically
+	tierOrder := map[domain.CustomerTier]int{
+		domain.CustomerTierBronze:   1,
+		domain.CustomerTierSilver:   2,
+		domain.CustomerTierGold:     3,
+		domain.CustomerTierPlatinum: 4,
+	}
+
+	if tierOrder[calculatedTier] > tierOrder[customer.Tier] {
+		customer.Tier = calculatedTier
+		if err := s.customerRepo.Update(ctx, customer); err != nil {
+			s.logger.Warn("failed to auto-update customer tier",
+				zap.String("customerID", customer.ID.String()),
+				zap.String("newTier", string(calculatedTier)),
+				zap.Error(err))
+		} else {
+			s.logger.Info("auto-upgraded customer tier",
+				zap.String("customerID", customer.ID.String()),
+				zap.String("newTier", string(calculatedTier)),
+				zap.Float64("totalValue", totalValue))
+		}
+	}
 }
 
 // GetByIDWithDetails returns a customer with full details including contacts, deals, and projects
@@ -148,6 +268,9 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 		s.logger.Warn("failed to get customer stats", zap.Error(err))
 		stats = &repository.CustomerStats{}
 	}
+
+	// Auto-update tier based on total value
+	s.updateTierIfNeeded(ctx, customer, stats.TotalValue)
 
 	// Build base customer DTO
 	customerDTO := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
@@ -200,6 +323,22 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 }
 
 func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.UpdateCustomerRequest) (*domain.CustomerDTO, error) {
+	// Validate email format
+	if err := validateEmail(req.Email); err != nil {
+		return nil, fmt.Errorf("%w: email", ErrInvalidEmailFormat)
+	}
+	if err := validateEmail(req.ContactEmail); err != nil {
+		return nil, fmt.Errorf("%w: contactEmail", ErrInvalidEmailFormat)
+	}
+
+	// Validate phone format
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, fmt.Errorf("%w: phone", ErrInvalidPhoneFormat)
+	}
+	if err := validatePhone(req.ContactPhone); err != nil {
+		return nil, fmt.Errorf("%w: contactPhone", ErrInvalidPhoneFormat)
+	}
+
 	customer, err := s.customerRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -227,6 +366,19 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	customer.ContactPerson = req.ContactPerson
 	customer.ContactEmail = req.ContactEmail
 	customer.ContactPhone = req.ContactPhone
+
+	// Update status if provided, keep existing if empty
+	if req.Status != "" {
+		customer.Status = req.Status
+	}
+
+	// Update tier if provided, keep existing if empty
+	if req.Tier != "" {
+		customer.Tier = req.Tier
+	}
+
+	// Update industry (can be empty to clear)
+	customer.Industry = req.Industry
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
