@@ -3,7 +3,9 @@ package repository_test
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/tests/testutil"
@@ -79,6 +81,35 @@ func TestCustomerRepository_GetByID(t *testing.T) {
 	assert.Equal(t, customer.ContactPhone, found.ContactPhone)
 }
 
+func TestCustomerRepository_GetByOrgNumber(t *testing.T) {
+	db := setupCustomerTestDB(t)
+	repo := repository.NewCustomerRepository(db)
+
+	t.Run("found", func(t *testing.T) {
+		customer := &domain.Customer{
+			Name:      "Unique Org Company",
+			OrgNumber: "9876543210",
+			Email:     "test@example.com",
+			Phone:     "12345678",
+			Country:   "Norway",
+		}
+		err := repo.Create(context.Background(), customer)
+		require.NoError(t, err)
+
+		found, err := repo.GetByOrgNumber(context.Background(), "9876543210")
+		assert.NoError(t, err)
+		assert.NotNil(t, found)
+		assert.Equal(t, customer.ID, found.ID)
+		assert.Equal(t, "Unique Org Company", found.Name)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		found, err := repo.GetByOrgNumber(context.Background(), "0000000000")
+		assert.NoError(t, err)
+		assert.Nil(t, found)
+	})
+}
+
 func TestCustomerRepository_List(t *testing.T) {
 	db := setupCustomerTestDB(t)
 	repo := repository.NewCustomerRepository(db)
@@ -95,23 +126,261 @@ func TestCustomerRepository_List(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Test listing all
-	result, total, err := repo.List(context.Background(), 1, 10, "")
-	assert.NoError(t, err)
-	assert.Equal(t, int64(3), total)
-	assert.Len(t, result, 3)
+	t.Run("list all", func(t *testing.T) {
+		result, total, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		assert.Len(t, result, 3)
+	})
 
-	// Test search
-	result, total, err = repo.List(context.Background(), 1, 10, "Tech")
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), total)
-	assert.Len(t, result, 2)
+	t.Run("pagination", func(t *testing.T) {
+		result, total, err := repo.List(context.Background(), 1, 2, nil, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		assert.Len(t, result, 2)
 
-	// Test pagination
-	result, total, err = repo.List(context.Background(), 1, 2, "")
-	assert.NoError(t, err)
-	assert.Equal(t, int64(3), total)
-	assert.Len(t, result, 2)
+		result, total, err = repo.List(context.Background(), 2, 2, nil, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		assert.Len(t, result, 1)
+	})
+}
+
+func TestCustomerRepository_ListWithFilters(t *testing.T) {
+	db := setupCustomerTestDB(t)
+	repo := repository.NewCustomerRepository(db)
+
+	// Create customers with different attributes
+	customers := []*domain.Customer{
+		{Name: "Oslo Company", OrgNumber: "111111001", Email: "oslo@example.com", Phone: "12345678", City: "Oslo", Country: "Norway"},
+		{Name: "Bergen AS", OrgNumber: "111111002", Email: "bergen@example.com", Phone: "12345678", City: "Bergen", Country: "Norway"},
+		{Name: "Stockholm AB", OrgNumber: "111111003", Email: "stockholm@example.com", Phone: "12345678", City: "Stockholm", Country: "Sweden"},
+		{Name: "Oslo Tech", OrgNumber: "111111004", Email: "oslotech@example.com", Phone: "12345678", City: "Oslo", Country: "Norway"},
+	}
+
+	for _, c := range customers {
+		err := repo.Create(context.Background(), c)
+		require.NoError(t, err)
+	}
+
+	t.Run("filter by city", func(t *testing.T) {
+		city := "Oslo"
+		filters := &repository.CustomerFilters{City: &city}
+		result, total, err := repo.List(context.Background(), 1, 10, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), total)
+		assert.Len(t, result, 2)
+		for _, c := range result {
+			assert.Equal(t, "Oslo", c.City)
+		}
+	})
+
+	t.Run("filter by country", func(t *testing.T) {
+		country := "Sweden"
+		filters := &repository.CustomerFilters{Country: &country}
+		result, total, err := repo.List(context.Background(), 1, 10, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		assert.Len(t, result, 1)
+		assert.Equal(t, "Stockholm AB", result[0].Name)
+	})
+
+	t.Run("filter by search query - name match", func(t *testing.T) {
+		search := "Tech"
+		filters := &repository.CustomerFilters{SearchQuery: &search}
+		result, total, err := repo.List(context.Background(), 1, 10, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		assert.Len(t, result, 1)
+		assert.Equal(t, "Oslo Tech", result[0].Name)
+	})
+
+	t.Run("filter by search query - org number match", func(t *testing.T) {
+		search := "111111002"
+		filters := &repository.CustomerFilters{SearchQuery: &search}
+		result, total, err := repo.List(context.Background(), 1, 10, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		assert.Len(t, result, 1)
+		assert.Equal(t, "Bergen AS", result[0].Name)
+	})
+
+	t.Run("filter by city and country combined", func(t *testing.T) {
+		city := "Oslo"
+		country := "Norway"
+		filters := &repository.CustomerFilters{City: &city, Country: &country}
+		result, total, err := repo.List(context.Background(), 1, 10, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), total)
+		assert.Len(t, result, 2)
+	})
+
+	t.Run("filter by created date range - future cutoff", func(t *testing.T) {
+		// Filter for customers created before a future date (should include all)
+		futureDate := time.Now().Add(24 * time.Hour)
+		filters := &repository.CustomerFilters{CreatedBefore: &futureDate}
+		result, total, err := repo.List(context.Background(), 1, 100, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		// Should find at least our 4 test customers
+		assert.GreaterOrEqual(t, total, int64(4))
+		assert.GreaterOrEqual(t, len(result), 4)
+	})
+
+	t.Run("filter by created date range - past cutoff", func(t *testing.T) {
+		// Filter for customers created after a future date (should find none from our test set)
+		futureDate := time.Now().Add(24 * time.Hour)
+		filters := &repository.CustomerFilters{CreatedAfter: &futureDate}
+		result, total, err := repo.List(context.Background(), 1, 100, filters, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), total)
+		assert.Len(t, result, 0)
+	})
+}
+
+func TestCustomerRepository_ListWithSorting(t *testing.T) {
+	db := setupCustomerTestDB(t)
+	repo := repository.NewCustomerRepository(db)
+
+	// Create customers with predictable ordering
+	customers := []*domain.Customer{
+		{Name: "Alpha Corp", OrgNumber: "222222001", Email: "alpha@example.com", Phone: "12345678", City: "Bergen", Country: "Norway"},
+		{Name: "Beta Inc", OrgNumber: "222222002", Email: "beta@example.com", Phone: "12345678", City: "Oslo", Country: "Norway"},
+		{Name: "Gamma AS", OrgNumber: "222222003", Email: "gamma@example.com", Phone: "12345678", City: "Trondheim", Country: "Norway"},
+	}
+
+	for _, c := range customers {
+		err := repo.Create(context.Background(), c)
+		require.NoError(t, err)
+		// Add small delay to ensure different timestamps
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Run("sort by name ascending", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByNameAsc)
+		assert.NoError(t, err)
+		assert.Equal(t, "Alpha Corp", result[0].Name)
+		assert.Equal(t, "Beta Inc", result[1].Name)
+		assert.Equal(t, "Gamma AS", result[2].Name)
+	})
+
+	t.Run("sort by name descending", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByNameDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, "Gamma AS", result[0].Name)
+		assert.Equal(t, "Beta Inc", result[1].Name)
+		assert.Equal(t, "Alpha Corp", result[2].Name)
+	})
+
+	t.Run("sort by created ascending", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByCreatedAsc)
+		assert.NoError(t, err)
+		// First created should be first
+		assert.Equal(t, "Alpha Corp", result[0].Name)
+	})
+
+	t.Run("sort by created descending", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByCreatedDesc)
+		assert.NoError(t, err)
+		// Last created should be first
+		assert.Equal(t, "Gamma AS", result[0].Name)
+	})
+
+	t.Run("sort by city ascending", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByCityAsc)
+		assert.NoError(t, err)
+		assert.Equal(t, "Bergen", result[0].City)
+		assert.Equal(t, "Oslo", result[1].City)
+		assert.Equal(t, "Trondheim", result[2].City)
+	})
+
+	t.Run("sort by city descending", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, repository.CustomerSortByCityDesc)
+		assert.NoError(t, err)
+		assert.Equal(t, "Trondheim", result[0].City)
+		assert.Equal(t, "Oslo", result[1].City)
+		assert.Equal(t, "Bergen", result[2].City)
+	})
+
+	t.Run("default sorting when empty", func(t *testing.T) {
+		result, _, err := repo.List(context.Background(), 1, 10, nil, "")
+		assert.NoError(t, err)
+		// Default is created_at DESC, so newest first
+		assert.Equal(t, "Gamma AS", result[0].Name)
+	})
+}
+
+func TestCustomerRepository_GetCustomerStats(t *testing.T) {
+	db := setupCustomerTestDB(t)
+	customerRepo := repository.NewCustomerRepository(db)
+
+	// Create a test customer
+	customer := testutil.CreateTestCustomer(t, db, "Stats Test Customer")
+
+	t.Run("customer with no deals or projects", func(t *testing.T) {
+		stats, err := customerRepo.GetCustomerStats(context.Background(), customer.ID)
+		assert.NoError(t, err)
+		assert.NotNil(t, stats)
+		assert.Equal(t, int64(0), stats.TotalDealsCount)
+		assert.Equal(t, int64(0), stats.ActiveDealsCount)
+		assert.Equal(t, float64(0), stats.TotalDealValue)
+		assert.Equal(t, float64(0), stats.WonDealsValue)
+		assert.Equal(t, int64(0), stats.ActiveProjectsCount)
+	})
+
+	t.Run("customer with deals", func(t *testing.T) {
+		// Create some deals for the customer
+		deals := []*domain.Deal{
+			{Title: "Active Deal 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Stage: domain.DealStageLead, Value: 100000, OwnerID: "user-1", Currency: "NOK"},
+			{Title: "Active Deal 2", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Stage: domain.DealStageQualified, Value: 200000, OwnerID: "user-1", Currency: "NOK"},
+			{Title: "Won Deal", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Stage: domain.DealStageWon, Value: 500000, OwnerID: "user-1", Currency: "NOK"},
+			{Title: "Lost Deal", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Stage: domain.DealStageLost, Value: 150000, OwnerID: "user-1", Currency: "NOK"},
+		}
+		for _, d := range deals {
+			err := db.Create(d).Error
+			require.NoError(t, err)
+		}
+
+		stats, err := customerRepo.GetCustomerStats(context.Background(), customer.ID)
+		assert.NoError(t, err)
+		assert.NotNil(t, stats)
+		assert.Equal(t, int64(4), stats.TotalDealsCount)
+		assert.Equal(t, int64(2), stats.ActiveDealsCount) // Lead and Qualified stages
+		assert.Equal(t, float64(950000), stats.TotalDealValue)
+		assert.Equal(t, float64(500000), stats.WonDealsValue)
+	})
+
+	t.Run("customer with projects", func(t *testing.T) {
+		// Create projects for the customer
+		startDate := time.Now()
+		projects := []*domain.Project{
+			{Name: "Active Project 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusActive, ManagerID: "mgr-1", StartDate: startDate},
+			{Name: "Planning Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusPlanning, ManagerID: "mgr-1", StartDate: startDate},
+			{Name: "Completed Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusCompleted, ManagerID: "mgr-1", StartDate: startDate},
+			{Name: "On Hold Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusOnHold, ManagerID: "mgr-1", StartDate: startDate},
+		}
+		for _, p := range projects {
+			err := db.Create(p).Error
+			require.NoError(t, err)
+		}
+
+		stats, err := customerRepo.GetCustomerStats(context.Background(), customer.ID)
+		assert.NoError(t, err)
+		assert.NotNil(t, stats)
+		// Active projects = Active + Planning + OnHold = 3
+		assert.Equal(t, int64(3), stats.ActiveProjectsCount)
+	})
+
+	t.Run("non-existent customer", func(t *testing.T) {
+		nonExistentID := uuid.New()
+		stats, err := customerRepo.GetCustomerStats(context.Background(), nonExistentID)
+		assert.NoError(t, err)
+		assert.NotNil(t, stats)
+		assert.Equal(t, int64(0), stats.TotalDealsCount)
+		assert.Equal(t, int64(0), stats.ActiveDealsCount)
+		assert.Equal(t, float64(0), stats.TotalDealValue)
+		assert.Equal(t, float64(0), stats.WonDealsValue)
+		assert.Equal(t, int64(0), stats.ActiveProjectsCount)
+	})
 }
 
 func TestCustomerRepository_Update(t *testing.T) {
