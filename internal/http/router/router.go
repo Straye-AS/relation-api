@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
@@ -67,17 +66,8 @@ func (rt *Router) Setup() http.Handler {
 	// Global middleware
 	r.Use(middleware.Recovery(rt.logger))
 	r.Use(middleware.Logging(rt.logger))
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{},
-		AllowOriginFunc: func(r *http.Request, origin string) bool {
-			return origin != ""
-		},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-API-Key"},
-		ExposedHeaders:   []string{"Location"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	r.Use(middleware.SecurityHeaders(&rt.cfg.Security))
+	r.Use(middleware.CORS(&rt.cfg.CORS, rt.cfg.App.Environment, rt.logger))
 
 	// Health check (basic liveness probe)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

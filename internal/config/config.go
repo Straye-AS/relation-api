@@ -22,6 +22,8 @@ type Config struct {
 	Secrets  SecretsConfig
 	Logging  LoggingConfig
 	Server   ServerConfig
+	CORS     CORSConfig
+	Security SecurityConfig
 }
 
 type AppConfig struct {
@@ -81,6 +83,47 @@ type ServerConfig struct {
 	WriteTimeout   int
 	RequestTimeout int
 	EnableSwagger  bool
+}
+
+// CORSConfig holds CORS configuration
+type CORSConfig struct {
+	// AllowedOrigins is a list of allowed origins for CORS requests
+	// Use "*" to allow all origins (not recommended for production)
+	AllowedOrigins []string
+	// AllowedMethods is a list of allowed HTTP methods
+	AllowedMethods []string
+	// AllowedHeaders is a list of allowed request headers
+	AllowedHeaders []string
+	// ExposedHeaders is a list of headers exposed to the client
+	ExposedHeaders []string
+	// AllowCredentials indicates whether credentials are allowed
+	AllowCredentials bool
+	// MaxAge is the max age (in seconds) for preflight cache
+	MaxAge int
+}
+
+// SecurityConfig holds security header configuration
+type SecurityConfig struct {
+	// EnableHSTS enables HTTP Strict Transport Security header
+	EnableHSTS bool
+	// HSTSMaxAge is the max age for HSTS in seconds (default: 31536000 = 1 year)
+	HSTSMaxAge int
+	// HSTSIncludeSubdomains includes subdomains in HSTS
+	HSTSIncludeSubdomains bool
+	// HSTSPreload enables HSTS preload
+	HSTSPreload bool
+	// ContentSecurityPolicy sets the Content-Security-Policy header
+	ContentSecurityPolicy string
+	// FrameOptions sets the X-Frame-Options header (DENY, SAMEORIGIN, or empty to disable)
+	FrameOptions string
+	// ContentTypeNosniff enables X-Content-Type-Options: nosniff
+	ContentTypeNosniff bool
+	// XSSProtection sets the X-XSS-Protection header
+	XSSProtection string
+	// ReferrerPolicy sets the Referrer-Policy header
+	ReferrerPolicy string
+	// PermissionsPolicy sets the Permissions-Policy header
+	PermissionsPolicy string
 }
 
 // ConnectionString builds PostgreSQL connection string
@@ -278,4 +321,25 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.writeTimeout", 30)
 	v.SetDefault("server.requestTimeout", 60)
 	v.SetDefault("server.enableSwagger", true)
+
+	// CORS defaults - restrictive by default
+	// In development, you may want to override with specific origins
+	v.SetDefault("cors.allowedOrigins", []string{})
+	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
+	v.SetDefault("cors.allowedHeaders", []string{"Accept", "Authorization", "Content-Type", "X-API-Key", "X-Request-ID"})
+	v.SetDefault("cors.exposedHeaders", []string{"Location", "X-Request-ID"})
+	v.SetDefault("cors.allowCredentials", true)
+	v.SetDefault("cors.maxAge", 300) // 5 minutes
+
+	// Security header defaults - secure by default
+	v.SetDefault("security.enableHSTS", false)            // Disabled by default, enable in production with HTTPS
+	v.SetDefault("security.hstsMaxAge", 31536000)         // 1 year
+	v.SetDefault("security.hstsIncludeSubdomains", true)
+	v.SetDefault("security.hstsPreload", false)
+	v.SetDefault("security.contentSecurityPolicy", "default-src 'self'")
+	v.SetDefault("security.frameOptions", "DENY")
+	v.SetDefault("security.contentTypeNosniff", true)
+	v.SetDefault("security.xssProtection", "1; mode=block")
+	v.SetDefault("security.referrerPolicy", "strict-origin-when-cross-origin")
+	v.SetDefault("security.permissionsPolicy", "geolocation=(), microphone=(), camera=()")
 }
