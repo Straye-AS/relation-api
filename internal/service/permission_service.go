@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
@@ -13,6 +15,7 @@ import (
 type PermissionService struct {
 	userRoleRepo       *repository.UserRoleRepository
 	userPermissionRepo *repository.UserPermissionRepository
+	activityRepo       *repository.ActivityRepository
 	logger             *zap.Logger
 }
 
@@ -20,11 +23,13 @@ type PermissionService struct {
 func NewPermissionService(
 	userRoleRepo *repository.UserRoleRepository,
 	userPermissionRepo *repository.UserPermissionRepository,
+	activityRepo *repository.ActivityRepository,
 	logger *zap.Logger,
 ) *PermissionService {
 	return &PermissionService{
 		userRoleRepo:       userRoleRepo,
 		userPermissionRepo: userPermissionRepo,
+		activityRepo:       activityRepo,
 		logger:             logger,
 	}
 }
@@ -111,24 +116,108 @@ func (s *PermissionService) GetEffectivePermissions(ctx context.Context, userCtx
 		companyID = &userCtx.CompanyID
 	}
 
-	overrides, err := s.userPermissionRepo.GetByUserIDAndCompany(ctx, userCtx.UserID.String(), *companyID)
-	if err != nil {
-		s.logger.Error("failed to get permission overrides",
-			zap.String("user_id", userCtx.UserID.String()),
-			zap.Error(err))
-		// Return role-based permissions on error
-		return mapKeysToSlice(permissions), nil
-	}
+	if companyID != nil {
+		overrides, err := s.userPermissionRepo.GetByUserIDAndCompany(ctx, userCtx.UserID.String(), *companyID)
+		if err != nil {
+			s.logger.Error("failed to get permission overrides",
+				zap.String("user_id", userCtx.UserID.String()),
+				zap.Error(err))
+			// Return role-based permissions on error
+			return mapKeysToSlice(permissions), nil
+		}
 
-	for _, override := range overrides {
-		if override.IsGranted {
-			permissions[override.Permission] = true
-		} else {
-			delete(permissions, override.Permission)
+		for _, override := range overrides {
+			if override.IsGranted {
+				permissions[override.Permission] = true
+			} else {
+				delete(permissions, override.Permission)
+			}
 		}
 	}
 
 	return mapKeysToSlice(permissions), nil
+}
+
+// GrantPermissionInput contains input for granting a permission
+type GrantPermissionInput struct {
+	UserID     string
+	Permission domain.PermissionType
+	CompanyID  *domain.CompanyID
+	Reason     string
+	ExpiresAt  *time.Time
+}
+
+// GrantPermission grants a permission override to a user
+func (s *PermissionService) GrantPermission(ctx context.Context, input GrantPermissionInput) (*domain.UserPermission, error) {
+	if !isValidPermission(input.Permission) {
+		return nil, ErrInvalidPermission
+	}
+
+	grantedBy := "system"
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		grantedBy = userCtx.UserID.String()
+	}
+
+	perm, err := s.userPermissionRepo.GrantPermission(ctx, input.UserID, input.Permission, input.CompanyID, grantedBy, input.Reason, input.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logPermissionChange(ctx, input.UserID, input.Permission, "granted", grantedBy, input.Reason)
+
+	return perm, nil
+}
+
+// DenyPermissionInput contains input for denying a permission
+type DenyPermissionInput struct {
+	UserID     string
+	Permission domain.PermissionType
+	CompanyID  *domain.CompanyID
+	Reason     string
+	ExpiresAt  *time.Time
+}
+
+// DenyPermission denies a permission for a user (override)
+func (s *PermissionService) DenyPermission(ctx context.Context, input DenyPermissionInput) (*domain.UserPermission, error) {
+	if !isValidPermission(input.Permission) {
+		return nil, ErrInvalidPermission
+	}
+
+	grantedBy := "system"
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		grantedBy = userCtx.UserID.String()
+	}
+
+	perm, err := s.userPermissionRepo.DenyPermission(ctx, input.UserID, input.Permission, input.CompanyID, grantedBy, input.Reason, input.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logPermissionChange(ctx, input.UserID, input.Permission, "denied", grantedBy, input.Reason)
+
+	return perm, nil
+}
+
+// RemoveOverride removes a permission override
+func (s *PermissionService) RemoveOverride(ctx context.Context, userID string, permission domain.PermissionType, companyID *domain.CompanyID) error {
+	removedBy := "system"
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		removedBy = userCtx.UserID.String()
+	}
+
+	err := s.userPermissionRepo.RemoveOverride(ctx, userID, permission, companyID)
+	if err != nil {
+		return err
+	}
+
+	s.logPermissionChange(ctx, userID, permission, "override removed", removedBy, "")
+
+	return nil
+}
+
+// GetUserOverrides returns all permission overrides for a user
+func (s *PermissionService) GetUserOverrides(ctx context.Context, userID string) ([]domain.UserPermission, error) {
+	return s.userPermissionRepo.GetByUserID(ctx, userID)
 }
 
 // GetUserRoles returns all active roles for a user from the database
@@ -152,6 +241,50 @@ func (s *PermissionService) RequirePermission(ctx context.Context, userCtx *auth
 		return ErrPermissionDenied
 	}
 	return nil
+}
+
+// CleanupExpiredOverrides removes expired permission overrides
+func (s *PermissionService) CleanupExpiredOverrides(ctx context.Context) (int64, error) {
+	count, err := s.userPermissionRepo.DeleteExpiredOverrides(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		s.logger.Info("deleted expired permission overrides", zap.Int64("count", count))
+	}
+	return count, nil
+}
+
+// logPermissionChange logs a permission change activity
+func (s *PermissionService) logPermissionChange(ctx context.Context, userID string, permission domain.PermissionType, action string, changedBy string, reason string) {
+	if s.activityRepo == nil {
+		return
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		s.logger.Warn("could not parse user ID for activity log", zap.String("user_id", userID))
+		return
+	}
+
+	body := "Permission '" + string(permission) + "' was " + action + " by " + changedBy
+	if reason != "" {
+		body += ". Reason: " + reason
+	}
+
+	activity := &domain.Activity{
+		TargetType:   domain.ActivityTargetType("User"),
+		TargetID:     userUUID,
+		Title:        "Permission " + action,
+		Body:         body,
+		ActivityType: domain.ActivityTypeSystem,
+		Status:       domain.ActivityStatusCompleted,
+		CreatorID:    changedBy,
+	}
+
+	if err := s.activityRepo.Create(ctx, activity); err != nil {
+		s.logger.Warn("failed to log permission change activity", zap.Error(err))
+	}
 }
 
 // getRolePermissions returns all permissions for a set of roles
@@ -261,10 +394,26 @@ func getAllPermissions() []domain.PermissionType {
 	}
 }
 
+// GetAllPermissions returns all defined permissions (exported for handlers)
+func GetAllPermissions() []domain.PermissionType {
+	return getAllPermissions()
+}
+
 func mapKeysToSlice(m map[domain.PermissionType]bool) []domain.PermissionType {
 	result := make([]domain.PermissionType, 0, len(m))
 	for k := range m {
 		result = append(result, k)
 	}
 	return result
+}
+
+// isValidPermission checks if a permission type is valid
+func isValidPermission(permission domain.PermissionType) bool {
+	allPerms := getAllPermissions()
+	for _, p := range allPerms {
+		if p == permission {
+			return true
+		}
+	}
+	return false
 }
