@@ -32,6 +32,7 @@ type Router struct {
 	authHandler             *handler.AuthHandler
 	companyHandler          *handler.CompanyHandler
 	auditHandler            *handler.AuditHandler
+	contactHandler          *handler.ContactHandler
 }
 
 func NewRouter(
@@ -51,6 +52,7 @@ func NewRouter(
 	authHandler *handler.AuthHandler,
 	companyHandler *handler.CompanyHandler,
 	auditHandler *handler.AuditHandler,
+	contactHandler *handler.ContactHandler,
 ) *Router {
 	return &Router{
 		cfg:                     cfg,
@@ -69,6 +71,7 @@ func NewRouter(
 		authHandler:             authHandler,
 		companyHandler:          companyHandler,
 		auditHandler:            auditHandler,
+		contactHandler:          contactHandler,
 	}
 }
 
@@ -195,8 +198,19 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}", rt.customerHandler.GetByID)
 				r.Put("/{id}", rt.customerHandler.Update)
 				r.Delete("/{id}", rt.customerHandler.Delete)
-				r.Get("/{id}/contacts", rt.customerHandler.ListContacts)
+				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Post("/{id}/contacts", rt.customerHandler.CreateContact)
+			})
+
+			// Contacts
+			r.Route("/contacts", func(r chi.Router) {
+				r.Get("/", rt.contactHandler.ListContacts)
+				r.Post("/", rt.contactHandler.CreateContact)
+				r.Get("/{id}", rt.contactHandler.GetContact)
+				r.Put("/{id}", rt.contactHandler.UpdateContact)
+				r.Delete("/{id}", rt.contactHandler.DeleteContact)
+				r.Post("/{id}/relationships", rt.contactHandler.AddRelationship)
+				r.Delete("/{id}/relationships/{relationshipId}", rt.contactHandler.RemoveRelationship)
 			})
 
 			// Projects
@@ -207,6 +221,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}", rt.projectHandler.Update)
 				r.Get("/{id}/budget", rt.projectHandler.GetBudget)
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
+				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 			})
 
 			// Offers
@@ -238,6 +253,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/reopen", rt.dealHandler.ReopenDeal)
 				r.Get("/{id}/history", rt.dealHandler.GetStageHistory)
 				r.Get("/{id}/activities", rt.dealHandler.GetActivities)
+				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 			})
 
 			// Files

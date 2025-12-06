@@ -136,6 +136,7 @@ func run() error {
 
 	// Initialize handlers
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
+	contactHandler := handler.NewContactHandler(contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, log)
 	offerHandler := handler.NewOfferHandler(offerService, log)
 	dealHandler := handler.NewDealHandler(dealService, log)
@@ -163,6 +164,7 @@ func run() error {
 		authHandler,
 		companyHandler,
 		auditHandler,
+		contactHandler,
 	)
 
 	// Create HTTP server

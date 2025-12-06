@@ -142,86 +142,102 @@ func (r *ContactRepository) SetPrimaryRelationship(ctx context.Context, contactI
 		Update("is_primary", true).Error
 }
 
-// SetPrimaryContactForEntity sets a contact as the primary for a specific entity,
-// unsetting any existing primary contact for that entity
-func (r *ContactRepository) SetPrimaryContactForEntity(ctx context.Context, entityType domain.ContactEntityType, entityID uuid.UUID, contactID uuid.UUID) error {
-	// First, unset any existing primary contact for this entity
-	if err := r.db.WithContext(ctx).
-		Model(&domain.ContactRelationship{}).
-		Where("entity_type = ? AND entity_id = ?", entityType, entityID).
-		Update("is_primary", false).Error; err != nil {
-		return err
-	}
-
-	// Then set the new primary
-	return r.db.WithContext(ctx).
-		Model(&domain.ContactRelationship{}).
-		Where("contact_id = ? AND entity_type = ? AND entity_id = ?", contactID, entityType, entityID).
-		Update("is_primary", true).Error
+// ContactFilters holds filters for listing contacts
+type ContactFilters struct {
+	Search     string
+	Title      string
+	EntityType *domain.ContactEntityType
+	EntityID   *uuid.UUID
 }
 
-// GetRelationshipByID returns a specific relationship by its ID
+// ContactSortOption defines sort options for contacts
+type ContactSortOption string
+
+const (
+	ContactSortByNameAsc     ContactSortOption = "name_asc"
+	ContactSortByNameDesc    ContactSortOption = "name_desc"
+	ContactSortByEmailAsc    ContactSortOption = "email_asc"
+	ContactSortByCreatedDesc ContactSortOption = "created_desc"
+)
+
+// ListWithFilters returns contacts with filters and pagination
+func (r *ContactRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *ContactFilters, sortBy ContactSortOption) ([]domain.Contact, int64, error) {
+	var contacts []domain.Contact
+	var total int64
+
+	offset := (page - 1) * pageSize
+
+	query := r.db.WithContext(ctx).Model(&domain.Contact{}).Where("is_active = ?", true)
+
+	// Apply filters
+	if filters != nil {
+		if filters.Search != "" {
+			searchPattern := "%" + filters.Search + "%"
+			query = query.Where(
+				"first_name ILIKE ? OR last_name ILIKE ? OR email ILIKE ?",
+				searchPattern, searchPattern, searchPattern,
+			)
+		}
+
+		if filters.Title != "" {
+			query = query.Where("title ILIKE ?", "%"+filters.Title+"%")
+		}
+
+		if filters.EntityType != nil && filters.EntityID != nil {
+			query = query.Joins("JOIN contact_relationships cr ON cr.contact_id = contacts.id").
+				Where("cr.entity_type = ? AND cr.entity_id = ?", *filters.EntityType, *filters.EntityID)
+		}
+	}
+
+	// Get total count
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply sorting
+	switch sortBy {
+	case ContactSortByNameAsc:
+		query = query.Order("last_name ASC, first_name ASC")
+	case ContactSortByNameDesc:
+		query = query.Order("last_name DESC, first_name DESC")
+	case ContactSortByEmailAsc:
+		query = query.Order("email ASC")
+	case ContactSortByCreatedDesc:
+		query = query.Order("created_at DESC")
+	default:
+		query = query.Order("last_name ASC, first_name ASC")
+	}
+
+	// Get paginated results
+	err := query.Preload("Relationships").
+		Preload("PrimaryCustomer").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&contacts).Error
+
+	return contacts, total, err
+}
+
+// GetRelationshipByID returns a relationship by its ID
 func (r *ContactRepository) GetRelationshipByID(ctx context.Context, relationshipID uuid.UUID) (*domain.ContactRelationship, error) {
-	var relationship domain.ContactRelationship
-	err := r.db.WithContext(ctx).
-		Preload("Contact").
-		Where("id = ?", relationshipID).
-		First(&relationship).Error
+	var rel domain.ContactRelationship
+	err := r.db.WithContext(ctx).First(&rel, "id = ?", relationshipID).Error
 	if err != nil {
 		return nil, err
 	}
-	return &relationship, nil
+	return &rel, nil
 }
 
-// GetRelationshipByContactAndEntity returns a specific relationship by contact and entity
-func (r *ContactRepository) GetRelationshipByContactAndEntity(ctx context.Context, contactID uuid.UUID, entityType domain.ContactEntityType, entityID uuid.UUID) (*domain.ContactRelationship, error) {
-	var relationship domain.ContactRelationship
-	err := r.db.WithContext(ctx).
-		Where("contact_id = ? AND entity_type = ? AND entity_id = ?", contactID, entityType, entityID).
-		First(&relationship).Error
-	if err != nil {
-		return nil, err
-	}
-	return &relationship, nil
-}
-
-// DeleteRelationshipByID deletes a relationship by its ID
-func (r *ContactRepository) DeleteRelationshipByID(ctx context.Context, relationshipID uuid.UUID) error {
+// RemoveRelationshipByID removes a relationship by its ID
+func (r *ContactRepository) RemoveRelationshipByID(ctx context.Context, relationshipID uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.ContactRelationship{}, "id = ?", relationshipID).Error
 }
 
-// ExistsByEmail checks if a contact with the given email already exists
-func (r *ContactRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.Contact{}).
-		Where("LOWER(email) = LOWER(?)", email).
-		Count(&count).Error
-	return count > 0, err
-}
-
-// ExistsByEmailExcluding checks if a contact with the given email exists, excluding a specific contact ID
-func (r *ContactRepository) ExistsByEmailExcluding(ctx context.Context, email string, excludeID uuid.UUID) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.Contact{}).
-		Where("LOWER(email) = LOWER(?) AND id != ?", email, excludeID).
-		Count(&count).Error
-	return count > 0, err
-}
-
-// HasRelationships checks if a contact has any relationships
-func (r *ContactRepository) HasRelationships(ctx context.Context, contactID uuid.UUID) (bool, error) {
+// CheckRelationshipExists checks if a relationship already exists
+func (r *ContactRepository) CheckRelationshipExists(ctx context.Context, contactID uuid.UUID, entityType domain.ContactEntityType, entityID uuid.UUID) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&domain.ContactRelationship{}).
-		Where("contact_id = ?", contactID).
+		Where("contact_id = ? AND entity_type = ? AND entity_id = ?", contactID, entityType, entityID).
 		Count(&count).Error
 	return count > 0, err
-}
-
-// CountRelationships returns the number of relationships for a contact
-func (r *ContactRepository) CountRelationships(ctx context.Context, contactID uuid.UUID) (int64, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.ContactRelationship{}).
-		Where("contact_id = ?", contactID).
-		Count(&count).Error
-	return count, err
 }
