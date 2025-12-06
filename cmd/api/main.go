@@ -107,6 +107,8 @@ func run() error {
 	fileRepo := repository.NewFileRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	userRoleRepo := repository.NewUserRoleRepository(db, log)
+	userPermissionRepo := repository.NewUserPermissionRepository(db, log)
 
 	// Initialize services
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
@@ -116,6 +118,7 @@ func run() error {
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, notificationRepo, log)
 	companyService := service.NewCompanyService(log)
+	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, log)
@@ -127,7 +130,7 @@ func run() error {
 	offerHandler := handler.NewOfferHandler(offerService, log)
 	fileHandler := handler.NewFileHandler(fileService, cfg.Storage.MaxUploadSizeMB, log)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService, log)
-	authHandler := handler.NewAuthHandler(userRepo, log)
+	authHandler := handler.NewAuthHandler(userRepo, permissionService, log)
 	companyHandler := handler.NewCompanyHandler(companyService, log)
 
 	// Setup router
