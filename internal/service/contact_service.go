@@ -107,8 +107,8 @@ func (s *ContactService) ListByCustomer(ctx context.Context, customerID uuid.UUI
 	return dtos, nil
 }
 
-func (s *ContactService) List(ctx context.Context, page, pageSize int) ([]domain.ContactDTO, int64, error) {
-	contacts, total, err := s.contactRepo.List(ctx, page, pageSize)
+func (s *ContactService) List(ctx context.Context, page, pageSize int, filters *repository.ContactFilters, sortBy repository.ContactSortOption) ([]domain.ContactDTO, int64, error) {
+	contacts, total, err := s.contactRepo.List(ctx, page, pageSize, filters, sortBy)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list contacts: %w", err)
 	}
