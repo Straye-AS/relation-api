@@ -97,7 +97,8 @@ func TestCustomerService_GetByID(t *testing.T) {
 
 	// Get the customer
 	customer, err := svc.GetByID(ctx, created.ID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	require.NotNil(t, customer)
 	assert.Equal(t, created.ID, customer.ID)
 	assert.Equal(t, created.Name, customer.Name)
 }
@@ -185,13 +186,17 @@ func TestCustomerService_List(t *testing.T) {
 	result, err := svc.List(ctx, 1, 20, "")
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, result.Total, int64(3))
-	assert.GreaterOrEqual(t, len(result.Data), 3)
+	data, ok := result.Data.([]domain.CustomerDTO)
+	assert.True(t, ok)
+	assert.GreaterOrEqual(t, len(data), 3)
 
 	// Search customers
 	result, err = svc.List(ctx, 1, 20, "Tech")
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, result.Total, int64(2))
-	assert.GreaterOrEqual(t, len(result.Data), 2)
+	data, ok = result.Data.([]domain.CustomerDTO)
+	assert.True(t, ok)
+	assert.GreaterOrEqual(t, len(data), 2)
 }
 
 func TestCustomerService_Delete(t *testing.T) {

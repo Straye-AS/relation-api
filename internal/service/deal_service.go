@@ -139,7 +139,10 @@ func (s *DealService) Create(ctx context.Context, req *domain.CreateDealRequest)
 	}
 
 	// Reload with relations
-	deal, _ = s.dealRepo.GetByID(ctx, deal.ID)
+	deal, err = s.dealRepo.GetByID(ctx, deal.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload deal: %w", err)
+	}
 
 	dto := mapper.ToDealDTO(deal)
 	return &dto, nil
