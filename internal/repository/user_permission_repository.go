@@ -32,6 +32,7 @@ func (r *UserPermissionRepository) GetByUserID(ctx context.Context, userID strin
 		Where("expires_at IS NULL OR expires_at > ?", time.Now()).
 		Find(&perms).Error
 	if err != nil {
+		r.logger.Error("failed to get user permissions", zap.String("user_id", userID), zap.Error(err))
 		return nil, err
 	}
 	return perms, nil
@@ -46,9 +47,34 @@ func (r *UserPermissionRepository) GetByUserIDAndCompany(ctx context.Context, us
 		Order("company_id NULLS LAST"). // Global overrides first, then company-specific
 		Find(&perms).Error
 	if err != nil {
+		r.logger.Error("failed to get user permissions by company",
+			zap.String("user_id", userID),
+			zap.String("company_id", string(companyID)),
+			zap.Error(err))
 		return nil, err
 	}
 	return perms, nil
+}
+
+// Create creates a new permission override
+func (r *UserPermissionRepository) Create(ctx context.Context, permission *domain.UserPermission) error {
+	if err := r.db.WithContext(ctx).Create(permission).Error; err != nil {
+		r.logger.Error("failed to create user permission",
+			zap.String("user_id", permission.UserID),
+			zap.String("permission", string(permission.Permission)),
+			zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+// Delete removes a permission override
+func (r *UserPermissionRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	if err := r.db.WithContext(ctx).Delete(&domain.UserPermission{}, "id = ?", id).Error; err != nil {
+		r.logger.Error("failed to delete user permission", zap.String("id", id.String()), zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 // GetPermissionOverride checks for a specific permission override
@@ -68,10 +94,14 @@ func (r *UserPermissionRepository) GetPermissionOverride(ctx context.Context, us
 	}
 
 	err := query.First(&perm).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, nil
-	}
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No override exists
+		}
+		r.logger.Error("failed to get permission override",
+			zap.String("user_id", userID),
+			zap.String("permission", string(permission)),
+			zap.Error(err))
 		return nil, err
 	}
 	return &perm, nil
@@ -170,7 +200,19 @@ func (r *UserPermissionRepository) RemoveOverride(ctx context.Context, userID st
 		query = query.Where("company_id IS NULL")
 	}
 
-	return query.Delete(&domain.UserPermission{}).Error
+	if err := query.Delete(&domain.UserPermission{}).Error; err != nil {
+		r.logger.Error("failed to remove permission override",
+			zap.String("user_id", userID),
+			zap.String("permission", string(permission)),
+			zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+// RevokePermission is an alias for RemoveOverride (restores default role-based permission)
+func (r *UserPermissionRepository) RevokePermission(ctx context.Context, userID string, permission domain.PermissionType, companyID *domain.CompanyID) error {
+	return r.RemoveOverride(ctx, userID, permission, companyID)
 }
 
 // RemoveOverrideByID removes a specific permission override by ID

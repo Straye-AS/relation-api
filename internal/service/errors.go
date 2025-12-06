@@ -16,6 +16,9 @@ var (
 	// ErrConflict is returned when there's a conflict (e.g., duplicate)
 	ErrConflict = errors.New("resource conflict")
 
+	// ErrUnauthorized is returned when user is not authenticated
+	ErrUnauthorized = errors.New("unauthorized")
+
 	// ErrRoleNotFound is returned when a role is not found
 	ErrRoleNotFound = errors.New("role not found")
 

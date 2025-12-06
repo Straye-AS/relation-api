@@ -1,10 +1,14 @@
 -- +goose Up
--- +goose StatementBegin
 
 -- ============================================================================
 -- UPDATE USER ROLE ENUM
 -- Replace 'sales' with 'market' and add 'project_leader'
 -- ============================================================================
+
+-- First, drop all views that depend on the user_role type
+DROP VIEW IF EXISTS role_default_permissions;
+
+-- +goose StatementBegin
 
 -- PostgreSQL doesn't allow direct modification of enum values
 -- We need to create a new type, migrate data, and replace
@@ -22,7 +26,6 @@ CREATE TYPE user_role_new AS ENUM (
 );
 
 -- Update user_roles table to use the new enum
--- First, drop the default and alter column type
 ALTER TABLE user_roles
     ALTER COLUMN role TYPE user_role_new
     USING (
@@ -38,12 +41,13 @@ DROP TYPE user_role;
 -- Rename new enum to original name
 ALTER TYPE user_role_new RENAME TO user_role;
 
+-- +goose StatementEnd
+
 -- ============================================================================
--- UPDATE ROLE DEFAULT PERMISSIONS VIEW
+-- RECREATE ROLE DEFAULT PERMISSIONS VIEW
 -- ============================================================================
 
--- Drop and recreate the view with updated roles
-DROP VIEW IF EXISTS role_default_permissions;
+-- +goose StatementBegin
 
 CREATE VIEW role_default_permissions AS
 SELECT
@@ -166,6 +170,10 @@ SELECT
 -- +goose StatementEnd
 
 -- +goose Down
+
+-- First, drop views that depend on the user_role type
+DROP VIEW IF EXISTS role_default_permissions;
+
 -- +goose StatementBegin
 
 -- Revert to original enum (sales instead of market, no project_leader)
@@ -196,8 +204,9 @@ DROP TYPE user_role;
 -- Rename old enum back
 ALTER TYPE user_role_old RENAME TO user_role;
 
--- Recreate original view
-DROP VIEW IF EXISTS role_default_permissions;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 
 CREATE VIEW role_default_permissions AS
 SELECT
