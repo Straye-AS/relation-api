@@ -141,3 +141,103 @@ func (r *ContactRepository) SetPrimaryRelationship(ctx context.Context, contactI
 		Where("contact_id = ? AND entity_type = ? AND entity_id = ?", contactID, entityType, entityID).
 		Update("is_primary", true).Error
 }
+
+// ContactFilters holds filters for listing contacts
+type ContactFilters struct {
+	Search     string
+	Title      string
+	EntityType *domain.ContactEntityType
+	EntityID   *uuid.UUID
+}
+
+// ContactSortOption defines sort options for contacts
+type ContactSortOption string
+
+const (
+	ContactSortByNameAsc     ContactSortOption = "name_asc"
+	ContactSortByNameDesc    ContactSortOption = "name_desc"
+	ContactSortByEmailAsc    ContactSortOption = "email_asc"
+	ContactSortByCreatedDesc ContactSortOption = "created_desc"
+)
+
+// ListWithFilters returns contacts with filters and pagination
+func (r *ContactRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *ContactFilters, sortBy ContactSortOption) ([]domain.Contact, int64, error) {
+	var contacts []domain.Contact
+	var total int64
+
+	offset := (page - 1) * pageSize
+
+	query := r.db.WithContext(ctx).Model(&domain.Contact{}).Where("is_active = ?", true)
+
+	// Apply filters
+	if filters != nil {
+		if filters.Search != "" {
+			searchPattern := "%" + filters.Search + "%"
+			query = query.Where(
+				"first_name ILIKE ? OR last_name ILIKE ? OR email ILIKE ?",
+				searchPattern, searchPattern, searchPattern,
+			)
+		}
+
+		if filters.Title != "" {
+			query = query.Where("title ILIKE ?", "%"+filters.Title+"%")
+		}
+
+		if filters.EntityType != nil && filters.EntityID != nil {
+			query = query.Joins("JOIN contact_relationships cr ON cr.contact_id = contacts.id").
+				Where("cr.entity_type = ? AND cr.entity_id = ?", *filters.EntityType, *filters.EntityID)
+		}
+	}
+
+	// Get total count
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply sorting
+	switch sortBy {
+	case ContactSortByNameAsc:
+		query = query.Order("last_name ASC, first_name ASC")
+	case ContactSortByNameDesc:
+		query = query.Order("last_name DESC, first_name DESC")
+	case ContactSortByEmailAsc:
+		query = query.Order("email ASC")
+	case ContactSortByCreatedDesc:
+		query = query.Order("created_at DESC")
+	default:
+		query = query.Order("last_name ASC, first_name ASC")
+	}
+
+	// Get paginated results
+	err := query.Preload("Relationships").
+		Preload("PrimaryCustomer").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&contacts).Error
+
+	return contacts, total, err
+}
+
+// GetRelationshipByID returns a relationship by its ID
+func (r *ContactRepository) GetRelationshipByID(ctx context.Context, relationshipID uuid.UUID) (*domain.ContactRelationship, error) {
+	var rel domain.ContactRelationship
+	err := r.db.WithContext(ctx).First(&rel, "id = ?", relationshipID).Error
+	if err != nil {
+		return nil, err
+	}
+	return &rel, nil
+}
+
+// RemoveRelationshipByID removes a relationship by its ID
+func (r *ContactRepository) RemoveRelationshipByID(ctx context.Context, relationshipID uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.ContactRelationship{}, "id = ?", relationshipID).Error
+}
+
+// CheckRelationshipExists checks if a relationship already exists
+func (r *ContactRepository) CheckRelationshipExists(ctx context.Context, contactID uuid.UUID, entityType domain.ContactEntityType, entityID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.ContactRelationship{}).
+		Where("contact_id = ? AND entity_type = ? AND entity_id = ?", contactID, entityType, entityID).
+		Count(&count).Error
+	return count > 0, err
+}

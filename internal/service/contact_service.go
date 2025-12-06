@@ -168,8 +168,159 @@ func (s *ContactService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 }
 
 func (s *ContactService) Delete(ctx context.Context, id uuid.UUID) error {
+	// Get the contact first for activity logging
+	contact, err := s.contactRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("contact not found: %w", err)
+	}
+
 	if err := s.contactRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete contact: %w", err)
+	}
+
+	// Create activity
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		activity := &domain.Activity{
+			TargetType:  domain.ActivityTargetContact,
+			TargetID:    id,
+			Title:       "Contact deleted",
+			Body:        fmt.Sprintf("Contact '%s' was deleted", contact.FullName()),
+			CreatorName: userCtx.DisplayName,
+		}
+		s.activityRepo.Create(ctx, activity)
+	}
+
+	return nil
+}
+
+// ListWithFilters returns contacts with filters and pagination
+func (s *ContactService) ListWithFilters(ctx context.Context, page, pageSize int, filters *repository.ContactFilters, sortBy repository.ContactSortOption) (*domain.PaginatedResponse, error) {
+	contacts, total, err := s.contactRepo.ListWithFilters(ctx, page, pageSize, filters, sortBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacts: %w", err)
+	}
+
+	dtos := make([]domain.ContactDTO, len(contacts))
+	for i, contact := range contacts {
+		dto := mapper.ToContactDTO(&contact)
+		// Add primary customer name if available
+		if contact.PrimaryCustomer != nil {
+			dto.PrimaryCustomerName = contact.PrimaryCustomer.Name
+		}
+		dtos[i] = dto
+	}
+
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize > 0 {
+		totalPages++
+	}
+
+	return &domain.PaginatedResponse{
+		Data:       dtos,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// ListByEntity returns contacts related to a specific entity
+func (s *ContactService) ListByEntity(ctx context.Context, entityType domain.ContactEntityType, entityID uuid.UUID) ([]domain.ContactDTO, error) {
+	contacts, err := s.contactRepo.ListByEntity(ctx, entityType, entityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacts: %w", err)
+	}
+
+	dtos := make([]domain.ContactDTO, len(contacts))
+	for i, contact := range contacts {
+		dtos[i] = mapper.ToContactDTO(&contact)
+	}
+
+	return dtos, nil
+}
+
+// AddRelationship adds a relationship between a contact and an entity
+func (s *ContactService) AddRelationship(ctx context.Context, contactID uuid.UUID, req *domain.AddContactRelationshipRequest) (*domain.ContactRelationshipDTO, error) {
+	// Check if contact exists
+	contact, err := s.contactRepo.GetByID(ctx, contactID)
+	if err != nil {
+		return nil, fmt.Errorf("contact not found: %w", err)
+	}
+
+	// Check if relationship already exists
+	exists, err := s.contactRepo.CheckRelationshipExists(ctx, contactID, req.EntityType, req.EntityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check relationship: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("relationship already exists")
+	}
+
+	// Create the relationship
+	rel := &domain.ContactRelationship{
+		ContactID:  contactID,
+		EntityType: req.EntityType,
+		EntityID:   req.EntityID,
+		Role:       req.Role,
+		IsPrimary:  req.IsPrimary,
+	}
+
+	if err := s.contactRepo.AddRelationship(ctx, rel); err != nil {
+		return nil, fmt.Errorf("failed to add relationship: %w", err)
+	}
+
+	// If this is primary, ensure no other relationship of this type is primary
+	if req.IsPrimary {
+		if err := s.contactRepo.SetPrimaryRelationship(ctx, contactID, req.EntityType, req.EntityID); err != nil {
+			s.logger.Warn("failed to set primary relationship", zap.Error(err))
+		}
+	}
+
+	// Create activity
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		activity := &domain.Activity{
+			TargetType:  domain.ActivityTargetContact,
+			TargetID:    contactID,
+			Title:       "Relationship added",
+			Body:        fmt.Sprintf("Contact '%s' was linked to %s", contact.FullName(), req.EntityType),
+			CreatorName: userCtx.DisplayName,
+		}
+		s.activityRepo.Create(ctx, activity)
+	}
+
+	dto := mapper.ToContactRelationshipDTO(rel)
+	return &dto, nil
+}
+
+// RemoveRelationship removes a relationship by its ID
+func (s *ContactService) RemoveRelationship(ctx context.Context, contactID, relationshipID uuid.UUID) error {
+	// Verify the relationship exists and belongs to this contact
+	rel, err := s.contactRepo.GetRelationshipByID(ctx, relationshipID)
+	if err != nil {
+		return fmt.Errorf("relationship not found: %w", err)
+	}
+
+	if rel.ContactID != contactID {
+		return fmt.Errorf("relationship does not belong to this contact")
+	}
+
+	// Get contact for activity logging
+	contact, _ := s.contactRepo.GetByID(ctx, contactID)
+
+	if err := s.contactRepo.RemoveRelationshipByID(ctx, relationshipID); err != nil {
+		return fmt.Errorf("failed to remove relationship: %w", err)
+	}
+
+	// Create activity
+	if userCtx, ok := auth.FromContext(ctx); ok && contact != nil {
+		activity := &domain.Activity{
+			TargetType:  domain.ActivityTargetContact,
+			TargetID:    contactID,
+			Title:       "Relationship removed",
+			Body:        fmt.Sprintf("Contact '%s' was unlinked from %s", contact.FullName(), rel.EntityType),
+			CreatorName: userCtx.DisplayName,
+		}
+		s.activityRepo.Create(ctx, activity)
 	}
 
 	return nil
