@@ -63,22 +63,22 @@ type ContactRelationshipDTO struct {
 }
 
 type DealDTO struct {
-	ID                uuid.UUID `json:"id"`
-	Title             string    `json:"title"`
-	Description       string    `json:"description,omitempty"`
-	CustomerID        uuid.UUID `json:"customerId"`
-	CustomerName      string    `json:"customerName,omitempty"`
-	CompanyID         CompanyID `json:"companyId"`
-	Stage             DealStage `json:"stage"`
-	Probability       int       `json:"probability"`
-	Value             float64   `json:"value"`
-	WeightedValue     float64   `json:"weightedValue"`
-	Currency          string    `json:"currency"`
-	ExpectedCloseDate *string   `json:"expectedCloseDate,omitempty"`
-	ActualCloseDate   *string   `json:"actualCloseDate,omitempty"`
-	OwnerID           string    `json:"ownerId"`
-	OwnerName         string    `json:"ownerName,omitempty"`
-	Source            string    `json:"source,omitempty"`
+	ID                uuid.UUID  `json:"id"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description,omitempty"`
+	CustomerID        uuid.UUID  `json:"customerId"`
+	CustomerName      string     `json:"customerName,omitempty"`
+	CompanyID         CompanyID  `json:"companyId"`
+	Stage             DealStage  `json:"stage"`
+	Probability       int        `json:"probability"`
+	Value             float64    `json:"value"`
+	WeightedValue     float64    `json:"weightedValue"`
+	Currency          string     `json:"currency"`
+	ExpectedCloseDate *string    `json:"expectedCloseDate,omitempty"`
+	ActualCloseDate   *string    `json:"actualCloseDate,omitempty"`
+	OwnerID           string     `json:"ownerId"`
+	OwnerName         string     `json:"ownerName,omitempty"`
+	Source            string     `json:"source,omitempty"`
 	Notes             string     `json:"notes,omitempty"`
 	LostReason        string     `json:"lostReason,omitempty"`
 	OfferID           *uuid.UUID `json:"offerId,omitempty"`
@@ -735,4 +735,22 @@ type SearchResult struct {
 	Title    string    `json:"title"`
 	Subtitle string    `json:"subtitle,omitempty"`
 	Metadata string    `json:"metadata,omitempty"`
+}
+
+// Customer Stats DTOs
+
+// CustomerStatsResponse contains aggregated statistics for a customer
+type CustomerStatsResponse struct {
+	ActiveDealsCount    int64   `json:"activeDealsCount"`
+	TotalDealsCount     int64   `json:"totalDealsCount"`
+	TotalDealValue      float64 `json:"totalDealValue"`
+	WonDealsValue       float64 `json:"wonDealsValue"`
+	ActiveProjectsCount int64   `json:"activeProjectsCount"`
+	TotalProjectsCount  int64   `json:"totalProjectsCount"`
+}
+
+// CustomerWithStatsResponse extends CustomerDTO with statistics
+type CustomerWithStatsResponse struct {
+	CustomerDTO
+	Stats CustomerStatsResponse `json:"stats"`
 }
