@@ -26,6 +26,7 @@ type Router struct {
 	customerHandler         *handler.CustomerHandler
 	projectHandler          *handler.ProjectHandler
 	offerHandler            *handler.OfferHandler
+	dealHandler             *handler.DealHandler
 	fileHandler             *handler.FileHandler
 	dashboardHandler        *handler.DashboardHandler
 	authHandler             *handler.AuthHandler
@@ -44,6 +45,7 @@ func NewRouter(
 	customerHandler *handler.CustomerHandler,
 	projectHandler *handler.ProjectHandler,
 	offerHandler *handler.OfferHandler,
+	dealHandler *handler.DealHandler,
 	fileHandler *handler.FileHandler,
 	dashboardHandler *handler.DashboardHandler,
 	authHandler *handler.AuthHandler,
@@ -61,6 +63,7 @@ func NewRouter(
 		customerHandler:         customerHandler,
 		projectHandler:          projectHandler,
 		offerHandler:            offerHandler,
+		dealHandler:             dealHandler,
 		fileHandler:             fileHandler,
 		dashboardHandler:        dashboardHandler,
 		authHandler:             authHandler,
@@ -217,6 +220,24 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/items", rt.offerHandler.AddItem)
 				r.Get("/{id}/files", rt.offerHandler.GetFiles)
 				r.Get("/{id}/activities", rt.offerHandler.GetActivities)
+			})
+
+			// Deals
+			r.Route("/deals", func(r chi.Router) {
+				r.Get("/", rt.dealHandler.List)
+				r.Post("/", rt.dealHandler.Create)
+				r.Get("/pipeline", rt.dealHandler.GetPipelineOverview)
+				r.Get("/stats", rt.dealHandler.GetPipelineStats)
+				r.Get("/forecast", rt.dealHandler.GetForecast)
+				r.Get("/{id}", rt.dealHandler.GetByID)
+				r.Put("/{id}", rt.dealHandler.Update)
+				r.Delete("/{id}", rt.dealHandler.Delete)
+				r.Post("/{id}/advance", rt.dealHandler.AdvanceStage)
+				r.Post("/{id}/win", rt.dealHandler.WinDeal)
+				r.Post("/{id}/lose", rt.dealHandler.LoseDeal)
+				r.Post("/{id}/reopen", rt.dealHandler.ReopenDeal)
+				r.Get("/{id}/history", rt.dealHandler.GetStageHistory)
+				r.Get("/{id}/activities", rt.dealHandler.GetActivities)
 			})
 
 			// Files

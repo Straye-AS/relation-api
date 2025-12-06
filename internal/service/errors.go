@@ -7,6 +7,9 @@ var (
 	// ErrPermissionDenied is returned when a user doesn't have permission for an action
 	ErrPermissionDenied = errors.New("permission denied")
 
+	// ErrForbidden is returned when access is forbidden
+	ErrForbidden = errors.New("forbidden")
+
 	// ErrNotFound is returned when a resource is not found
 	ErrNotFound = errors.New("resource not found")
 

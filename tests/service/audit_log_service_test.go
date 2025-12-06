@@ -367,11 +367,11 @@ func TestAuditLogService_LogWithClientIP(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name           string
-		remoteAddr     string
-		xForwardedFor  string
-		xRealIP        string
-		expectedIP     string
+		name          string
+		remoteAddr    string
+		xForwardedFor string
+		xRealIP       string
+		expectedIP    string
 	}{
 		{
 			name:       "direct connection",

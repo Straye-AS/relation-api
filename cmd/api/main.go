@@ -103,6 +103,8 @@ func run() error {
 	projectRepo := repository.NewProjectRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
 	offerItemRepo := repository.NewOfferItemRepository(db)
+	dealRepo := repository.NewDealRepository(db)
+	dealStageHistoryRepo := repository.NewDealStageHistoryRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
@@ -116,6 +118,7 @@ func run() error {
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, log)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, fileRepo, activityRepo, log)
+	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, log)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, notificationRepo, log)
 	companyService := service.NewCompanyService(log)
@@ -132,6 +135,7 @@ func run() error {
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, log)
 	offerHandler := handler.NewOfferHandler(offerService, log)
+	dealHandler := handler.NewDealHandler(dealService, log)
 	fileHandler := handler.NewFileHandler(fileService, cfg.Storage.MaxUploadSizeMB, log)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService, log)
 	authHandler := handler.NewAuthHandler(userRepo, permissionService, log)
@@ -150,6 +154,7 @@ func run() error {
 		customerHandler,
 		projectHandler,
 		offerHandler,
+		dealHandler,
 		fileHandler,
 		dashboardHandler,
 		authHandler,
