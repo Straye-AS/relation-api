@@ -123,6 +123,7 @@ func run() error {
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, log)
 	companyFilterMiddleware := middleware.NewCompanyFilterMiddleware(log)
+	rateLimiter := middleware.NewRateLimiter(&cfg.RateLimit, log)
 
 	// Initialize handlers
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
@@ -140,6 +141,7 @@ func run() error {
 		db,
 		authMiddleware,
 		companyFilterMiddleware,
+		rateLimiter,
 		customerHandler,
 		projectHandler,
 		offerHandler,
