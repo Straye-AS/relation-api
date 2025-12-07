@@ -610,8 +610,9 @@ func (s *OfferService) CloneOffer(ctx context.Context, id uuid.UUID, req *domain
 			return fmt.Errorf("failed to create cloned offer: %w", err)
 		}
 
-		// Clone budget dimensions if requested (default behavior)
-		if req.IncludeDimensions && s.dimensionRepo != nil {
+		// Clone budget dimensions if requested (default behavior - nil or true means include)
+		includeDimensions := req.IncludeDimensions == nil || *req.IncludeDimensions
+		if includeDimensions && s.dimensionRepo != nil {
 			dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, id)
 			if err == nil && len(dimensions) > 0 {
 				for _, dim := range dimensions {

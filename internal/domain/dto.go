@@ -689,8 +689,8 @@ type AdvanceOfferRequest struct {
 // CloneOfferRequest contains options for cloning an offer
 type CloneOfferRequest struct {
 	NewTitle          string `json:"newTitle,omitempty" validate:"max=200"`
-	IncludeDimensions bool   `json:"includeDimensions"` // Default true - clone budget dimensions
-	IncludeFiles      bool   `json:"includeFiles"`      // Default false - files are not cloned by default
+	IncludeDimensions *bool  `json:"includeDimensions,omitempty"` // Default true - clone budget dimensions (nil treated as true)
+	IncludeFiles      bool   `json:"includeFiles"`                // Default false - files are not cloned by default
 }
 
 // AcceptOfferRequest contains options when accepting an offer

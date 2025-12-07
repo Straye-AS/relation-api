@@ -9,6 +9,7 @@ bin/
 *_test.go
 coverage.out
 coverage.html
+QAReports
 
 # Development files
 .env

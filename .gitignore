@@ -6,6 +6,7 @@ tmp/
 *.dll
 *.so
 *.dylib
+QAReports
 
 # Go build cache and test outputs
 *.test

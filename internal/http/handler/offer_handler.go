@@ -46,6 +46,9 @@ func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 	if pageSize < 1 {
 		pageSize = 20
 	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
 
 	var customerID, projectID *uuid.UUID
 	if cid := r.URL.Query().Get("customerId"); cid != "" {
@@ -499,9 +502,10 @@ func (h *OfferHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set defaults for cloning
-	if !req.IncludeDimensions {
-		req.IncludeDimensions = true // Default to include dimensions
+	// Default to include dimensions when cloning (if not explicitly set in JSON)
+	if req.IncludeDimensions == nil {
+		includeDims := true
+		req.IncludeDimensions = &includeDims
 	}
 
 	if err := validate.Struct(req); err != nil {
