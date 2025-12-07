@@ -372,14 +372,16 @@ type OfferItem struct {
 }
 
 // BudgetDimensionCategory represents a predefined budget line type
+// Categories can be company-specific (CompanyID set) or global (CompanyID null)
 type BudgetDimensionCategory struct {
-	ID           string    `gorm:"type:varchar(50);primaryKey" json:"id"`
-	Name         string    `gorm:"type:varchar(200);not null" json:"name"`
-	Description  string    `gorm:"type:text" json:"description,omitempty"`
-	DisplayOrder int       `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
-	IsActive     bool      `gorm:"not null;default:true;column:is_active" json:"isActive"`
-	CreatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	ID           string     `gorm:"type:varchar(50);primaryKey" json:"id"`
+	CompanyID    *CompanyID `gorm:"type:varchar(50);column:company_id;index" json:"companyId,omitempty"` // nil = global category available to all companies
+	Name         string     `gorm:"type:varchar(200);not null" json:"name"`
+	Description  string     `gorm:"type:text" json:"description,omitempty"`
+	DisplayOrder int        `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
+	IsActive     bool       `gorm:"not null;default:true;column:is_active" json:"isActive"`
+	CreatedAt    time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt    time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 // TableName returns the table name for BudgetDimensionCategory
