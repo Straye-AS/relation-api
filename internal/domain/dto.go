@@ -684,6 +684,41 @@ type AdvanceOfferRequest struct {
 	Phase OfferPhase `json:"phase" validate:"required"`
 }
 
+// Offer Lifecycle DTOs
+
+// CloneOfferRequest contains options for cloning an offer
+type CloneOfferRequest struct {
+	NewTitle          string `json:"newTitle,omitempty" validate:"max=200"`
+	IncludeDimensions bool   `json:"includeDimensions"` // Default true - clone budget dimensions
+	IncludeFiles      bool   `json:"includeFiles"`      // Default false - files are not cloned by default
+}
+
+// AcceptOfferRequest contains options when accepting an offer
+type AcceptOfferRequest struct {
+	CreateProject bool   `json:"createProject"` // If true, create a project from this offer
+	ProjectName   string `json:"projectName,omitempty" validate:"max=200"`
+	ManagerID     string `json:"managerId,omitempty" validate:"max=100"`
+}
+
+// AcceptOfferResponse contains the result of accepting an offer
+type AcceptOfferResponse struct {
+	Offer   *OfferDTO   `json:"offer"`
+	Project *ProjectDTO `json:"project,omitempty"` // Only present if createProject was true
+}
+
+// RejectOfferRequest contains the reason for rejecting an offer
+type RejectOfferRequest struct {
+	Reason string `json:"reason,omitempty" validate:"max=500"`
+}
+
+// OfferDetailDTO includes offer with budget dimensions and summary
+type OfferDetailDTO struct {
+	OfferDTO
+	BudgetDimensions []BudgetDimensionDTO `json:"budgetDimensions,omitempty"`
+	BudgetSummary    *BudgetSummaryDTO    `json:"budgetSummary,omitempty"`
+	FilesCount       int                  `json:"filesCount"`
+}
+
 type ProjectBudgetDTO struct {
 	Budget      float64 `json:"budget"`
 	Spent       float64 `json:"spent"`

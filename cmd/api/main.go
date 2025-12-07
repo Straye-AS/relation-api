@@ -115,12 +115,13 @@ func run() error {
 	userRoleRepo := repository.NewUserRoleRepository(db, log)
 	userPermissionRepo := repository.NewUserPermissionRepository(db, log)
 	auditLogRepo := repository.NewAuditLogRepository(db)
+	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
 
 	// Initialize services
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, log)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, fileRepo, activityRepo, log)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetDimensionRepo, fileRepo, activityRepo, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, notificationRepo, log)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, notificationRepo, log)

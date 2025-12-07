@@ -42,4 +42,27 @@ var (
 
 	// ErrCompanyNotFound is returned when a company is not found
 	ErrCompanyNotFound = errors.New("company not found")
+
+	// Offer lifecycle errors
+
+	// ErrOfferNotFound is returned when an offer is not found
+	ErrOfferNotFound = errors.New("offer not found")
+
+	// ErrOfferInvalidPhaseTransition is returned when trying to transition to an invalid phase
+	ErrOfferInvalidPhaseTransition = errors.New("invalid offer phase transition")
+
+	// ErrOfferNotInDraftPhase is returned when offer must be in draft phase
+	ErrOfferNotInDraftPhase = errors.New("offer must be in draft or in_progress phase to be sent")
+
+	// ErrOfferNotSent is returned when offer must be in sent phase
+	ErrOfferNotSent = errors.New("offer must be in sent phase")
+
+	// ErrOfferAlreadyClosed is returned when trying to modify a closed offer
+	ErrOfferAlreadyClosed = errors.New("offer is already in a closed state (won/lost/expired)")
+
+	// ErrOfferCannotClone is returned when an offer cannot be cloned
+	ErrOfferCannotClone = errors.New("cannot clone this offer")
+
+	// ErrProjectCreationFailed is returned when project creation fails during offer acceptance
+	ErrProjectCreationFailed = errors.New("failed to create project from offer")
 )
