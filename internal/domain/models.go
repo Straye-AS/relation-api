@@ -449,8 +449,8 @@ func (bd *BudgetDimension) GetName() string {
 type BudgetSummary struct {
 	TotalCost      float64 `json:"totalCost"`
 	TotalRevenue   float64 `json:"totalRevenue"`
-	TotalMargin    float64 `json:"totalMargin"`    // Revenue - Cost
-	MarginPercent  float64 `json:"marginPercent"`  // ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
+	TotalMargin    float64 `json:"totalMargin"`   // Revenue - Cost
+	MarginPercent  float64 `json:"marginPercent"` // ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
 	DimensionCount int     `json:"dimensionCount"`
 }
 
