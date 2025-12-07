@@ -39,3 +39,14 @@ func respondValidationError(w http.ResponseWriter, err error) {
 func parseJSON(data string, target interface{}) error {
 	return json.Unmarshal([]byte(data), target)
 }
+
+// respondWithError sends a JSON error response with the given status code and message
+func respondWithError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":   http.StatusText(status),
+		"message": message,
+		"code":    status,
+	})
+}

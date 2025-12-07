@@ -232,11 +232,25 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/", rt.offerHandler.Create)
 				r.Get("/{id}", rt.offerHandler.GetByID)
 				r.Put("/{id}", rt.offerHandler.Update)
+				r.Delete("/{id}", rt.offerHandler.Delete)
+
+				// Lifecycle endpoints
 				r.Post("/{id}/advance", rt.offerHandler.Advance)
+				r.Post("/{id}/send", rt.offerHandler.Send)
+				r.Post("/{id}/accept", rt.offerHandler.Accept)
+				r.Post("/{id}/reject", rt.offerHandler.Reject)
+				r.Post("/{id}/clone", rt.offerHandler.Clone)
+
+				// Sub-resources
 				r.Get("/{id}/items", rt.offerHandler.GetItems)
 				r.Post("/{id}/items", rt.offerHandler.AddItem)
 				r.Get("/{id}/files", rt.offerHandler.GetFiles)
 				r.Get("/{id}/activities", rt.offerHandler.GetActivities)
+
+				// Budget endpoints
+				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetDimensions)
+				r.Get("/{id}/budget", rt.offerHandler.GetBudgetSummary)
+				r.Post("/{id}/recalculate", rt.offerHandler.RecalculateTotals)
 			})
 
 			// Deals

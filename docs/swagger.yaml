@@ -1,5 +1,26 @@
 basePath: /api/v1
 definitions:
+  domain.AcceptOfferRequest:
+    properties:
+      createProject:
+        description: If true, create a project from this offer
+        type: boolean
+      managerId:
+        maxLength: 100
+        type: string
+      projectName:
+        maxLength: 200
+        type: string
+    type: object
+  domain.AcceptOfferResponse:
+    properties:
+      offer:
+        $ref: '#/definitions/domain.OfferDTO'
+      project:
+        allOf:
+        - $ref: '#/definitions/domain.ProjectDTO'
+        description: Only present if createProject was true
+    type: object
   domain.ActivityDTO:
     properties:
       activityType:
@@ -196,6 +217,96 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  domain.BudgetDimensionCategoryDTO:
+    properties:
+      description:
+        type: string
+      displayOrder:
+        type: integer
+      id:
+        type: string
+      isActive:
+        type: boolean
+      name:
+        type: string
+    type: object
+  domain.BudgetDimensionDTO:
+    properties:
+      category:
+        $ref: '#/definitions/domain.BudgetDimensionCategoryDTO'
+      categoryId:
+        type: string
+      cost:
+        type: number
+      createdAt:
+        type: string
+      customName:
+        type: string
+      description:
+        type: string
+      displayOrder:
+        type: integer
+      id:
+        type: string
+      marginOverride:
+        type: boolean
+      marginPercent:
+        type: number
+      name:
+        description: Resolved name (category or custom)
+        type: string
+      parentId:
+        type: string
+      parentType:
+        $ref: '#/definitions/domain.BudgetParentType'
+      quantity:
+        type: number
+      revenue:
+        type: number
+      targetMarginPercent:
+        type: number
+      unit:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  domain.BudgetParentType:
+    enum:
+    - offer
+    - project
+    type: string
+    x-enum-varnames:
+    - BudgetParentOffer
+    - BudgetParentProject
+  domain.BudgetSummaryDTO:
+    properties:
+      dimensionCount:
+        type: integer
+      overallMarginPercent:
+        type: number
+      parentId:
+        type: string
+      parentType:
+        $ref: '#/definitions/domain.BudgetParentType'
+      totalCost:
+        type: number
+      totalProfit:
+        type: number
+      totalRevenue:
+        type: number
+    type: object
+  domain.CloneOfferRequest:
+    properties:
+      includeDimensions:
+        description: Default true - clone budget dimensions
+        type: boolean
+      includeFiles:
+        description: Default false - files are not cloned by default
+        type: boolean
+      newTitle:
+        maxLength: 200
+        type: string
     type: object
   domain.Company:
     properties:
@@ -990,6 +1101,53 @@ definitions:
       value:
         type: number
     type: object
+  domain.OfferDetailDTO:
+    properties:
+      budgetDimensions:
+        items:
+          $ref: '#/definitions/domain.BudgetDimensionDTO'
+        type: array
+      budgetSummary:
+        $ref: '#/definitions/domain.BudgetSummaryDTO'
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      createdAt:
+        description: ISO 8601
+        type: string
+      customerId:
+        type: string
+      customerName:
+        type: string
+      description:
+        type: string
+      filesCount:
+        type: integer
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/domain.OfferItemDTO'
+        type: array
+      notes:
+        type: string
+      phase:
+        $ref: '#/definitions/domain.OfferPhase'
+      probability:
+        type: integer
+      responsibleUserId:
+        type: string
+      responsibleUserName:
+        type: string
+      status:
+        $ref: '#/definitions/domain.OfferStatus'
+      title:
+        type: string
+      updatedAt:
+        description: ISO 8601
+        type: string
+      value:
+        type: number
+    type: object
   domain.OfferItemDTO:
     properties:
       cost:
@@ -1215,6 +1373,12 @@ definitions:
     - ProjectStatusOnHold
     - ProjectStatusCompleted
     - ProjectStatusCancelled
+  domain.RejectOfferRequest:
+    properties:
+      reason:
+        maxLength: 500
+        type: string
+    type: object
   domain.SearchResult:
     properties:
       id:
@@ -3184,6 +3348,36 @@ paths:
       tags:
       - Offers
   /offers/{id}:
+    delete:
+      description: Delete an offer by ID. Only offers in draft or in_progress phase
+        can be deleted.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete offer
+      tags:
+      - Offers
     get:
       parameters:
       - description: Offer ID
@@ -3230,6 +3424,49 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update offer
+      tags:
+      - Offers
+  /offers/{id}/accept:
+    post:
+      consumes:
+      - application/json
+      description: Transitions an offer from sent phase to won phase. Optionally creates
+        a project from the offer.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Accept options
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.AcceptOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Accepted offer and optional project
+          schema:
+            $ref: '#/definitions/domain.AcceptOfferResponse'
+        "400":
+          description: Invalid offer ID, request body, or offer not in sent phase
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Accept offer
       tags:
       - Offers
   /offers/{id}/activities:
@@ -3287,6 +3524,117 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Advance offer phase
+      tags:
+      - Offers
+  /offers/{id}/budget:
+    get:
+      description: Get aggregated budget totals for an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Budget summary
+          schema:
+            $ref: '#/definitions/domain.BudgetSummaryDTO'
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offer budget summary
+      tags:
+      - Offers
+  /offers/{id}/clone:
+    post:
+      consumes:
+      - application/json
+      description: Creates a copy of an existing offer. The cloned offer starts in
+        draft phase.
+      parameters:
+      - description: Source Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Clone options
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CloneOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Cloned offer
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid offer ID or request body
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Source offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Clone offer
+      tags:
+      - Offers
+  /offers/{id}/detail:
+    get:
+      description: Get an offer including budget dimensions and summary calculations
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Offer with budget details
+          schema:
+            $ref: '#/definitions/domain.OfferDetailDTO'
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offer with budget details
       tags:
       - Offers
   /offers/{id}/files:
@@ -3361,6 +3709,117 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Add offer item
+      tags:
+      - Offers
+  /offers/{id}/recalculate:
+    post:
+      description: Recalculates the offer value from budget dimensions
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated offer
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Recalculate offer totals
+      tags:
+      - Offers
+  /offers/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: Transitions an offer from sent phase to lost phase with an optional
+        reason.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Rejection reason
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.RejectOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rejected offer
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid offer ID, request body, or offer not in sent phase
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Reject offer
+      tags:
+      - Offers
+  /offers/{id}/send:
+    post:
+      description: Transitions an offer from draft or in_progress phase to sent phase.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated offer
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid offer ID or offer not in valid phase for sending
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Send offer to customer
       tags:
       - Offers
   /projects:

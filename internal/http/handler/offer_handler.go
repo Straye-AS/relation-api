@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -160,8 +161,8 @@ func (h *OfferHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	offer, err := h.offerService.Update(r.Context(), id, &req)
 	if err != nil {
-		h.logger.Error("failed to update offer", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to update offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 
@@ -323,4 +324,312 @@ func (h *OfferHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, activities)
+}
+
+// Delete godoc
+// @Summary Delete offer
+// @Description Delete an offer by ID. Only offers in draft or in_progress phase can be deleted.
+// @Tags Offers
+// @Param id path string true "Offer ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id} [delete]
+func (h *OfferHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	err = h.offerService.Delete(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to delete offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Send godoc
+// @Summary Send offer to customer
+// @Description Transitions an offer from draft or in_progress phase to sent phase.
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferDTO "Updated offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or offer not in valid phase for sending"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/send [post]
+func (h *OfferHandler) Send(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	offer, err := h.offerService.SendOffer(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to send offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// Accept godoc
+// @Summary Accept offer
+// @Description Transitions an offer from sent phase to won phase. Optionally creates a project from the offer.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.AcceptOfferRequest true "Accept options"
+// @Success 200 {object} domain.AcceptOfferResponse "Accepted offer and optional project"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, or offer not in sent phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/accept [post]
+func (h *OfferHandler) Accept(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	var req domain.AcceptOfferRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	response, err := h.offerService.AcceptOffer(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to accept offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, response)
+}
+
+// Reject godoc
+// @Summary Reject offer
+// @Description Transitions an offer from sent phase to lost phase with an optional reason.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.RejectOfferRequest true "Rejection reason"
+// @Success 200 {object} domain.OfferDTO "Rejected offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, or offer not in sent phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/reject [post]
+func (h *OfferHandler) Reject(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	var req domain.RejectOfferRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.RejectOffer(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to reject offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// Clone godoc
+// @Summary Clone offer
+// @Description Creates a copy of an existing offer. The cloned offer starts in draft phase.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Source Offer ID"
+// @Param request body domain.CloneOfferRequest true "Clone options"
+// @Success 201 {object} domain.OfferDTO "Cloned offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or request body"
+// @Failure 404 {object} domain.ErrorResponse "Source offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/clone [post]
+func (h *OfferHandler) Clone(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	var req domain.CloneOfferRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Set defaults for cloning
+	if !req.IncludeDimensions {
+		req.IncludeDimensions = true // Default to include dimensions
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.CloneOffer(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to clone offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	w.Header().Set("Location", "/offers/"+offer.ID.String())
+	respondJSON(w, http.StatusCreated, offer)
+}
+
+// GetWithBudgetDimensions godoc
+// @Summary Get offer with budget details
+// @Description Get an offer including budget dimensions and summary calculations
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferDetailDTO "Offer with budget details"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/detail [get]
+func (h *OfferHandler) GetWithBudgetDimensions(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	offer, err := h.offerService.GetByIDWithBudgetDimensions(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to get offer with budget dimensions", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// GetBudgetSummary godoc
+// @Summary Get offer budget summary
+// @Description Get aggregated budget totals for an offer
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.BudgetSummaryDTO "Budget summary"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/budget [get]
+func (h *OfferHandler) GetBudgetSummary(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	summary, err := h.offerService.GetBudgetSummary(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to get budget summary", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, summary)
+}
+
+// RecalculateTotals godoc
+// @Summary Recalculate offer totals
+// @Description Recalculates the offer value from budget dimensions
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferDTO "Updated offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/recalculate [post]
+func (h *OfferHandler) RecalculateTotals(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	offer, err := h.offerService.RecalculateTotals(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to recalculate totals", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// handleOfferError maps service errors to HTTP status codes
+func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrOfferNotFound):
+		respondWithError(w, http.StatusNotFound, "Offer not found")
+	case errors.Is(err, service.ErrOfferNotInDraftPhase):
+		respondWithError(w, http.StatusBadRequest, "Offer must be in draft or in_progress phase to be sent")
+	case errors.Is(err, service.ErrOfferNotSent):
+		respondWithError(w, http.StatusBadRequest, "Offer must be in sent phase to accept or reject")
+	case errors.Is(err, service.ErrOfferAlreadyClosed):
+		respondWithError(w, http.StatusBadRequest, "Offer is already in a closed state (won/lost/expired)")
+	case errors.Is(err, service.ErrOfferCannotClone):
+		respondWithError(w, http.StatusBadRequest, "Cannot clone this offer")
+	case errors.Is(err, service.ErrProjectCreationFailed):
+		respondWithError(w, http.StatusInternalServerError, "Failed to create project from offer")
+	case errors.Is(err, service.ErrCustomerNotFound):
+		respondWithError(w, http.StatusBadRequest, "Customer not found")
+	case errors.Is(err, service.ErrUnauthorized):
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+	default:
+		respondWithError(w, http.StatusInternalServerError, "Internal server error")
+	}
 }

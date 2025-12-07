@@ -2493,6 +2493,120 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete an offer by ID. Only offers in draft or in_progress phase can be deleted.",
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Delete offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/accept": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer from sent phase to won phase. Optionally creates a project from the offer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Accept offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Accept options",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AcceptOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Accepted offer and optional project",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AcceptOfferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, or offer not in sent phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/offers/{id}/activities": {
@@ -2584,6 +2698,183 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/budget": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get aggregated budget totals for an offer",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer budget summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Budget summary",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BudgetSummaryDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/clone": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a copy of an existing offer. The cloned offer starts in draft phase.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Clone offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Clone options",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CloneOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Cloned offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID or request body",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Source offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get an offer including budget dimensions and summary calculations",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer with budget details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Offer with budget details",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDetailDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -2708,6 +2999,183 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferItemDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/recalculate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Recalculates the offer value from budget dimensions",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Recalculate offer totals",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer from sent phase to lost phase with an optional reason.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Reject offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Rejection reason",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.RejectOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rejected offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, or offer not in sent phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/send": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer from draft or in_progress phase to sent phase.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Send offer to customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID or offer not in valid phase for sending",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -3106,6 +3574,39 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "domain.AcceptOfferRequest": {
+            "type": "object",
+            "properties": {
+                "createProject": {
+                    "description": "If true, create a project from this offer",
+                    "type": "boolean"
+                },
+                "managerId": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "projectName": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "domain.AcceptOfferResponse": {
+            "type": "object",
+            "properties": {
+                "offer": {
+                    "$ref": "#/definitions/domain.OfferDTO"
+                },
+                "project": {
+                    "description": "Only present if createProject was true",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    ]
+                }
+            }
+        },
         "domain.ActivityDTO": {
             "type": "object",
             "properties": {
@@ -3375,6 +3876,140 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.BudgetDimensionCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "displayOrder": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.BudgetDimensionDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/domain.BudgetDimensionCategoryDTO"
+                },
+                "categoryId": {
+                    "type": "string"
+                },
+                "cost": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "customName": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "displayOrder": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "marginOverride": {
+                    "type": "boolean"
+                },
+                "marginPercent": {
+                    "type": "number"
+                },
+                "name": {
+                    "description": "Resolved name (category or custom)",
+                    "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "parentType": {
+                    "$ref": "#/definitions/domain.BudgetParentType"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "revenue": {
+                    "type": "number"
+                },
+                "targetMarginPercent": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.BudgetParentType": {
+            "type": "string",
+            "enum": [
+                "offer",
+                "project"
+            ],
+            "x-enum-varnames": [
+                "BudgetParentOffer",
+                "BudgetParentProject"
+            ]
+        },
+        "domain.BudgetSummaryDTO": {
+            "type": "object",
+            "properties": {
+                "dimensionCount": {
+                    "type": "integer"
+                },
+                "overallMarginPercent": {
+                    "type": "number"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "parentType": {
+                    "$ref": "#/definitions/domain.BudgetParentType"
+                },
+                "totalCost": {
+                    "type": "number"
+                },
+                "totalProfit": {
+                    "type": "number"
+                },
+                "totalRevenue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.CloneOfferRequest": {
+            "type": "object",
+            "properties": {
+                "includeDimensions": {
+                    "description": "Default true - clone budget dimensions",
+                    "type": "boolean"
+                },
+                "includeFiles": {
+                    "description": "Default false - files are not cloned by default",
+                    "type": "boolean"
+                },
+                "newTitle": {
+                    "type": "string",
+                    "maxLength": 200
                 }
             }
         },
@@ -4509,6 +5144,76 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.OfferDetailDTO": {
+            "type": "object",
+            "properties": {
+                "budgetDimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                    }
+                },
+                "budgetSummary": {
+                    "$ref": "#/definitions/domain.BudgetSummaryDTO"
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "customerName": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "filesCount": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferItemDTO"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "probability": {
+                    "type": "integer"
+                },
+                "responsibleUserId": {
+                    "type": "string"
+                },
+                "responsibleUserName": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
         "domain.OfferItemDTO": {
             "type": "object",
             "properties": {
@@ -4833,6 +5538,15 @@ const docTemplate = `{
                 "ProjectStatusCompleted",
                 "ProjectStatusCancelled"
             ]
+        },
+        "domain.RejectOfferRequest": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
         },
         "domain.SearchResult": {
             "type": "object",
