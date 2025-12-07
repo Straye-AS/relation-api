@@ -624,6 +624,26 @@ type UpdateBudgetDimensionRequest struct {
 	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
+// ReorderDimensionsRequest contains the ordered list of dimension IDs
+type ReorderDimensionsRequest struct {
+	OrderedIDs []uuid.UUID `json:"orderedIds" validate:"required,min=1"`
+}
+
+// AddOfferBudgetDimensionRequest is the simplified request for adding dimensions to an offer
+// ParentType and ParentID are inferred from the URL
+type AddOfferBudgetDimensionRequest struct {
+	CategoryID          *string  `json:"categoryId,omitempty" validate:"omitempty,max=50"`
+	CustomName          string   `json:"customName,omitempty" validate:"max=200"`
+	Cost                float64  `json:"cost" validate:"gt=0"`
+	Revenue             float64  `json:"revenue,omitempty" validate:"gte=0"`
+	TargetMarginPercent *float64 `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
+	MarginOverride      bool     `json:"marginOverride,omitempty"`
+	Description         string   `json:"description,omitempty"`
+	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	Unit                string   `json:"unit,omitempty" validate:"max=50"`
+	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
+}
+
 // Project Actual Cost Request DTOs
 
 type CreateProjectActualCostRequest struct {

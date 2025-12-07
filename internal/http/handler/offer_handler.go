@@ -554,19 +554,9 @@ func (h *OfferHandler) GetWithBudgetDimensions(w http.ResponseWriter, r *http.Re
 	respondJSON(w, http.StatusOK, offer)
 }
 
-// GetBudgetSummary godoc
-// @Summary Get offer budget summary
-// @Description Get aggregated budget totals for an offer
-// @Tags Offers
-// @Produce json
-// @Param id path string true "Offer ID"
-// @Success 200 {object} domain.BudgetSummaryDTO "Budget summary"
-// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID"
-// @Failure 404 {object} domain.ErrorResponse "Offer not found"
-// @Failure 500 {object} domain.ErrorResponse "Internal server error"
-// @Security BearerAuth
-// @Security ApiKeyAuth
-// @Router /offers/{id}/budget [get]
+// GetBudgetSummary retrieves budget summary for an offer
+// NOTE: This endpoint is now deprecated in favor of BudgetDimensionHandler.GetOfferBudgetWithDimensions
+// which provides both dimensions and summary. Kept for backwards compatibility.
 func (h *OfferHandler) GetBudgetSummary(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

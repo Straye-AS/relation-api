@@ -2713,14 +2713,14 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get aggregated budget totals for an offer",
+                "description": "Get the complete budget breakdown for an offer including all dimensions and summary",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Offers"
+                    "Offer Budget"
                 ],
-                "summary": "Get offer budget summary",
+                "summary": "Get offer budget breakdown",
                 "parameters": [
                     {
                         "type": "string",
@@ -2732,13 +2732,339 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Budget summary",
+                        "description": "Budget breakdown with dimensions and summary",
                         "schema": {
-                            "$ref": "#/definitions/domain.BudgetSummaryDTO"
+                            "$ref": "#/definitions/handler.OfferBudgetResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/budget/dimensions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all budget dimensions for a specific offer with pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offer Budget"
+                ],
+                "summary": "List offer budget dimensions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of budget dimensions",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PaginatedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Add a new budget dimension to an offer. Either categoryId or customName must be provided.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offer Budget"
+                ],
+                "summary": "Add budget dimension to offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Dimension data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AddOfferBudgetDimensionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created budget dimension",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/budget/dimensions/{dimensionId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update an existing budget dimension for an offer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offer Budget"
+                ],
+                "summary": "Update offer budget dimension",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dimension ID",
+                        "name": "dimensionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Dimension data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateBudgetDimensionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated budget dimension",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Dimension not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a budget dimension from an offer",
+                "tags": [
+                    "Offer Budget"
+                ],
+                "summary": "Delete offer budget dimension",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dimension ID",
+                        "name": "dimensionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Invalid ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Dimension not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/budget/reorder": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reorder the budget dimensions for an offer. All dimension IDs must be provided.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offer Budget"
+                ],
+                "summary": "Reorder offer budget dimensions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ordered dimension IDs",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReorderDimensionsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reordered budget dimensions",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or count mismatch",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -3746,6 +4072,48 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.AddOfferBudgetDimensionRequest": {
+            "type": "object",
+            "properties": {
+                "categoryId": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "cost": {
+                    "type": "number"
+                },
+                "customName": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "description": {
+                    "type": "string"
+                },
+                "displayOrder": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "marginOverride": {
+                    "type": "boolean"
+                },
+                "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "revenue": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "targetMarginPercent": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "unit": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
         "domain.AdvanceOfferRequest": {
             "type": "object",
             "required": [
@@ -4000,7 +4368,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "includeDimensions": {
-                    "description": "Default true - clone budget dimensions",
+                    "description": "Default true - clone budget dimensions (nil treated as true)",
                     "type": "boolean"
                 },
                 "includeFiles": {
@@ -5548,6 +5916,21 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.ReorderDimensionsRequest": {
+            "type": "object",
+            "required": [
+                "orderedIds"
+            ],
+            "properties": {
+                "orderedIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "domain.SearchResult": {
             "type": "object",
             "properties": {
@@ -5594,6 +5977,49 @@ const docTemplate = `{
                 },
                 "wonValue": {
                     "type": "number"
+                }
+            }
+        },
+        "domain.UpdateBudgetDimensionRequest": {
+            "type": "object",
+            "properties": {
+                "categoryId": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "customName": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "description": {
+                    "type": "string"
+                },
+                "displayOrder": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "marginOverride": {
+                    "type": "boolean"
+                },
+                "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "revenue": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "targetMarginPercent": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "unit": {
+                    "type": "string",
+                    "maxLength": 50
                 }
             }
         },
@@ -6055,6 +6481,20 @@ const docTemplate = `{
             "properties": {
                 "reason": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.OfferBudgetResponse": {
+            "type": "object",
+            "properties": {
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/domain.BudgetSummaryDTO"
                 }
             }
         },

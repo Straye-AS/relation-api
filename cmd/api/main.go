@@ -116,6 +116,7 @@ func run() error {
 	userPermissionRepo := repository.NewUserPermissionRepository(db, log)
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetDimensionCategoryRepo := repository.NewBudgetDimensionCategoryRepository(db)
 
 	// Initialize services
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
@@ -128,6 +129,7 @@ func run() error {
 	companyService := service.NewCompanyService(log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 	auditLogService := service.NewAuditLogService(auditLogRepo, log)
+	budgetDimensionService := service.NewBudgetDimensionService(budgetDimensionRepo, budgetDimensionCategoryRepo, offerRepo, projectRepo, activityRepo, log)
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, log)
@@ -146,6 +148,7 @@ func run() error {
 	authHandler := handler.NewAuthHandler(userRepo, permissionService, log)
 	companyHandler := handler.NewCompanyHandler(companyService, log)
 	auditHandler := handler.NewAuditHandler(auditLogService, log)
+	budgetDimensionHandler := handler.NewBudgetDimensionHandler(budgetDimensionService, log)
 
 	// Setup router
 	rt := router.NewRouter(
@@ -166,6 +169,7 @@ func run() error {
 		companyHandler,
 		auditHandler,
 		contactHandler,
+		budgetDimensionHandler,
 	)
 
 	// Create HTTP server
