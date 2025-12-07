@@ -89,7 +89,7 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		Value:               totalValue,
 		Status:              req.Status,
 		ResponsibleUserID:   req.ResponsibleUserID,
-		ResponsibleUserName: "", // TODO: Get from user service
+		ResponsibleUserName: "", // Populated by handler/external user lookup if needed
 		Description:         req.Description,
 		Notes:               req.Notes,
 		Items:               items,
@@ -100,7 +100,10 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 	}
 
 	// Reload with relations
-	offer, _ = s.offerRepo.GetByID(ctx, offer.ID)
+	offer, err = s.offerRepo.GetByID(ctx, offer.ID)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after create", zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, offer.ID, "Offer created",
@@ -230,7 +233,10 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	}
 
 	// Reload with relations
-	offer, _ = s.offerRepo.GetByID(ctx, id)
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after update", zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, offer.ID, "Offer updated",
@@ -321,7 +327,10 @@ func (s *OfferService) SendOffer(ctx context.Context, id uuid.UUID) (*domain.Off
 	}
 
 	// Reload with relations
-	offer, _ = s.offerRepo.GetByID(ctx, id)
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after send", zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, offer.ID, "Offer sent",
@@ -421,7 +430,9 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 					}
 					// Mark project as having detailed budget
 					project.HasDetailedBudget = true
-					tx.Save(project)
+					if err := tx.Save(project).Error; err != nil {
+						s.logger.Warn("failed to update project HasDetailedBudget flag", zap.Error(err))
+					}
 				}
 			}
 		}
@@ -434,7 +445,10 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 	}
 
 	// Reload offer
-	offer, _ = s.offerRepo.GetByID(ctx, id)
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after accept", zap.Error(err))
+	}
 	offerDTO := mapper.ToOfferDTO(offer)
 
 	// Convert project to DTO if created
@@ -488,7 +502,10 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 	}
 
 	// Reload with relations
-	offer, _ = s.offerRepo.GetByID(ctx, id)
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after reject", zap.Error(err))
+	}
 
 	// Log activity
 	activityBody := fmt.Sprintf("Offer '%s' was rejected (phase: %s -> lost)", offer.Title, oldPhase)
@@ -524,7 +541,10 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	}
 
 	// Reload with relations
-	offer, _ = s.offerRepo.GetByID(ctx, id)
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after expire", zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, offer.ID, "Offer expired",
@@ -626,7 +646,10 @@ func (s *OfferService) CloneOffer(ctx context.Context, id uuid.UUID, req *domain
 	}
 
 	// Reload with relations
-	newOffer, _ = s.offerRepo.GetByID(ctx, newOffer.ID)
+	newOffer, err = s.offerRepo.GetByID(ctx, newOffer.ID)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after clone", zap.Error(err))
+	}
 
 	// Log activity on source offer
 	s.logActivity(ctx, id, "Offer cloned",
@@ -690,7 +713,10 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 	}
 
 	// Reload offer
-	offer, _ = s.offerRepo.GetByID(ctx, id)
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after recalculate", zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, id, "Offer totals recalculated",
