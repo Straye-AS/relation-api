@@ -78,7 +78,16 @@ func (r *OfferRepository) Update(ctx context.Context, offer *domain.Offer) error
 }
 
 func (r *OfferRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.Offer{}, "id = ?", id).Error
+	query := r.db.WithContext(ctx).Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Delete(&domain.Offer{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // List returns a paginated list of offers with optional filters
@@ -180,11 +189,13 @@ func (r *OfferRepository) Search(ctx context.Context, searchQuery string, limit 
 
 // UpdateStatus updates only the status field of an offer
 // Returns error if offer not found or update fails
+// Applies company filter for multi-tenant isolation
 func (r *OfferRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.OfferStatus) error {
-	result := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Model(&domain.Offer{}).
-		Where("id = ?", id).
-		Update("status", status)
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Update("status", status)
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to update offer status: %w", result.Error)
@@ -199,11 +210,13 @@ func (r *OfferRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 
 // UpdatePhase updates only the phase field of an offer
 // Returns error if offer not found or update fails
+// Applies company filter for multi-tenant isolation
 func (r *OfferRepository) UpdatePhase(ctx context.Context, id uuid.UUID, phase domain.OfferPhase) error {
-	result := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Model(&domain.Offer{}).
-		Where("id = ?", id).
-		Update("phase", phase)
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Update("phase", phase)
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to update offer phase: %w", result.Error)
@@ -218,6 +231,7 @@ func (r *OfferRepository) UpdatePhase(ctx context.Context, id uuid.UUID, phase d
 
 // CalculateTotalsFromDimensions calculates and updates the offer's Value field
 // by summing the revenue from all budget dimensions linked to this offer
+// Applies company filter for multi-tenant isolation on the update
 func (r *OfferRepository) CalculateTotalsFromDimensions(ctx context.Context, offerID uuid.UUID) (float64, error) {
 	var totalRevenue float64
 
@@ -232,11 +246,12 @@ func (r *OfferRepository) CalculateTotalsFromDimensions(ctx context.Context, off
 		return 0, fmt.Errorf("failed to calculate totals from dimensions: %w", err)
 	}
 
-	// Update the offer's Value field
-	result := r.db.WithContext(ctx).
+	// Update the offer's Value field with company filter
+	query := r.db.WithContext(ctx).
 		Model(&domain.Offer{}).
-		Where("id = ?", offerID).
-		Update("value", totalRevenue)
+		Where("id = ?", offerID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Update("value", totalRevenue)
 
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to update offer value: %w", result.Error)
