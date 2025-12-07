@@ -445,6 +445,15 @@ func (bd *BudgetDimension) GetName() string {
 	return bd.CustomName
 }
 
+// BudgetSummary holds aggregated budget totals for a parent entity (offer or project)
+type BudgetSummary struct {
+	TotalCost      float64 `json:"totalCost"`
+	TotalRevenue   float64 `json:"totalRevenue"`
+	TotalMargin    float64 `json:"totalMargin"`    // Revenue - Cost
+	MarginPercent  float64 `json:"marginPercent"`  // ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
+	DimensionCount int     `json:"dimensionCount"`
+}
+
 // ActivityTargetType represents the type of entity an activity is associated with
 type ActivityTargetType string
 
