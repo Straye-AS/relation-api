@@ -603,6 +603,62 @@ func (h *DealHandler) GetForecast(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, forecast)
 }
 
+// @Summary Get pipeline analytics
+// @Description Get comprehensive sales pipeline analytics including stage summary, forecasts, conversion rates, and win rate analysis
+// @Tags Deals
+// @Produce json
+// @Param companyId query string false "Filter by company ID"
+// @Param ownerId query string false "Filter by owner ID"
+// @Param dateFrom query string false "Filter by date from (YYYY-MM-DD)"
+// @Param dateTo query string false "Filter by date to (YYYY-MM-DD)"
+// @Success 200 {object} domain.PipelineAnalyticsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid date range - dateFrom must be before dateTo"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /deals/analytics [get]
+func (h *DealHandler) GetPipelineAnalytics(w http.ResponseWriter, r *http.Request) {
+	filters := &domain.PipelineAnalyticsFilters{}
+
+	// Parse optional filters
+	if companyIDStr := r.URL.Query().Get("companyId"); companyIDStr != "" {
+		companyID := domain.CompanyID(companyIDStr)
+		filters.CompanyID = &companyID
+	}
+
+	if ownerID := r.URL.Query().Get("ownerId"); ownerID != "" {
+		filters.OwnerID = &ownerID
+	}
+
+	if dateFromStr := r.URL.Query().Get("dateFrom"); dateFromStr != "" {
+		if t, err := time.Parse("2006-01-02", dateFromStr); err == nil {
+			filters.DateFrom = &t
+		}
+	}
+
+	if dateToStr := r.URL.Query().Get("dateTo"); dateToStr != "" {
+		if t, err := time.Parse("2006-01-02", dateToStr); err == nil {
+			filters.DateTo = &t
+		}
+	}
+
+	// Validate date range: dateFrom must be before dateTo
+	if filters.DateFrom != nil && filters.DateTo != nil {
+		if filters.DateFrom.After(*filters.DateTo) {
+			respondWithError(w, http.StatusBadRequest, "Invalid date range: dateFrom must be before dateTo")
+			return
+		}
+	}
+
+	analytics, err := h.dealService.GetPipelineAnalytics(r.Context(), filters)
+	if err != nil {
+		h.logger.Error("failed to get pipeline analytics", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get pipeline analytics")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, analytics)
+}
+
 // @Summary Create offer from deal
 // @Description Create an offer linked to a deal, advancing the deal to proposal stage
 // @Tags Deals

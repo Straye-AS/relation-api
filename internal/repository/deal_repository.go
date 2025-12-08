@@ -474,3 +474,255 @@ func (r *DealRepository) applySorting(query *gorm.DB, sortBy DealSortOption) *go
 		return query.Order("created_at DESC")
 	}
 }
+
+// PipelineSummaryFromView represents a row from v_sales_pipeline_summary view
+type PipelineSummaryFromView struct {
+	CompanyID          domain.CompanyID
+	CompanyName        string
+	Stage              domain.DealStage
+	DealCount          int64
+	TotalValue         float64
+	TotalWeightedValue float64
+	AvgProbability     float64
+	AvgDealValue       float64
+	EarliestCloseDate  *time.Time
+	LatestCloseDate    *time.Time
+	OverdueCount       int64
+}
+
+// GetPipelineSummaryFromView queries the v_sales_pipeline_summary view for analytics
+func (r *DealRepository) GetPipelineSummaryFromView(ctx context.Context, companyID *domain.CompanyID) ([]PipelineSummaryFromView, error) {
+	var results []PipelineSummaryFromView
+
+	query := r.db.WithContext(ctx).
+		Table("v_sales_pipeline_summary").
+		Select("company_id, company_name, stage, deal_count, total_value, total_weighted_value, avg_probability, avg_deal_value, earliest_close_date, latest_close_date, overdue_count")
+
+	if companyID != nil {
+		query = query.Where("company_id = ?", *companyID)
+	}
+
+	// Apply multi-tenant company filter from context
+	query = ApplyCompanyFilterWithColumn(ctx, query, "company_id")
+
+	err := query.Find(&results).Error
+	return results, err
+}
+
+// RevenueForecastResult represents forecast data for a time period
+type RevenueForecastResult struct {
+	DealCount     int64
+	TotalValue    float64
+	WeightedValue float64
+}
+
+// GetRevenueForecastByDays returns forecast based on expected_close_date within given days
+func (r *DealRepository) GetRevenueForecastByDays(ctx context.Context, days int, companyID *domain.CompanyID, ownerID *string) (*RevenueForecastResult, error) {
+	result := &RevenueForecastResult{}
+
+	now := time.Now()
+	endDate := now.AddDate(0, 0, days)
+
+	query := r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Select("COUNT(*) as deal_count, COALESCE(SUM(value), 0) as total_value, COALESCE(SUM(weighted_value), 0) as weighted_value").
+		Where("stage NOT IN ?", []domain.DealStage{domain.DealStageWon, domain.DealStageLost}).
+		Where("expected_close_date IS NOT NULL").
+		Where("expected_close_date >= ? AND expected_close_date <= ?", now, endDate)
+
+	if companyID != nil {
+		query = query.Where("company_id = ?", *companyID)
+	}
+
+	if ownerID != nil {
+		query = query.Where("owner_id = ?", *ownerID)
+	}
+
+	// Apply multi-tenant company filter from context
+	query = ApplyCompanyFilter(ctx, query)
+
+	err := query.Scan(result).Error
+	return result, err
+}
+
+// WinRateResult holds win/loss analysis data
+type WinRateResult struct {
+	TotalClosed      int64
+	TotalWon         int64
+	TotalLost        int64
+	WinRate          float64
+	WonValue         float64
+	LostValue        float64
+	AvgWonDealValue  float64
+	AvgLostDealValue float64
+	AvgDaysToClose   float64
+}
+
+// GetWinRateAnalysis returns win/loss statistics
+func (r *DealRepository) GetWinRateAnalysis(ctx context.Context, companyID *domain.CompanyID, ownerID *string, dateFrom, dateTo *time.Time) (*WinRateResult, error) {
+	result := &WinRateResult{}
+
+	// Get won and lost counts and values
+	type winLossRow struct {
+		Stage      domain.DealStage
+		Count      int64
+		TotalValue float64
+		AvgValue   float64
+	}
+
+	var rows []winLossRow
+	query := r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Select("stage, COUNT(*) as count, COALESCE(SUM(value), 0) as total_value, COALESCE(AVG(value), 0) as avg_value").
+		Where("stage IN ?", []domain.DealStage{domain.DealStageWon, domain.DealStageLost}).
+		Group("stage")
+
+	if companyID != nil {
+		query = query.Where("company_id = ?", *companyID)
+	}
+
+	if ownerID != nil {
+		query = query.Where("owner_id = ?", *ownerID)
+	}
+
+	if dateFrom != nil {
+		query = query.Where("actual_close_date >= ?", *dateFrom)
+	}
+
+	if dateTo != nil {
+		query = query.Where("actual_close_date <= ?", *dateTo)
+	}
+
+	// Apply multi-tenant company filter from context
+	query = ApplyCompanyFilter(ctx, query)
+
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	for _, row := range rows {
+		if row.Stage == domain.DealStageWon {
+			result.TotalWon = row.Count
+			result.WonValue = row.TotalValue
+			result.AvgWonDealValue = row.AvgValue
+		} else if row.Stage == domain.DealStageLost {
+			result.TotalLost = row.Count
+			result.LostValue = row.TotalValue
+			result.AvgLostDealValue = row.AvgValue
+		}
+	}
+
+	result.TotalClosed = result.TotalWon + result.TotalLost
+	if result.TotalClosed > 0 {
+		result.WinRate = (float64(result.TotalWon) / float64(result.TotalClosed)) * 100
+	}
+
+	// Calculate average days to close for won deals
+	var avgDays struct {
+		AvgDays float64
+	}
+	daysQuery := r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Select("AVG(EXTRACT(EPOCH FROM (actual_close_date - created_at)) / 86400) as avg_days").
+		Where("stage = ?", domain.DealStageWon).
+		Where("actual_close_date IS NOT NULL")
+
+	if companyID != nil {
+		daysQuery = daysQuery.Where("company_id = ?", *companyID)
+	}
+
+	if ownerID != nil {
+		daysQuery = daysQuery.Where("owner_id = ?", *ownerID)
+	}
+
+	if dateFrom != nil {
+		daysQuery = daysQuery.Where("actual_close_date >= ?", *dateFrom)
+	}
+
+	if dateTo != nil {
+		daysQuery = daysQuery.Where("actual_close_date <= ?", *dateTo)
+	}
+
+	daysQuery = ApplyCompanyFilter(ctx, daysQuery)
+
+	if err := daysQuery.Scan(&avgDays).Error; err == nil {
+		result.AvgDaysToClose = avgDays.AvgDays
+	}
+
+	return result, nil
+}
+
+// ConversionRateResult holds stage conversion data
+type ConversionRateResult struct {
+	FromStage      domain.DealStage
+	ToStage        domain.DealStage
+	DealsConverted int64
+	TotalDeals     int64
+	ConversionRate float64
+}
+
+// GetConversionRates calculates stage-to-stage conversion rates from deal_stage_history
+func (r *DealRepository) GetConversionRates(ctx context.Context, companyID *domain.CompanyID) ([]ConversionRateResult, error) {
+	// Define the key conversion stages to track
+	conversions := []struct {
+		from domain.DealStage
+		to   domain.DealStage
+	}{
+		{domain.DealStageLead, domain.DealStageQualified},
+		{domain.DealStageQualified, domain.DealStageProposal},
+		{domain.DealStageProposal, domain.DealStageNegotiation},
+		{domain.DealStageNegotiation, domain.DealStageWon},
+	}
+
+	var results []ConversionRateResult
+
+	for _, conv := range conversions {
+		// Count deals that transitioned FROM the source stage
+		var totalFromStage int64
+		fromQuery := r.db.WithContext(ctx).
+			Table("deal_stage_history").
+			Joins("JOIN deals ON deal_stage_history.deal_id = deals.id").
+			Select("COUNT(DISTINCT deal_id)").
+			Where("from_stage = ?", conv.from)
+
+		// Apply multi-tenant filter from context
+		fromQuery = ApplyCompanyFilterWithColumn(ctx, fromQuery, "deals.company_id")
+
+		// Apply additional company filter if explicitly provided
+		if companyID != nil {
+			fromQuery = fromQuery.Where("deals.company_id = ?", *companyID)
+		}
+
+		fromQuery.Scan(&totalFromStage)
+
+		// Count deals that reached the target stage
+		var transitioned int64
+		toQuery := r.db.WithContext(ctx).
+			Table("deal_stage_history").
+			Joins("JOIN deals ON deal_stage_history.deal_id = deals.id").
+			Select("COUNT(DISTINCT deal_id)").
+			Where("from_stage = ? AND to_stage = ?", conv.from, conv.to)
+
+		// Apply multi-tenant filter from context
+		toQuery = ApplyCompanyFilterWithColumn(ctx, toQuery, "deals.company_id")
+
+		// Apply additional company filter if explicitly provided
+		if companyID != nil {
+			toQuery = toQuery.Where("deals.company_id = ?", *companyID)
+		}
+
+		toQuery.Scan(&transitioned)
+
+		rate := 0.0
+		if totalFromStage > 0 {
+			rate = (float64(transitioned) / float64(totalFromStage)) * 100
+		}
+
+		results = append(results, ConversionRateResult{
+			FromStage:      conv.from,
+			ToStage:        conv.to,
+			DealsConverted: transitioned,
+			TotalDeals:     totalFromStage,
+			ConversionRate: rate,
+		})
+	}
+
+	return results, nil
+}

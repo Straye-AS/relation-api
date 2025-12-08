@@ -276,6 +276,7 @@ func (rt *Router) Setup() http.Handler {
 			r.Route("/deals", func(r chi.Router) {
 				r.Get("/", rt.dealHandler.List)
 				r.Post("/", rt.dealHandler.Create)
+				r.Get("/analytics", rt.dealHandler.GetPipelineAnalytics)
 				r.Get("/pipeline", rt.dealHandler.GetPipelineOverview)
 				r.Get("/stats", rt.dealHandler.GetPipelineStats)
 				r.Get("/forecast", rt.dealHandler.GetForecast)

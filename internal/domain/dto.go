@@ -984,6 +984,67 @@ type CreateOfferFromDealRequest struct {
 	Title           string     `json:"title,omitempty" validate:"max=200"`
 }
 
+// Pipeline Analytics DTOs
+
+// StageSummaryDTO represents aggregated data for a single stage
+type StageSummaryDTO struct {
+	Stage          string  `json:"stage"`
+	DealCount      int64   `json:"dealCount"`
+	TotalValue     float64 `json:"totalValue"`
+	WeightedValue  float64 `json:"weightedValue"`
+	AvgProbability float64 `json:"avgProbability"`
+	AvgDealValue   float64 `json:"avgDealValue"`
+	OverdueCount   int64   `json:"overdueCount"`
+}
+
+// RevenueForecastDTO represents forecast for a time period
+type RevenueForecastDTO struct {
+	Period        string  `json:"period"` // "30d" or "90d"
+	DealCount     int64   `json:"dealCount"`
+	TotalValue    float64 `json:"totalValue"`
+	WeightedValue float64 `json:"weightedValue"`
+}
+
+// ConversionRateDTO represents stage-to-stage conversion
+type ConversionRateDTO struct {
+	FromStage      string  `json:"fromStage"`
+	ToStage        string  `json:"toStage"`
+	ConversionRate float64 `json:"conversionRate"`
+	DealsConverted int64   `json:"dealsConverted"`
+	TotalDeals     int64   `json:"totalDeals"`
+}
+
+// WinRateAnalysisDTO represents win/loss analysis
+type WinRateAnalysisDTO struct {
+	TotalClosed      int64   `json:"totalClosed"`
+	TotalWon         int64   `json:"totalWon"`
+	TotalLost        int64   `json:"totalLost"`
+	WinRate          float64 `json:"winRate"`
+	WonValue         float64 `json:"wonValue"`
+	LostValue        float64 `json:"lostValue"`
+	AvgWonDealValue  float64 `json:"avgWonDealValue"`
+	AvgLostDealValue float64 `json:"avgLostDealValue"`
+	AvgDaysToClose   float64 `json:"avgDaysToClose"`
+}
+
+// PipelineAnalyticsDTO is the comprehensive analytics response
+type PipelineAnalyticsDTO struct {
+	Summary         []StageSummaryDTO   `json:"summary"`
+	Forecast30Days  RevenueForecastDTO  `json:"forecast30Days"`
+	Forecast90Days  RevenueForecastDTO  `json:"forecast90Days"`
+	ConversionRates []ConversionRateDTO `json:"conversionRates"`
+	WinRateAnalysis WinRateAnalysisDTO  `json:"winRateAnalysis"`
+	GeneratedAt     string              `json:"generatedAt"`
+}
+
+// PipelineAnalyticsFilters contains optional filters for analytics queries
+type PipelineAnalyticsFilters struct {
+	CompanyID *CompanyID `json:"companyId,omitempty"`
+	OwnerID   *string    `json:"ownerId,omitempty"`
+	DateFrom  *time.Time `json:"dateFrom,omitempty"`
+	DateTo    *time.Time `json:"dateTo,omitempty"`
+}
+
 // CreateOfferFromDealResponse contains the result of creating an offer from a deal
 type CreateOfferFromDealResponse struct {
 	Offer *OfferDTO `json:"offer"`
