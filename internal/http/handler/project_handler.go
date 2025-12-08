@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -61,7 +62,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	result, err := h.projectService.List(r.Context(), page, pageSize, customerID, status)
 	if err != nil {
 		h.logger.Error("failed to list projects", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to list projects")
 		return
 	}
 
@@ -80,7 +81,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateProjectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -91,12 +92,16 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	project, err := h.projectService.Create(r.Context(), &req)
 	if err != nil {
+		if errors.Is(err, service.ErrCustomerNotFound) {
+			respondWithError(w, http.StatusBadRequest, "Customer not found")
+			return
+		}
 		h.logger.Error("failed to create project", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to create project")
 		return
 	}
 
-	w.Header().Set("Location", "/projects/"+project.ID.String())
+	w.Header().Set("Location", "/api/v1/projects/"+project.ID.String())
 	respondJSON(w, http.StatusCreated, project)
 }
 
@@ -111,13 +116,18 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid project ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
 		return
 	}
 
 	project, err := h.projectService.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Project not found", http.StatusNotFound)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Project not found")
+			return
+		}
+		h.logger.Error("failed to get project", zap.Error(err), zap.String("project_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get project")
 		return
 	}
 
@@ -137,13 +147,13 @@ func (h *ProjectHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid project ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.UpdateProjectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -154,8 +164,12 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	project, err := h.projectService.Update(r.Context(), id, &req)
 	if err != nil {
-		h.logger.Error("failed to update project", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Project not found")
+			return
+		}
+		h.logger.Error("failed to update project", zap.Error(err), zap.String("project_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to update project")
 		return
 	}
 
@@ -173,13 +187,18 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) GetBudget(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid project ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
 		return
 	}
 
 	budget, err := h.projectService.GetBudget(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Project not found", http.StatusNotFound)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Project not found")
+			return
+		}
+		h.logger.Error("failed to get project budget", zap.Error(err), zap.String("project_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get project budget")
 		return
 	}
 
@@ -198,7 +217,7 @@ func (h *ProjectHandler) GetBudget(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid project ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
 		return
 	}
 
@@ -206,11 +225,18 @@ func (h *ProjectHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 {
 		limit = 50
 	}
+	if limit > 200 {
+		limit = 200
+	}
 
 	activities, err := h.projectService.GetActivities(r.Context(), id, limit)
 	if err != nil {
-		h.logger.Error("failed to get activities", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Project not found")
+			return
+		}
+		h.logger.Error("failed to get project activities", zap.Error(err), zap.String("project_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get project activities")
 		return
 	}
 

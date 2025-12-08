@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -39,28 +40,31 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxUploadMB*1024*1024)
 
 	if err := r.ParseMultipartForm(h.maxUploadMB * 1024 * 1024); err != nil {
-		http.Error(w, "File too large", http.StatusRequestEntityTooLarge)
+		respondWithError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("File too large: maximum size is %dMB", h.maxUploadMB))
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "Invalid file upload", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid file upload: file field is required")
 		return
 	}
 	defer file.Close()
 
 	var offerID *uuid.UUID
 	if oid := r.FormValue("offerId"); oid != "" {
-		if id, err := uuid.Parse(oid); err == nil {
-			offerID = &id
+		id, err := uuid.Parse(oid)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid offerId: must be a valid UUID")
+			return
 		}
+		offerID = &id
 	}
 
 	fileDTO, err := h.fileService.Upload(r.Context(), header.Filename, header.Header.Get("Content-Type"), file, offerID)
 	if err != nil {
 		h.logger.Error("failed to upload file", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to upload file")
 		return
 	}
 
@@ -78,13 +82,14 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid file ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid file ID: must be a valid UUID")
 		return
 	}
 
 	fileDTO, err := h.fileService.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
+		h.logger.Error("failed to get file", zap.Error(err), zap.String("file_id", id.String()))
+		respondWithError(w, http.StatusNotFound, "File not found")
 		return
 	}
 
@@ -102,13 +107,14 @@ func (h *FileHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid file ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid file ID: must be a valid UUID")
 		return
 	}
 
 	reader, filename, err := h.fileService.Download(r.Context(), id)
 	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
+		h.logger.Error("failed to download file", zap.Error(err), zap.String("file_id", id.String()))
+		respondWithError(w, http.StatusNotFound, "File not found")
 		return
 	}
 	defer reader.Close()

@@ -71,7 +71,7 @@ func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 	result, err := h.offerService.List(r.Context(), page, pageSize, customerID, projectID, phase)
 	if err != nil {
 		h.logger.Error("failed to list offers", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to list offers")
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateOfferRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -102,11 +102,11 @@ func (h *OfferHandler) Create(w http.ResponseWriter, r *http.Request) {
 	offer, err := h.offerService.Create(r.Context(), &req)
 	if err != nil {
 		h.logger.Error("failed to create offer", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.handleOfferError(w, err)
 		return
 	}
 
-	w.Header().Set("Location", "/offers/"+offer.ID.String())
+	w.Header().Set("Location", "/api/v1/offers/"+offer.ID.String())
 	respondJSON(w, http.StatusCreated, offer)
 }
 
@@ -121,13 +121,14 @@ func (h *OfferHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
 	offer, err := h.offerService.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Offer not found", http.StatusNotFound)
+		h.logger.Error("failed to get offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 
@@ -147,13 +148,13 @@ func (h *OfferHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.UpdateOfferRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -185,13 +186,13 @@ func (h *OfferHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) Advance(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.AdvanceOfferRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -202,8 +203,8 @@ func (h *OfferHandler) Advance(w http.ResponseWriter, r *http.Request) {
 
 	offer, err := h.offerService.Advance(r.Context(), id, &req)
 	if err != nil {
-		h.logger.Error("failed to advance offer", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to advance offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 
@@ -221,14 +222,14 @@ func (h *OfferHandler) Advance(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
 	items, err := h.offerService.GetItems(r.Context(), id)
 	if err != nil {
-		h.logger.Error("failed to get offer items", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to get offer items", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 
@@ -248,13 +249,13 @@ func (h *OfferHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.CreateOfferItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -265,8 +266,8 @@ func (h *OfferHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.offerService.AddItem(r.Context(), id, &req)
 	if err != nil {
-		h.logger.Error("failed to add offer item", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to add offer item", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 
@@ -284,14 +285,14 @@ func (h *OfferHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
 	files, err := h.offerService.GetFiles(r.Context(), id)
 	if err != nil {
-		h.logger.Error("failed to get offer files", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to get offer files", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 
@@ -310,7 +311,7 @@ func (h *OfferHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 func (h *OfferHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid offer ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
 	}
 
@@ -318,11 +319,14 @@ func (h *OfferHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 {
 		limit = 50
 	}
+	if limit > 200 {
+		limit = 200
+	}
 
 	activities, err := h.offerService.GetActivities(r.Context(), id, limit)
 	if err != nil {
-		h.logger.Error("failed to get activities", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to get offer activities", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
 		return
 	}
 

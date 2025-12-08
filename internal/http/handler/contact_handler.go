@@ -79,7 +79,7 @@ func (h *ContactHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 			domain.ContactTypeOther:     true,
 		}
 		if !validTypes[ct] {
-			http.Error(w, "Invalid contactType. Must be one of: primary, secondary, billing, technical, executive, other", http.StatusBadRequest)
+			respondWithError(w, http.StatusBadRequest, "Invalid contactType: must be one of primary, secondary, billing, technical, executive, other")
 			return
 		}
 		filters.ContactType = &ct
@@ -89,7 +89,7 @@ func (h *ContactHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	if entityType := r.URL.Query().Get("entityType"); entityType != "" {
 		et := domain.ContactEntityType(entityType)
 		if et != domain.ContactEntityCustomer && et != domain.ContactEntityDeal && et != domain.ContactEntityProject {
-			http.Error(w, "Invalid entityType. Must be one of: customer, deal, project", http.StatusBadRequest)
+			respondWithError(w, http.StatusBadRequest, "Invalid entityType: must be one of customer, deal, project")
 			return
 		}
 		filters.EntityType = &et
@@ -99,7 +99,7 @@ func (h *ContactHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	if entityID := r.URL.Query().Get("entityId"); entityID != "" {
 		id, err := uuid.Parse(entityID)
 		if err != nil {
-			http.Error(w, "Invalid entityId format", http.StatusBadRequest)
+			respondWithError(w, http.StatusBadRequest, "Invalid entityId: must be a valid UUID")
 			return
 		}
 		filters.EntityID = &id
@@ -114,7 +114,7 @@ func (h *ContactHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	result, err := h.contactService.ListWithFilters(r.Context(), page, pageSize, filters, sortBy)
 	if err != nil {
 		h.logger.Error("failed to list contacts", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to list contacts")
 		return
 	}
 
@@ -136,13 +136,14 @@ func (h *ContactHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 func (h *ContactHandler) GetContact(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid contact ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid contact ID: must be a valid UUID")
 		return
 	}
 
 	contact, err := h.contactService.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Contact not found", http.StatusNotFound)
+		h.logger.Error("failed to get contact", zap.Error(err), zap.String("contact_id", id.String()))
+		respondWithError(w, http.StatusNotFound, "Contact not found")
 		return
 	}
 
@@ -165,7 +166,7 @@ func (h *ContactHandler) GetContact(w http.ResponseWriter, r *http.Request) {
 func (h *ContactHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -177,14 +178,11 @@ func (h *ContactHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	contact, err := h.contactService.Create(r.Context(), &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "email already exists") {
-			respondJSON(w, http.StatusConflict, map[string]string{
-				"error":   "Conflict",
-				"message": "A contact with this email already exists",
-			})
+			respondWithError(w, http.StatusConflict, "A contact with this email already exists")
 			return
 		}
 		h.logger.Error("failed to create contact", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to create contact")
 		return
 	}
 
@@ -210,13 +208,13 @@ func (h *ContactHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
 func (h *ContactHandler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid contact ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid contact ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.UpdateContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -228,18 +226,15 @@ func (h *ContactHandler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	contact, err := h.contactService.Update(r.Context(), id, &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			http.Error(w, "Contact not found", http.StatusNotFound)
+			respondWithError(w, http.StatusNotFound, "Contact not found")
 			return
 		}
 		if strings.Contains(err.Error(), "email already exists") {
-			respondJSON(w, http.StatusConflict, map[string]string{
-				"error":   "Conflict",
-				"message": "A contact with this email already exists",
-			})
+			respondWithError(w, http.StatusConflict, "A contact with this email already exists")
 			return
 		}
-		h.logger.Error("failed to update contact", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to update contact", zap.Error(err), zap.String("contact_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to update contact")
 		return
 	}
 
@@ -261,17 +256,17 @@ func (h *ContactHandler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 func (h *ContactHandler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid contact ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid contact ID: must be a valid UUID")
 		return
 	}
 
 	if err := h.contactService.Delete(r.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			http.Error(w, "Contact not found", http.StatusNotFound)
+			respondWithError(w, http.StatusNotFound, "Contact not found")
 			return
 		}
-		h.logger.Error("failed to delete contact", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to delete contact", zap.Error(err), zap.String("contact_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to delete contact")
 		return
 	}
 
@@ -297,13 +292,13 @@ func (h *ContactHandler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 func (h *ContactHandler) AddRelationship(w http.ResponseWriter, r *http.Request) {
 	contactID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid contact ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid contact ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.AddContactRelationshipRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -316,22 +311,22 @@ func (h *ContactHandler) AddRelationship(w http.ResponseWriter, r *http.Request)
 	if req.EntityType != domain.ContactEntityCustomer &&
 		req.EntityType != domain.ContactEntityDeal &&
 		req.EntityType != domain.ContactEntityProject {
-		http.Error(w, "Invalid entityType. Must be one of: customer, deal, project", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid entityType: must be one of customer, deal, project")
 		return
 	}
 
 	relationship, err := h.contactService.AddRelationship(r.Context(), contactID, &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			http.Error(w, "Contact not found", http.StatusNotFound)
+			respondWithError(w, http.StatusNotFound, "Contact not found")
 			return
 		}
 		if strings.Contains(err.Error(), "already exists") {
-			http.Error(w, "Relationship already exists", http.StatusConflict)
+			respondWithError(w, http.StatusConflict, "Relationship already exists")
 			return
 		}
-		h.logger.Error("failed to add relationship", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to add relationship", zap.Error(err), zap.String("contact_id", contactID.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to add relationship")
 		return
 	}
 
@@ -354,27 +349,27 @@ func (h *ContactHandler) AddRelationship(w http.ResponseWriter, r *http.Request)
 func (h *ContactHandler) RemoveRelationship(w http.ResponseWriter, r *http.Request) {
 	contactID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid contact ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid contact ID: must be a valid UUID")
 		return
 	}
 
 	relationshipID, err := uuid.Parse(chi.URLParam(r, "relationshipId"))
 	if err != nil {
-		http.Error(w, "Invalid relationship ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid relationship ID: must be a valid UUID")
 		return
 	}
 
 	if err := h.contactService.RemoveRelationship(r.Context(), contactID, relationshipID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			http.Error(w, "Relationship not found", http.StatusNotFound)
+			respondWithError(w, http.StatusNotFound, "Relationship not found")
 			return
 		}
 		if strings.Contains(err.Error(), "does not belong") {
-			http.Error(w, "Relationship does not belong to this contact", http.StatusBadRequest)
+			respondWithError(w, http.StatusBadRequest, "Relationship does not belong to this contact")
 			return
 		}
-		h.logger.Error("failed to remove relationship", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to remove relationship", zap.Error(err), zap.String("contact_id", contactID.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to remove relationship")
 		return
 	}
 
@@ -398,7 +393,7 @@ func (h *ContactHandler) GetContactsForEntity(w http.ResponseWriter, r *http.Req
 	// Parse entity ID
 	entityID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid entity ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid entity ID: must be a valid UUID")
 		return
 	}
 
@@ -414,14 +409,14 @@ func (h *ContactHandler) GetContactsForEntity(w http.ResponseWriter, r *http.Req
 	case strings.Contains(path, "/projects/"):
 		entityType = domain.ContactEntityProject
 	default:
-		http.Error(w, "Invalid entity type in URL", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid entity type in URL")
 		return
 	}
 
 	contacts, err := h.contactService.ListByEntity(r.Context(), entityType, entityID)
 	if err != nil {
-		h.logger.Error("failed to get contacts for entity", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to get contacts for entity", zap.Error(err), zap.String("entity_id", entityID.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get contacts for entity")
 		return
 	}
 

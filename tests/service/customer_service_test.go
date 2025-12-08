@@ -45,7 +45,6 @@ func createCustomerTestContext() context.Context {
 	return ctx
 }
 
-
 func TestCustomerService_Create(t *testing.T) {
 	db := setupCustomerServiceTestDB(t)
 	svc := createCustomerService(db)
