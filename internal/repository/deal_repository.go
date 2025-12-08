@@ -678,13 +678,16 @@ func (r *DealRepository) GetConversionRates(ctx context.Context, companyID *doma
 		var totalFromStage int64
 		fromQuery := r.db.WithContext(ctx).
 			Table("deal_stage_history").
+			Joins("JOIN deals ON deal_stage_history.deal_id = deals.id").
 			Select("COUNT(DISTINCT deal_id)").
 			Where("from_stage = ?", conv.from)
 
+		// Apply multi-tenant filter from context
+		fromQuery = ApplyCompanyFilterWithColumn(ctx, fromQuery, "deals.company_id")
+
+		// Apply additional company filter if explicitly provided
 		if companyID != nil {
-			fromQuery = fromQuery.
-				Joins("JOIN deals ON deal_stage_history.deal_id = deals.id").
-				Where("deals.company_id = ?", *companyID)
+			fromQuery = fromQuery.Where("deals.company_id = ?", *companyID)
 		}
 
 		fromQuery.Scan(&totalFromStage)
@@ -693,13 +696,16 @@ func (r *DealRepository) GetConversionRates(ctx context.Context, companyID *doma
 		var transitioned int64
 		toQuery := r.db.WithContext(ctx).
 			Table("deal_stage_history").
+			Joins("JOIN deals ON deal_stage_history.deal_id = deals.id").
 			Select("COUNT(DISTINCT deal_id)").
 			Where("from_stage = ? AND to_stage = ?", conv.from, conv.to)
 
+		// Apply multi-tenant filter from context
+		toQuery = ApplyCompanyFilterWithColumn(ctx, toQuery, "deals.company_id")
+
+		// Apply additional company filter if explicitly provided
 		if companyID != nil {
-			toQuery = toQuery.
-				Joins("JOIN deals ON deal_stage_history.deal_id = deals.id").
-				Where("deals.company_id = ?", *companyID)
+			toQuery = toQuery.Where("deals.company_id = ?", *companyID)
 		}
 
 		toQuery.Scan(&transitioned)

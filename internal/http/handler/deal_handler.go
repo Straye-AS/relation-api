@@ -612,6 +612,7 @@ func (h *DealHandler) GetForecast(w http.ResponseWriter, r *http.Request) {
 // @Param dateFrom query string false "Filter by date from (YYYY-MM-DD)"
 // @Param dateTo query string false "Filter by date to (YYYY-MM-DD)"
 // @Success 200 {object} domain.PipelineAnalyticsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid date range - dateFrom must be before dateTo"
 // @Security BearerAuth
 // @Security ApiKeyAuth
 // @Router /deals/analytics [get]
@@ -637,6 +638,14 @@ func (h *DealHandler) GetPipelineAnalytics(w http.ResponseWriter, r *http.Reques
 	if dateToStr := r.URL.Query().Get("dateTo"); dateToStr != "" {
 		if t, err := time.Parse("2006-01-02", dateToStr); err == nil {
 			filters.DateTo = &t
+		}
+	}
+
+	// Validate date range: dateFrom must be before dateTo
+	if filters.DateFrom != nil && filters.DateTo != nil {
+		if filters.DateFrom.After(*filters.DateTo) {
+			respondWithError(w, http.StatusBadRequest, "Invalid date range: dateFrom must be before dateTo")
+			return
 		}
 	}
 
