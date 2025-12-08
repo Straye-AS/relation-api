@@ -313,6 +313,21 @@ type NotificationDTO struct {
 	EntityType string     `json:"entityType,omitempty"`
 }
 
+// CreateNotificationRequest contains the data needed to create a notification
+type CreateNotificationRequest struct {
+	UserID     uuid.UUID        `json:"userId" validate:"required"`
+	Type       NotificationType `json:"type" validate:"required"`
+	Title      string           `json:"title" validate:"required,max=200"`
+	Message    string           `json:"message" validate:"required,max=500"`
+	EntityID   *uuid.UUID       `json:"entityId,omitempty"`
+	EntityType string           `json:"entityType,omitempty" validate:"max=50"`
+}
+
+// UnreadCountDTO represents the count of unread notifications
+type UnreadCountDTO struct {
+	Count int `json:"count"`
+}
+
 // Dashboard DTOs
 
 type DisciplineStats struct {

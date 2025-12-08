@@ -667,6 +667,19 @@ type File struct {
 	Offer       *Offer     `gorm:"foreignKey:OfferID"`
 }
 
+// NotificationType represents the type of notification
+type NotificationType string
+
+const (
+	NotificationTypeTaskAssigned     NotificationType = "task_assigned"
+	NotificationTypeBudgetAlert      NotificationType = "budget_alert"
+	NotificationTypeDealStageChanged NotificationType = "deal_stage_changed"
+	NotificationTypeOfferAccepted    NotificationType = "offer_accepted"
+	NotificationTypeOfferRejected    NotificationType = "offer_rejected"
+	NotificationTypeActivityReminder NotificationType = "activity_reminder"
+	NotificationTypeProjectUpdate    NotificationType = "project_update"
+)
+
 // Notification represents a user notification
 type Notification struct {
 	BaseModel
