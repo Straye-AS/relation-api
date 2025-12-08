@@ -856,6 +856,32 @@ type CustomerStatsResponse struct {
 	TotalProjectsCount  int64   `json:"totalProjectsCount"`
 }
 
+// Activity Filters for advanced querying
+
+// ActivityFilters provides comprehensive filtering options for activity queries
+type ActivityFilters struct {
+	ActivityType  *ActivityType       `json:"activityType,omitempty"`
+	Status        *ActivityStatus     `json:"status,omitempty"`
+	TargetType    *ActivityTargetType `json:"targetType,omitempty"`
+	TargetID      *uuid.UUID          `json:"targetId,omitempty"`
+	AssignedToID  *string             `json:"assignedToId,omitempty"`
+	CreatorID     *string             `json:"creatorId,omitempty"`
+	DueDateFrom   *time.Time          `json:"dueDateFrom,omitempty"`
+	DueDateTo     *time.Time          `json:"dueDateTo,omitempty"`
+	ScheduledFrom *time.Time          `json:"scheduledFrom,omitempty"`
+	ScheduledTo   *time.Time          `json:"scheduledTo,omitempty"`
+	IsPrivate     *bool               `json:"isPrivate,omitempty"`
+	Priority      *int                `json:"priority,omitempty"`
+}
+
+// ActivityStatusCounts holds counts grouped by activity status for dashboard statistics
+type ActivityStatusCounts struct {
+	Planned    int `json:"planned"`
+	InProgress int `json:"inProgress"`
+	Completed  int `json:"completed"`
+	Cancelled  int `json:"cancelled"`
+}
+
 // CustomerWithStatsResponse extends CustomerDTO with statistics
 type CustomerWithStatsResponse struct {
 	CustomerDTO
