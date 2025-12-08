@@ -178,6 +178,91 @@ func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID)
 	return &projectDTO, dimensionDTOs, activityDTOs, nil
 }
 
+// GetByIDWithDetails retrieves a project with full details including budget summary
+func (s *ProjectService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) (*domain.ProjectWithDetailsDTO, error) {
+	project, _, activities, err := s.projectRepo.GetByIDWithRelations(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project with relations: %w", err)
+	}
+
+	// Get budget summary
+	budgetSummary, err := s.GetBudgetSummary(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to get budget summary", zap.Error(err))
+	}
+
+	dto := mapper.ToProjectWithDetailsDTO(project, budgetSummary, activities, project.Offer, project.Deal)
+	return &dto, nil
+}
+
+// UpdateStatusAndHealth updates project status with optional health override
+func (s *ProjectService) UpdateStatusAndHealth(ctx context.Context, id uuid.UUID, req *domain.UpdateProjectStatusRequest) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Check permissions - must be manager or admin
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	// Validate status transition
+	if !s.isValidStatusTransition(project.Status, req.Status) {
+		return nil, fmt.Errorf("%w: cannot transition from %s to %s",
+			ErrInvalidStatusTransition, project.Status, req.Status)
+	}
+
+	oldStatus := project.Status
+	project.Status = req.Status
+
+	// Handle health update
+	if req.Health != nil {
+		project.Health = req.Health
+	}
+
+	// Handle completion percent update
+	if req.CompletionPercent != nil {
+		if *req.CompletionPercent < 0 || *req.CompletionPercent > 100 {
+			return nil, ErrInvalidCompletionPercent
+		}
+		project.CompletionPercent = req.CompletionPercent
+	}
+
+	// Auto-update completion percent on completion
+	if req.Status == domain.ProjectStatusCompleted {
+		hundred := 100.0
+		project.CompletionPercent = &hundred
+	}
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project status: %w", err)
+	}
+
+	// Recalculate health if not explicitly set
+	if req.Health == nil {
+		if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+			s.logger.Warn("failed to recalculate project health", zap.Error(err))
+		}
+	}
+
+	// Reload project
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	// Log activity
+	s.logActivity(ctx, project.ID, "Project status changed",
+		fmt.Sprintf("Project '%s' status changed from %s to %s", project.Name, oldStatus, req.Status))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
 // Update updates an existing project with permission check
 func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.UpdateProjectRequest) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)

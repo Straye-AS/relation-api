@@ -924,3 +924,21 @@ type UpdateActivityRequest struct {
 type CompleteActivityRequest struct {
 	Outcome string `json:"outcome,omitempty" validate:"max=500"`
 }
+
+// Project Request DTOs
+
+// UpdateProjectStatusRequest contains data for updating project status and health
+type UpdateProjectStatusRequest struct {
+	Status            ProjectStatus  `json:"status" validate:"required"`
+	Health            *ProjectHealth `json:"health,omitempty"`
+	CompletionPercent *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
+}
+
+// ProjectWithDetailsDTO includes project data with related entities and budget summary
+type ProjectWithDetailsDTO struct {
+	ProjectDTO
+	BudgetSummary    *BudgetSummaryDTO `json:"budgetSummary,omitempty"`
+	RecentActivities []ActivityDTO     `json:"recentActivities,omitempty"`
+	Offer            *OfferDTO         `json:"offer,omitempty"`
+	Deal             *DealDTO          `json:"deal,omitempty"`
+}

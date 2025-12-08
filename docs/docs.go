@@ -4474,6 +4474,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get paginated list of projects with optional filters",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4492,20 +4496,45 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "Page size",
+                        "description": "Items per page (max 200)",
                         "name": "pageSize",
                         "in": "query"
                     },
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Filter by customer ID",
                         "name": "customerId",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "planning",
+                            "active",
+                            "on_hold",
+                            "completed",
+                            "cancelled"
+                        ],
                         "type": "string",
                         "description": "Filter by status",
                         "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "on_track",
+                            "at_risk",
+                            "over_budget"
+                        ],
+                        "type": "string",
+                        "description": "Filter by health",
+                        "name": "health",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by manager ID",
+                        "name": "managerId",
                         "in": "query"
                     }
                 ],
@@ -4513,7 +4542,40 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.PaginatedResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.ProjectDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4527,6 +4589,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Create a new project. Requires manager or admin permissions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4554,6 +4617,30 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/domain.ProjectDTO"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
                     }
                 }
             }
@@ -4568,16 +4655,21 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get a project with full details including budget summary and recent activities",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Projects"
                 ],
-                "summary": "Get project",
+                "summary": "Get project by ID",
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Project ID",
                         "name": "id",
                         "in": "path",
@@ -4588,7 +4680,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
+                            "$ref": "#/definitions/domain.ProjectWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4602,6 +4718,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Update an existing project. Requires manager or admin permissions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4615,6 +4732,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Project ID",
                         "name": "id",
                         "in": "path",
@@ -4636,6 +4754,102 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/domain.ProjectDTO"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a project. Requires manager or admin permissions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Delete project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
                     }
                 }
             }
@@ -4650,6 +4864,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get recent activities for a project",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4660,12 +4878,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Project ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
+                        "maximum": 200,
                         "type": "integer",
                         "default": 50,
                         "description": "Limit",
@@ -4682,6 +4902,30 @@ const docTemplate = `{
                                 "$ref": "#/definitions/domain.ActivityDTO"
                             }
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
                     }
                 }
             }
@@ -4696,6 +4940,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get budget information for a project including spent amount and remaining budget",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4706,6 +4954,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "format": "uuid",
                         "description": "Project ID",
                         "name": "id",
                         "in": "path",
@@ -4717,6 +4966,110 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.ProjectBudgetDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update project status with optional health override. Requires manager or admin permissions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid status transition",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4857,6 +5210,29 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "domain.APIError": {
+            "type": "object",
+            "properties": {
+                "detail": {
+                    "type": "string"
+                },
+                "errors": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.AcceptOfferRequest": {
             "type": "object",
             "properties": {
@@ -6946,6 +7322,105 @@ const docTemplate = `{
                 "ProjectStatusCancelled"
             ]
         },
+        "domain.ProjectWithDetailsDTO": {
+            "type": "object",
+            "properties": {
+                "budget": {
+                    "type": "number"
+                },
+                "budgetSummary": {
+                    "$ref": "#/definitions/domain.BudgetSummaryDTO"
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "completionPercent": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "customerId": {
+                    "type": "string"
+                },
+                "customerName": {
+                    "type": "string"
+                },
+                "deal": {
+                    "$ref": "#/definitions/domain.DealDTO"
+                },
+                "dealId": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "endDate": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "estimatedCompletionDate": {
+                    "type": "string"
+                },
+                "hasDetailedBudget": {
+                    "type": "boolean"
+                },
+                "health": {
+                    "$ref": "#/definitions/domain.ProjectHealth"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "managerId": {
+                    "type": "string"
+                },
+                "managerName": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "offer": {
+                    "$ref": "#/definitions/domain.OfferDTO"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "projectNumber": {
+                    "type": "string"
+                },
+                "recentActivities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ActivityDTO"
+                    }
+                },
+                "spent": {
+                    "type": "number"
+                },
+                "startDate": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.ProjectStatus"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
         "domain.RejectOfferRequest": {
             "type": "object",
             "properties": {
@@ -7417,6 +7892,25 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.UpdateProjectStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "completionPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "health": {
+                    "$ref": "#/definitions/domain.ProjectHealth"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.ProjectStatus"
                 }
             }
         },
