@@ -781,8 +781,8 @@ func TestProjectHandler_GetActivities(t *testing.T) {
 	})
 }
 
-// Helper to create a test offer with optional budget dimensions
-func createTestOffer(t *testing.T, db *gorm.DB, customer *domain.Customer, title string, phase domain.OfferPhase, value float64, userID string) *domain.Offer {
+// Helper to create a test offer for project tests with optional budget dimensions
+func createTestOfferForProject(t *testing.T, db *gorm.DB, customer *domain.Customer, title string, phase domain.OfferPhase, value float64, userID string) *domain.Offer {
 	offer := &domain.Offer{
 		Title:               title,
 		CustomerID:          customer.ID,
@@ -830,7 +830,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 
 	t.Run("inherit budget from won offer successfully", func(t *testing.T) {
 		// Create a won offer with budget dimensions
-		offer := createTestOffer(t, db, customer, "Won Offer", domain.OfferPhaseWon, 150000, userCtx.UserID.String())
+		offer := createTestOfferForProject(t, db, customer, "Won Offer", domain.OfferPhaseWon, 150000, userCtx.UserID.String())
 		createTestBudgetDimensions(t, db, offer.ID, 3)
 
 		// Create a project to inherit into
@@ -868,7 +868,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 
 	t.Run("inherit budget from won offer without dimensions", func(t *testing.T) {
 		// Create a won offer without budget dimensions
-		offer := createTestOffer(t, db, customer, "Won Offer No Dims", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
+		offer := createTestOfferForProject(t, db, customer, "Won Offer No Dims", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
 
 		// Create a project to inherit into
 		project := createTestProject(t, db, customer, "Project No Dims", domain.ProjectStatusPlanning, userCtx.UserID.String())
@@ -902,7 +902,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 
 	t.Run("inherit budget fails for non-won offer", func(t *testing.T) {
 		// Create an offer in draft phase (not won)
-		offer := createTestOffer(t, db, customer, "Draft Offer", domain.OfferPhaseDraft, 50000, userCtx.UserID.String())
+		offer := createTestOfferForProject(t, db, customer, "Draft Offer", domain.OfferPhaseDraft, 50000, userCtx.UserID.String())
 
 		project := createTestProject(t, db, customer, "Project Draft Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
 
@@ -949,7 +949,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 	})
 
 	t.Run("inherit budget fails for non-existent project", func(t *testing.T) {
-		offer := createTestOffer(t, db, customer, "Won Offer 2", domain.OfferPhaseWon, 75000, userCtx.UserID.String())
+		offer := createTestOfferForProject(t, db, customer, "Won Offer 2", domain.OfferPhaseWon, 75000, userCtx.UserID.String())
 		nonExistentProjectID := uuid.New()
 
 		reqBody := domain.InheritBudgetRequest{
