@@ -426,22 +426,28 @@ func ToFileDTO(file *domain.File) domain.FileDTO {
 // ToActivityDTO converts Activity to ActivityDTO
 func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
 	dto := domain.ActivityDTO{
-		ID:              activity.ID,
-		TargetType:      activity.TargetType,
-		TargetID:        activity.TargetID,
-		Title:           activity.Title,
-		Body:            activity.Body,
-		OccurredAt:      activity.OccurredAt.Format("2006-01-02T15:04:05Z"),
-		CreatorName:     activity.CreatorName,
-		CreatedAt:       activity.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		ActivityType:    activity.ActivityType,
-		Status:          activity.Status,
-		DurationMinutes: activity.DurationMinutes,
-		Priority:        activity.Priority,
-		IsPrivate:       activity.IsPrivate,
-		CreatorID:       activity.CreatorID,
-		AssignedToID:    activity.AssignedToID,
-		CompanyID:       activity.CompanyID,
+		ID:               activity.ID,
+		TargetType:       activity.TargetType,
+		TargetID:         activity.TargetID,
+		Title:            activity.Title,
+		Body:             activity.Body,
+		OccurredAt:       activity.OccurredAt.Format("2006-01-02T15:04:05Z"),
+		CreatorName:      activity.CreatorName,
+		CreatedAt:        activity.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		ActivityType:     activity.ActivityType,
+		Status:           activity.Status,
+		DurationMinutes:  activity.DurationMinutes,
+		Priority:         activity.Priority,
+		IsPrivate:        activity.IsPrivate,
+		CreatorID:        activity.CreatorID,
+		AssignedToID:     activity.AssignedToID,
+		CompanyID:        activity.CompanyID,
+		ParentActivityID: activity.ParentActivityID,
+	}
+
+	// Convert pq.StringArray to []string for attendees
+	if len(activity.Attendees) > 0 {
+		dto.Attendees = []string(activity.Attendees)
 	}
 
 	if activity.ScheduledAt != nil {

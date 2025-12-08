@@ -569,6 +569,263 @@ func (h *ActivityHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// AddAttendee godoc
+// @Summary Add attendee to meeting
+// @Description Add a user as an attendee to a meeting activity
+// @Tags Activities
+// @Accept json
+// @Produce json
+// @Param id path string true "Activity ID" format(uuid)
+// @Param body body domain.AddAttendeeRequest true "Attendee user ID"
+// @Success 200 {object} domain.ActivityDTO
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 403 {object} domain.ErrorResponse
+// @Failure 404 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /activities/{id}/attendees [post]
+func (h *ActivityHandler) AddAttendee(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid activity ID format",
+		})
+		return
+	}
+
+	var req domain.AddAttendeeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	// Validate request
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	activity, err := h.activityService.AddAttendee(r.Context(), id, req.UserID)
+	if err != nil {
+		if errors.Is(err, service.ErrUserContextRequired) {
+			respondJSON(w, http.StatusUnauthorized, domain.ErrorResponse{
+				Error:   "Unauthorized",
+				Message: "Authentication required",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityNotFound) {
+			respondJSON(w, http.StatusNotFound, domain.ErrorResponse{
+				Error:   "Not Found",
+				Message: "Activity not found",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityForbidden) {
+			respondJSON(w, http.StatusForbidden, domain.ErrorResponse{
+				Error:   "Forbidden",
+				Message: "You do not have permission to modify this activity",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityNotMeeting) {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: "Attendees can only be added to meeting type activities",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrAttendeeAlreadyAdded) {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: "User is already an attendee",
+			})
+			return
+		}
+		h.logger.Error("failed to add attendee", zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to add attendee",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, activity)
+}
+
+// RemoveAttendee godoc
+// @Summary Remove attendee from meeting
+// @Description Remove a user from the attendees list of a meeting activity
+// @Tags Activities
+// @Accept json
+// @Produce json
+// @Param id path string true "Activity ID" format(uuid)
+// @Param userId path string true "User ID to remove"
+// @Success 200 {object} domain.ActivityDTO
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 403 {object} domain.ErrorResponse
+// @Failure 404 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /activities/{id}/attendees/{userId} [delete]
+func (h *ActivityHandler) RemoveAttendee(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid activity ID format",
+		})
+		return
+	}
+
+	userID := chi.URLParam(r, "userId")
+	if userID == "" {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "User ID is required",
+		})
+		return
+	}
+
+	activity, err := h.activityService.RemoveAttendee(r.Context(), id, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrUserContextRequired) {
+			respondJSON(w, http.StatusUnauthorized, domain.ErrorResponse{
+				Error:   "Unauthorized",
+				Message: "Authentication required",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityNotFound) {
+			respondJSON(w, http.StatusNotFound, domain.ErrorResponse{
+				Error:   "Not Found",
+				Message: "Activity not found",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityForbidden) {
+			respondJSON(w, http.StatusForbidden, domain.ErrorResponse{
+				Error:   "Forbidden",
+				Message: "You do not have permission to modify this activity",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityNotMeeting) {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: "Attendees can only be managed for meeting type activities",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrAttendeeNotFound) {
+			respondJSON(w, http.StatusNotFound, domain.ErrorResponse{
+				Error:   "Not Found",
+				Message: "Attendee not found",
+			})
+			return
+		}
+		h.logger.Error("failed to remove attendee", zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to remove attendee",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, activity)
+}
+
+// CreateFollowUp godoc
+// @Summary Create follow-up task
+// @Description Create a follow-up task from a completed activity
+// @Tags Activities
+// @Accept json
+// @Produce json
+// @Param id path string true "Activity ID" format(uuid)
+// @Param body body domain.CreateFollowUpRequest true "Follow-up task data"
+// @Success 201 {object} domain.ActivityDTO
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 403 {object} domain.ErrorResponse
+// @Failure 404 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /activities/{id}/follow-up [post]
+func (h *ActivityHandler) CreateFollowUp(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid activity ID format",
+		})
+		return
+	}
+
+	var req domain.CreateFollowUpRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	// Validate request
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	activity, err := h.activityService.CreateFollowUp(r.Context(), id, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrUserContextRequired) {
+			respondJSON(w, http.StatusUnauthorized, domain.ErrorResponse{
+				Error:   "Unauthorized",
+				Message: "Authentication required",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityNotFound) {
+			respondJSON(w, http.StatusNotFound, domain.ErrorResponse{
+				Error:   "Not Found",
+				Message: "Activity not found",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrActivityForbidden) {
+			respondJSON(w, http.StatusForbidden, domain.ErrorResponse{
+				Error:   "Forbidden",
+				Message: "You do not have permission to access this activity",
+			})
+			return
+		}
+		if errors.Is(err, service.ErrFollowUpRequiresCompletedParent) {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: "Follow-up can only be created from a completed activity",
+			})
+			return
+		}
+		h.logger.Error("failed to create follow-up", zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to create follow-up",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, activity)
+}
+
 // Complete godoc
 // @Summary Complete activity
 // @Description Mark an activity as completed with an optional outcome

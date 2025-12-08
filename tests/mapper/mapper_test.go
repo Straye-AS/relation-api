@@ -168,3 +168,63 @@ func TestToActivityDTO(t *testing.T) {
 	assert.Equal(t, domain.ActivityTypeNote, dto.ActivityType)
 	assert.Equal(t, domain.ActivityStatusCompleted, dto.Status)
 }
+
+func TestToActivityDTO_WithAttendees(t *testing.T) {
+	targetID := uuid.New()
+	parentActivityID := uuid.New()
+	occurredAt := time.Now()
+	attendee1 := uuid.New().String()
+	attendee2 := uuid.New().String()
+
+	activity := &domain.Activity{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+		},
+		TargetType:       domain.ActivityTargetCustomer,
+		TargetID:         targetID,
+		Title:            "Team Meeting",
+		Body:             "Weekly sync meeting",
+		OccurredAt:       occurredAt,
+		CreatorName:      "Test User",
+		ActivityType:     domain.ActivityTypeMeeting,
+		Status:           domain.ActivityStatusPlanned,
+		Priority:         2,
+		IsPrivate:        false,
+		Attendees:        []string{attendee1, attendee2},
+		ParentActivityID: &parentActivityID,
+	}
+
+	dto := mapper.ToActivityDTO(activity)
+
+	assert.Equal(t, activity.ID, dto.ID)
+	assert.Equal(t, domain.ActivityTypeMeeting, dto.ActivityType)
+	assert.Equal(t, "Team Meeting", dto.Title)
+	assert.Len(t, dto.Attendees, 2)
+	assert.Contains(t, dto.Attendees, attendee1)
+	assert.Contains(t, dto.Attendees, attendee2)
+	assert.Equal(t, &parentActivityID, dto.ParentActivityID)
+}
+
+func TestToActivityDTO_EmptyAttendees(t *testing.T) {
+	targetID := uuid.New()
+	occurredAt := time.Now()
+
+	activity := &domain.Activity{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+		},
+		TargetType:   domain.ActivityTargetCustomer,
+		TargetID:     targetID,
+		Title:        "Task",
+		OccurredAt:   occurredAt,
+		ActivityType: domain.ActivityTypeTask,
+		Status:       domain.ActivityStatusPlanned,
+	}
+
+	dto := mapper.ToActivityDTO(activity)
+
+	assert.Empty(t, dto.Attendees)
+	assert.Nil(t, dto.ParentActivityID)
+}

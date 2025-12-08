@@ -679,3 +679,386 @@ func TestActivityService_PrivateActivityAccess(t *testing.T) {
 		assert.NotNil(t, activity)
 	})
 }
+
+func TestActivityService_AddAttendee(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+
+	t.Run("add attendee to meeting", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Team Meeting",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		attendeeID := uuid.New().String()
+		activity, err := svc.AddAttendee(ctx, meeting.ID, attendeeID)
+		assert.NoError(t, err)
+		assert.NotNil(t, activity)
+		assert.Contains(t, activity.Attendees, attendeeID)
+	})
+
+	t.Run("cannot add attendee to non-meeting activity", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Task Activity",
+			ActivityType: domain.ActivityTypeTask,
+		}
+		task, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.AddAttendee(ctx, task.ID, uuid.New().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrActivityNotMeeting)
+	})
+
+	t.Run("cannot add same attendee twice", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Another Meeting",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		attendeeID := uuid.New().String()
+		_, err = svc.AddAttendee(ctx, meeting.ID, attendeeID)
+		require.NoError(t, err)
+
+		_, err = svc.AddAttendee(ctx, meeting.ID, attendeeID)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrAttendeeAlreadyAdded)
+	})
+
+	t.Run("add attendee to non-existent activity", func(t *testing.T) {
+		_, err := svc.AddAttendee(ctx, uuid.New(), uuid.New().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrActivityNotFound)
+	})
+}
+
+func TestActivityService_RemoveAttendee(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+
+	t.Run("remove attendee from meeting", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		attendeeID := uuid.New().String()
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Meeting with Attendee",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+			Attendees:    []string{attendeeID},
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		require.Contains(t, meeting.Attendees, attendeeID)
+
+		activity, err := svc.RemoveAttendee(ctx, meeting.ID, attendeeID)
+		assert.NoError(t, err)
+		assert.NotNil(t, activity)
+		assert.NotContains(t, activity.Attendees, attendeeID)
+	})
+
+	t.Run("remove non-existent attendee", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Meeting without Attendees",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.RemoveAttendee(ctx, meeting.ID, uuid.New().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrAttendeeNotFound)
+	})
+
+	t.Run("cannot remove attendee from non-meeting activity", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Note Activity",
+			ActivityType: domain.ActivityTypeNote,
+		}
+		note, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.RemoveAttendee(ctx, note.ID, uuid.New().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrActivityNotMeeting)
+	})
+}
+
+func TestActivityService_CreateFollowUp(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+	userCtx, _ := auth.FromContext(ctx)
+
+	t.Run("create follow-up from completed activity", func(t *testing.T) {
+		// First create and complete a parent activity
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Parent Task",
+			ActivityType: domain.ActivityTypeTask,
+			Priority:     3,
+		}
+		parent, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		// Complete the parent
+		parent, err = svc.Complete(ctx, parent.ID, "Task completed successfully")
+		require.NoError(t, err)
+		require.Equal(t, domain.ActivityStatusCompleted, parent.Status)
+
+		// Create follow-up
+		followUpReq := &domain.CreateFollowUpRequest{
+			Title:       "Follow-up Task",
+			Description: "Need to verify the work",
+		}
+		followUp, err := svc.CreateFollowUp(ctx, parent.ID, followUpReq)
+		assert.NoError(t, err)
+		assert.NotNil(t, followUp)
+		assert.Equal(t, "Follow-up Task", followUp.Title)
+		assert.Equal(t, domain.ActivityTypeTask, followUp.ActivityType)
+		assert.Equal(t, domain.ActivityStatusPlanned, followUp.Status)
+		assert.Equal(t, &parent.ID, followUp.ParentActivityID)
+		assert.Equal(t, parent.Priority, followUp.Priority) // Inherited priority
+		assert.Contains(t, followUp.Body, "Follow-up from: Parent Task")
+	})
+
+	t.Run("follow-up inherits target from parent", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Customer Task",
+			ActivityType: domain.ActivityTypeTask,
+		}
+		parent, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.Complete(ctx, parent.ID, "")
+		require.NoError(t, err)
+
+		followUp, err := svc.CreateFollowUp(ctx, parent.ID, &domain.CreateFollowUpRequest{
+			Title: "Follow-up for Customer",
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, domain.ActivityTargetCustomer, followUp.TargetType)
+		assert.Equal(t, customer.ID, followUp.TargetID)
+	})
+
+	t.Run("follow-up with custom assignee", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Team Task",
+			ActivityType: domain.ActivityTypeTask,
+		}
+		parent, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.Complete(ctx, parent.ID, "")
+		require.NoError(t, err)
+
+		assigneeID := uuid.New().String()
+		followUp, err := svc.CreateFollowUp(ctx, parent.ID, &domain.CreateFollowUpRequest{
+			Title:        "Assigned Follow-up",
+			AssignedToID: &assigneeID,
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, assigneeID, followUp.AssignedToID)
+	})
+
+	t.Run("follow-up defaults assignee to current user", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "My Task",
+			ActivityType: domain.ActivityTypeTask,
+		}
+		parent, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.Complete(ctx, parent.ID, "")
+		require.NoError(t, err)
+
+		followUp, err := svc.CreateFollowUp(ctx, parent.ID, &domain.CreateFollowUpRequest{
+			Title: "Self-Assigned Follow-up",
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, userCtx.UserID.String(), followUp.AssignedToID)
+	})
+
+	t.Run("cannot create follow-up from incomplete activity", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Incomplete Task",
+			ActivityType: domain.ActivityTypeTask,
+			Status:       domain.ActivityStatusPlanned,
+		}
+		parent, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.CreateFollowUp(ctx, parent.ID, &domain.CreateFollowUpRequest{
+			Title: "Should Fail",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrFollowUpRequiresCompletedParent)
+	})
+
+	t.Run("follow-up from non-existent activity", func(t *testing.T) {
+		_, err := svc.CreateFollowUp(ctx, uuid.New(), &domain.CreateFollowUpRequest{
+			Title: "Should Fail",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrActivityNotFound)
+	})
+
+	t.Run("follow-up with due date", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Task with Follow-up Due Date",
+			ActivityType: domain.ActivityTypeTask,
+		}
+		parent, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		_, err = svc.Complete(ctx, parent.ID, "")
+		require.NoError(t, err)
+
+		dueDate := time.Now().Add(48 * time.Hour)
+		followUp, err := svc.CreateFollowUp(ctx, parent.ID, &domain.CreateFollowUpRequest{
+			Title:   "Follow-up with Due Date",
+			DueDate: &dueDate,
+		})
+		assert.NoError(t, err)
+		assert.NotEmpty(t, followUp.DueDate)
+	})
+}
+
+func TestActivityService_CreateMeetingWithAttendees(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+
+	t.Run("create meeting with attendees", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		attendee1 := uuid.New().String()
+		attendee2 := uuid.New().String()
+
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Team Sync",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+			Attendees:    []string{attendee1, attendee2},
+		}
+		meeting, err := svc.Create(ctx, req)
+		assert.NoError(t, err)
+		assert.NotNil(t, meeting)
+		assert.Len(t, meeting.Attendees, 2)
+		assert.Contains(t, meeting.Attendees, attendee1)
+		assert.Contains(t, meeting.Attendees, attendee2)
+	})
+
+	t.Run("attendees ignored for non-meeting activity", func(t *testing.T) {
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Task with Attendees",
+			ActivityType: domain.ActivityTypeTask,
+			Attendees:    []string{uuid.New().String()},
+		}
+		task, err := svc.Create(ctx, req)
+		assert.NoError(t, err)
+		assert.Empty(t, task.Attendees)
+	})
+}
+
+func TestActivityService_UpdateMeetingAttendees(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+
+	t.Run("update meeting attendees", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		initialAttendee := uuid.New().String()
+
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Meeting to Update",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+			Attendees:    []string{initialAttendee},
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		require.Len(t, meeting.Attendees, 1)
+
+		// Update with new attendees
+		newAttendee1 := uuid.New().String()
+		newAttendee2 := uuid.New().String()
+		updateReq := &domain.UpdateActivityRequest{
+			Title:     "Updated Meeting",
+			Attendees: []string{newAttendee1, newAttendee2},
+		}
+		updated, err := svc.Update(ctx, meeting.ID, updateReq)
+		assert.NoError(t, err)
+		assert.Len(t, updated.Attendees, 2)
+		assert.Contains(t, updated.Attendees, newAttendee1)
+		assert.Contains(t, updated.Attendees, newAttendee2)
+		assert.NotContains(t, updated.Attendees, initialAttendee)
+	})
+
+	t.Run("clear meeting attendees", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Meeting to Clear",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+			Attendees:    []string{uuid.New().String()},
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		require.Len(t, meeting.Attendees, 1)
+
+		// Update with empty attendees
+		updateReq := &domain.UpdateActivityRequest{
+			Title:     "Cleared Meeting",
+			Attendees: []string{},
+		}
+		updated, err := svc.Update(ctx, meeting.ID, updateReq)
+		assert.NoError(t, err)
+		assert.Empty(t, updated.Attendees)
+	})
+}

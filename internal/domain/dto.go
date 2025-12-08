@@ -769,25 +769,27 @@ type ProjectBudgetDTO struct {
 }
 
 type ActivityDTO struct {
-	ID              uuid.UUID          `json:"id"`
-	TargetType      ActivityTargetType `json:"targetType"`
-	TargetID        uuid.UUID          `json:"targetId"`
-	Title           string             `json:"title"`
-	Body            string             `json:"body,omitempty"`
-	OccurredAt      string             `json:"occurredAt"`
-	CreatorName     string             `json:"creatorName,omitempty"`
-	CreatedAt       string             `json:"createdAt"`
-	ActivityType    ActivityType       `json:"activityType"`
-	Status          ActivityStatus     `json:"status"`
-	ScheduledAt     string             `json:"scheduledAt,omitempty"`
-	DueDate         string             `json:"dueDate,omitempty"`
-	CompletedAt     string             `json:"completedAt,omitempty"`
-	DurationMinutes *int               `json:"durationMinutes,omitempty"`
-	Priority        int                `json:"priority"`
-	IsPrivate       bool               `json:"isPrivate"`
-	CreatorID       string             `json:"creatorId,omitempty"`
-	AssignedToID    string             `json:"assignedToId,omitempty"`
-	CompanyID       *CompanyID         `json:"companyId,omitempty"`
+	ID               uuid.UUID          `json:"id"`
+	TargetType       ActivityTargetType `json:"targetType"`
+	TargetID         uuid.UUID          `json:"targetId"`
+	Title            string             `json:"title"`
+	Body             string             `json:"body,omitempty"`
+	OccurredAt       string             `json:"occurredAt"`
+	CreatorName      string             `json:"creatorName,omitempty"`
+	CreatedAt        string             `json:"createdAt"`
+	ActivityType     ActivityType       `json:"activityType"`
+	Status           ActivityStatus     `json:"status"`
+	ScheduledAt      string             `json:"scheduledAt,omitempty"`
+	DueDate          string             `json:"dueDate,omitempty"`
+	CompletedAt      string             `json:"completedAt,omitempty"`
+	DurationMinutes  *int               `json:"durationMinutes,omitempty"`
+	Priority         int                `json:"priority"`
+	IsPrivate        bool               `json:"isPrivate"`
+	CreatorID        string             `json:"creatorId,omitempty"`
+	AssignedToID     string             `json:"assignedToId,omitempty"`
+	CompanyID        *CompanyID         `json:"companyId,omitempty"`
+	Attendees        []string           `json:"attendees,omitempty"`
+	ParentActivityID *uuid.UUID         `json:"parentActivityId,omitempty"`
 }
 
 // UserRole DTOs
@@ -912,6 +914,7 @@ type CreateActivityRequest struct {
 	IsPrivate       bool               `json:"isPrivate,omitempty"`
 	AssignedToID    string             `json:"assignedToId,omitempty" validate:"max=100"`
 	CompanyID       *CompanyID         `json:"companyId,omitempty"`
+	Attendees       []string           `json:"attendees,omitempty"`
 }
 
 // UpdateActivityRequest contains the data for updating an existing activity
@@ -925,11 +928,25 @@ type UpdateActivityRequest struct {
 	Priority        int            `json:"priority,omitempty" validate:"min=0,max=5"`
 	IsPrivate       bool           `json:"isPrivate,omitempty"`
 	AssignedToID    string         `json:"assignedToId,omitempty" validate:"max=100"`
+	Attendees       []string       `json:"attendees,omitempty"`
 }
 
 // CompleteActivityRequest contains optional outcome when completing an activity
 type CompleteActivityRequest struct {
 	Outcome string `json:"outcome,omitempty" validate:"max=500"`
+}
+
+// AddAttendeeRequest contains the user ID to add as an attendee
+type AddAttendeeRequest struct {
+	UserID string `json:"userId" validate:"required,max=100"`
+}
+
+// CreateFollowUpRequest contains the data for creating a follow-up task from a completed activity
+type CreateFollowUpRequest struct {
+	Title        string     `json:"title" validate:"required,max=200"`
+	Description  string     `json:"description,omitempty" validate:"max=2000"`
+	DueDate      *time.Time `json:"dueDate,omitempty"`
+	AssignedToID *string    `json:"assignedToId,omitempty" validate:"omitempty,max=100"`
 }
 
 // Project Request DTOs

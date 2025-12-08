@@ -531,24 +531,27 @@ func (as ActivityStatus) IsValid() bool {
 // Activity represents an event log entry for any entity
 type Activity struct {
 	BaseModel
-	TargetType      ActivityTargetType `gorm:"type:varchar(50);not null;index;column:target_type"`
-	TargetID        uuid.UUID          `gorm:"type:uuid;not null;index;column:target_id"`
-	Title           string             `gorm:"type:varchar(200);not null"`
-	Body            string             `gorm:"type:varchar(2000)"`
-	OccurredAt      time.Time          `gorm:"not null;default:CURRENT_TIMESTAMP;index;column:occurred_at"`
-	CreatorName     string             `gorm:"type:varchar(200);column:creator_name"`
-	ActivityType    ActivityType       `gorm:"type:activity_type;not null;default:'note';column:activity_type"`
-	Status          ActivityStatus     `gorm:"type:activity_status;not null;default:'completed'"`
-	ScheduledAt     *time.Time         `gorm:"column:scheduled_at"`
-	DueDate         *time.Time         `gorm:"type:date;column:due_date"`
-	CompletedAt     *time.Time         `gorm:"column:completed_at"`
-	DurationMinutes *int               `gorm:"column:duration_minutes"`
-	Priority        int                `gorm:"default:0"`
-	IsPrivate       bool               `gorm:"not null;default:false;column:is_private"`
-	CreatorID       string             `gorm:"type:varchar(100);column:creator_id"`
-	AssignedToID    string             `gorm:"type:varchar(100);column:assigned_to_id"`
-	CompanyID       *CompanyID         `gorm:"type:varchar(50);column:company_id"`
-	Company         *Company           `gorm:"foreignKey:CompanyID"`
+	TargetType       ActivityTargetType `gorm:"type:varchar(50);not null;index;column:target_type"`
+	TargetID         uuid.UUID          `gorm:"type:uuid;not null;index;column:target_id"`
+	Title            string             `gorm:"type:varchar(200);not null"`
+	Body             string             `gorm:"type:varchar(2000)"`
+	OccurredAt       time.Time          `gorm:"not null;default:CURRENT_TIMESTAMP;index;column:occurred_at"`
+	CreatorName      string             `gorm:"type:varchar(200);column:creator_name"`
+	ActivityType     ActivityType       `gorm:"type:activity_type;not null;default:'note';column:activity_type"`
+	Status           ActivityStatus     `gorm:"type:activity_status;not null;default:'completed'"`
+	ScheduledAt      *time.Time         `gorm:"column:scheduled_at"`
+	DueDate          *time.Time         `gorm:"type:date;column:due_date"`
+	CompletedAt      *time.Time         `gorm:"column:completed_at"`
+	DurationMinutes  *int               `gorm:"column:duration_minutes"`
+	Priority         int                `gorm:"default:0"`
+	IsPrivate        bool               `gorm:"not null;default:false;column:is_private"`
+	CreatorID        string             `gorm:"type:varchar(100);column:creator_id"`
+	AssignedToID     string             `gorm:"type:varchar(100);column:assigned_to_id"`
+	CompanyID        *CompanyID         `gorm:"type:varchar(50);column:company_id"`
+	Company          *Company           `gorm:"foreignKey:CompanyID"`
+	Attendees        pq.StringArray     `gorm:"type:text[];column:attendees"`
+	ParentActivityID *uuid.UUID         `gorm:"type:uuid;column:parent_activity_id"`
+	ParentActivity   *Activity          `gorm:"foreignKey:ParentActivityID"`
 }
 
 // UserRoleType represents a role a user can have
