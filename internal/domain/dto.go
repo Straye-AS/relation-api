@@ -936,7 +936,7 @@ type UpdateProjectStatusRequest struct {
 
 // InheritBudgetRequest for POST /projects/{id}/inherit-budget
 type InheritBudgetRequest struct {
-	OfferID uuid.UUID `json:"offerId" validate:"required"`
+	OfferID uuid.UUID `json:"offerId" validate:"required" example:"550e8400-e29b-41d4-a716-446655440000" format:"uuid"`
 }
 
 // InheritBudgetResponse contains the result of budget inheritance from an offer

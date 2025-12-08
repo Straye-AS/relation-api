@@ -454,6 +454,11 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
+	// Check permissions - must be manager or admin
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
 	// Verify offer exists and is won
 	if s.offerRepo == nil {
 		return nil, fmt.Errorf("offer repository not available")
@@ -494,7 +499,10 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 		}
 
 		// Reload project
-		project, _ = s.projectRepo.GetByID(ctx, projectID)
+		project, err = s.projectRepo.GetByID(ctx, projectID)
+		if err != nil {
+			s.logger.Warn("failed to reload project after budget inheritance", zap.Error(err))
+		}
 		dto := mapper.ToProjectDTO(project)
 		return &domain.InheritBudgetResponse{
 			Project:         &dto,
@@ -549,7 +557,10 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 		fmt.Sprintf("Budget dimensions (%d items) inherited from offer '%s'", dimensionsCount, offer.Title))
 
 	// Reload project to get updated data
-	project, _ = s.projectRepo.GetByID(ctx, projectID)
+	project, err = s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		s.logger.Warn("failed to reload project after budget inheritance", zap.Error(err))
+	}
 	dto := mapper.ToProjectDTO(project)
 
 	return &domain.InheritBudgetResponse{
