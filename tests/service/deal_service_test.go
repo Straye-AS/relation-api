@@ -386,7 +386,7 @@ func TestDealService_LoseDeal(t *testing.T) {
 	customer := createDealServiceTestCustomer(t, db)
 	ctx := createTestContext()
 
-	t.Run("lose deal with reason", func(t *testing.T) {
+	t.Run("lose deal with reason category and notes", func(t *testing.T) {
 		userCtx, _ := auth.FromContext(ctx)
 		req := &domain.CreateDealRequest{
 			Title:      "Deal to Lose",
@@ -397,12 +397,18 @@ func TestDealService_LoseDeal(t *testing.T) {
 		}
 		deal, _ := svc.Create(ctx, req)
 
-		lostDeal, err := svc.LoseDeal(ctx, deal.ID, "Competitor won")
+		loseReq := &domain.LoseDealRequest{
+			Reason: domain.LossReasonCompetitor,
+			Notes:  "Lost to competitor XYZ who offered lower price",
+		}
+		lostDeal, err := svc.LoseDeal(ctx, deal.ID, loseReq)
 		assert.NoError(t, err)
 		assert.NotNil(t, lostDeal)
 		assert.Equal(t, domain.DealStageLost, lostDeal.Stage)
 		assert.Equal(t, 0, lostDeal.Probability)
-		assert.Equal(t, "Competitor won", lostDeal.LostReason)
+		assert.Equal(t, loseReq.Notes, lostDeal.LostReason)
+		assert.NotNil(t, lostDeal.LossReasonCategory)
+		assert.Equal(t, domain.LossReasonCompetitor, *lostDeal.LossReasonCategory)
 		assert.NotNil(t, lostDeal.ActualCloseDate)
 	})
 
@@ -419,7 +425,11 @@ func TestDealService_LoseDeal(t *testing.T) {
 		// Manually update to won
 		db.Model(&domain.Deal{}).Where("id = ?", deal.ID).Update("stage", domain.DealStageWon)
 
-		_, err := svc.LoseDeal(ctx, deal.ID, "Test")
+		loseReq := &domain.LoseDealRequest{
+			Reason: domain.LossReasonOther,
+			Notes:  "Testing that won deals cannot be lost",
+		}
+		_, err := svc.LoseDeal(ctx, deal.ID, loseReq)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot mark a won deal as lost")
 	})
@@ -434,9 +444,17 @@ func TestDealService_LoseDeal(t *testing.T) {
 		}
 		deal, _ := svc.Create(ctx, req)
 		// Lose it first
-		svc.LoseDeal(ctx, deal.ID, "First loss")
+		firstLossReq := &domain.LoseDealRequest{
+			Reason: domain.LossReasonPrice,
+			Notes:  "First loss due to price concerns from the client",
+		}
+		svc.LoseDeal(ctx, deal.ID, firstLossReq)
 
-		_, err := svc.LoseDeal(ctx, deal.ID, "Second loss")
+		secondLossReq := &domain.LoseDealRequest{
+			Reason: domain.LossReasonTiming,
+			Notes:  "Attempting second loss which should fail validation",
+		}
+		_, err := svc.LoseDeal(ctx, deal.ID, secondLossReq)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "already marked as lost")
 	})
@@ -460,7 +478,11 @@ func TestDealService_ReopenDeal(t *testing.T) {
 		deal, _ := svc.Create(ctx, req)
 
 		// Lose it first
-		_, err := svc.LoseDeal(ctx, deal.ID, "Temporary loss")
+		loseReq := &domain.LoseDealRequest{
+			Reason: domain.LossReasonTiming,
+			Notes:  "Temporary loss due to timing issues with client",
+		}
+		_, err := svc.LoseDeal(ctx, deal.ID, loseReq)
 		require.NoError(t, err)
 
 		// Reopen
@@ -471,6 +493,7 @@ func TestDealService_ReopenDeal(t *testing.T) {
 		assert.Equal(t, 10, reopened.Probability)
 		assert.Nil(t, reopened.ActualCloseDate)
 		assert.Empty(t, reopened.LostReason)
+		assert.Nil(t, reopened.LossReasonCategory)
 	})
 
 	t.Run("cannot reopen non-lost deal", func(t *testing.T) {

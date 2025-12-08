@@ -395,13 +395,14 @@ type WinDealResponse struct {
 }
 
 // @Summary Lose deal
-// @Description Mark a deal as lost with a reason
+// @Description Mark a deal as lost with a categorized reason and detailed notes
 // @Tags Deals
 // @Accept json
 // @Produce json
 // @Param id path string true "Deal ID"
-// @Param request body LoseDealRequest true "Lost reason"
+// @Param request body domain.LoseDealRequest true "Loss reason category and notes"
 // @Success 200 {object} domain.DealDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid request - reason must be one of: price, timing, competitor, requirements, other. Notes must be 10-500 characters."
 // @Security BearerAuth
 // @Security ApiKeyAuth
 // @Router /deals/{id}/lose [post]
@@ -412,13 +413,18 @@ func (h *DealHandler) LoseDeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req LoseDealRequest
+	var req domain.LoseDealRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
-	deal, err := h.dealService.LoseDeal(r.Context(), id, req.Reason)
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	deal, err := h.dealService.LoseDeal(r.Context(), id, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			respondWithError(w, http.StatusNotFound, "Deal not found")
@@ -430,11 +436,6 @@ func (h *DealHandler) LoseDeal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, deal)
-}
-
-// LoseDealRequest contains the lost reason
-type LoseDealRequest struct {
-	Reason string `json:"reason" validate:"required"`
 }
 
 // @Summary Reopen deal

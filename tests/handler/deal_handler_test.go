@@ -518,23 +518,24 @@ func TestDealHandler_LoseDeal(t *testing.T) {
 	ctx := createDealTestContext()
 	userCtx, _ := auth.FromContext(ctx)
 
-	// Create a deal
-	deal := &domain.Deal{
-		Title:        "Deal to Lose",
-		CustomerID:   customer.ID,
-		CustomerName: customer.Name,
-		CompanyID:    domain.CompanyStalbygg,
-		Stage:        domain.DealStageProposal,
-		Probability:  50,
-		Currency:     "NOK",
-		OwnerID:      userCtx.UserID.String(),
-	}
-	err := db.Create(deal).Error
-	require.NoError(t, err)
+	t.Run("lose deal with valid reason and notes", func(t *testing.T) {
+		// Create a fresh deal for this test
+		deal := &domain.Deal{
+			Title:        "Deal to Lose",
+			CustomerID:   customer.ID,
+			CustomerName: customer.Name,
+			CompanyID:    domain.CompanyStalbygg,
+			Stage:        domain.DealStageProposal,
+			Probability:  50,
+			Currency:     "NOK",
+			OwnerID:      userCtx.UserID.String(),
+		}
+		err := db.Create(deal).Error
+		require.NoError(t, err)
 
-	t.Run("lose deal with reason", func(t *testing.T) {
-		reqBody := handler.LoseDealRequest{
-			Reason: "Competitor won",
+		reqBody := domain.LoseDealRequest{
+			Reason: domain.LossReasonCompetitor,
+			Notes:  "Lost to competitor XYZ who offered a lower price",
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -552,10 +553,164 @@ func TestDealHandler_LoseDeal(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var lostDeal domain.DealDTO
-		err := json.Unmarshal(rr.Body.Bytes(), &lostDeal)
+		err = json.Unmarshal(rr.Body.Bytes(), &lostDeal)
 		assert.NoError(t, err)
 		assert.Equal(t, domain.DealStageLost, lostDeal.Stage)
-		assert.Equal(t, "Competitor won", lostDeal.LostReason)
+		assert.Equal(t, "Lost to competitor XYZ who offered a lower price", lostDeal.LostReason)
+		assert.NotNil(t, lostDeal.LossReasonCategory)
+		assert.Equal(t, domain.LossReasonCompetitor, *lostDeal.LossReasonCategory)
+	})
+
+	t.Run("lose deal with missing reason category", func(t *testing.T) {
+		deal := &domain.Deal{
+			Title:        "Deal Missing Reason",
+			CustomerID:   customer.ID,
+			CustomerName: customer.Name,
+			CompanyID:    domain.CompanyStalbygg,
+			Stage:        domain.DealStageProposal,
+			Probability:  50,
+			Currency:     "NOK",
+			OwnerID:      userCtx.UserID.String(),
+		}
+		err := db.Create(deal).Error
+		require.NoError(t, err)
+
+		reqBody := map[string]string{
+			"notes": "This has notes but no reason category",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/deals/"+deal.ID.String()+"/lose", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", deal.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.LoseDeal(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("lose deal with invalid reason category", func(t *testing.T) {
+		deal := &domain.Deal{
+			Title:        "Deal Invalid Reason",
+			CustomerID:   customer.ID,
+			CustomerName: customer.Name,
+			CompanyID:    domain.CompanyStalbygg,
+			Stage:        domain.DealStageProposal,
+			Probability:  50,
+			Currency:     "NOK",
+			OwnerID:      userCtx.UserID.String(),
+		}
+		err := db.Create(deal).Error
+		require.NoError(t, err)
+
+		reqBody := map[string]string{
+			"reason": "invalid_reason",
+			"notes":  "This has an invalid reason category",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/deals/"+deal.ID.String()+"/lose", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", deal.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.LoseDeal(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("lose deal with notes too short", func(t *testing.T) {
+		deal := &domain.Deal{
+			Title:        "Deal Short Notes",
+			CustomerID:   customer.ID,
+			CustomerName: customer.Name,
+			CompanyID:    domain.CompanyStalbygg,
+			Stage:        domain.DealStageProposal,
+			Probability:  50,
+			Currency:     "NOK",
+			OwnerID:      userCtx.UserID.String(),
+		}
+		err := db.Create(deal).Error
+		require.NoError(t, err)
+
+		reqBody := domain.LoseDealRequest{
+			Reason: domain.LossReasonPrice,
+			Notes:  "Too short", // Less than 10 characters
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/deals/"+deal.ID.String()+"/lose", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", deal.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.LoseDeal(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("lose deal with all valid reason categories", func(t *testing.T) {
+		categories := []domain.LossReasonCategory{
+			domain.LossReasonPrice,
+			domain.LossReasonTiming,
+			domain.LossReasonCompetitor,
+			domain.LossReasonRequirements,
+			domain.LossReasonOther,
+		}
+
+		for _, category := range categories {
+			deal := &domain.Deal{
+				Title:        "Deal " + string(category),
+				CustomerID:   customer.ID,
+				CustomerName: customer.Name,
+				CompanyID:    domain.CompanyStalbygg,
+				Stage:        domain.DealStageProposal,
+				Probability:  50,
+				Currency:     "NOK",
+				OwnerID:      userCtx.UserID.String(),
+			}
+			err := db.Create(deal).Error
+			require.NoError(t, err)
+
+			reqBody := domain.LoseDealRequest{
+				Reason: category,
+				Notes:  "Testing category: " + string(category) + " validation",
+			}
+			body, _ := json.Marshal(reqBody)
+
+			req := httptest.NewRequest(http.MethodPost, "/deals/"+deal.ID.String()+"/lose", bytes.NewReader(body))
+			req = req.WithContext(ctx)
+			req.Header.Set("Content-Type", "application/json")
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", deal.ID.String())
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			rr := httptest.NewRecorder()
+			h.LoseDeal(rr, req)
+
+			assert.Equal(t, http.StatusOK, rr.Code, "Expected OK for category %s", category)
+
+			var lostDeal domain.DealDTO
+			err = json.Unmarshal(rr.Body.Bytes(), &lostDeal)
+			assert.NoError(t, err)
+			assert.Equal(t, domain.DealStageLost, lostDeal.Stage)
+			assert.NotNil(t, lostDeal.LossReasonCategory)
+			assert.Equal(t, category, *lostDeal.LossReasonCategory)
+		}
 	})
 }
 
@@ -566,22 +721,24 @@ func TestDealHandler_ReopenDeal(t *testing.T) {
 	ctx := createDealTestContext()
 	userCtx, _ := auth.FromContext(ctx)
 
-	// Create a lost deal
+	// Create a lost deal with loss reason category
+	lossCategory := domain.LossReasonPrice
 	deal := &domain.Deal{
-		Title:        "Lost Deal",
-		CustomerID:   customer.ID,
-		CustomerName: customer.Name,
-		CompanyID:    domain.CompanyStalbygg,
-		Stage:        domain.DealStageLost,
-		Probability:  0,
-		LostReason:   "Previous loss",
-		Currency:     "NOK",
-		OwnerID:      userCtx.UserID.String(),
+		Title:              "Lost Deal",
+		CustomerID:         customer.ID,
+		CustomerName:       customer.Name,
+		CompanyID:          domain.CompanyStalbygg,
+		Stage:              domain.DealStageLost,
+		Probability:        0,
+		LostReason:         "Previous loss due to price",
+		LossReasonCategory: &lossCategory,
+		Currency:           "NOK",
+		OwnerID:            userCtx.UserID.String(),
 	}
 	err := db.Create(deal).Error
 	require.NoError(t, err)
 
-	t.Run("reopen lost deal", func(t *testing.T) {
+	t.Run("reopen lost deal clears loss reason", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/deals/"+deal.ID.String()+"/reopen", nil)
 		req = req.WithContext(ctx)
 
@@ -599,6 +756,8 @@ func TestDealHandler_ReopenDeal(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, domain.DealStageLead, reopened.Stage)
 		assert.Equal(t, 10, reopened.Probability)
+		assert.Empty(t, reopened.LostReason)
+		assert.Nil(t, reopened.LossReasonCategory)
 	})
 }
 

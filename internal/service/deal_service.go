@@ -489,8 +489,8 @@ func (s *DealService) notifyDealWon(ctx context.Context, deal *domain.Deal, winn
 		zap.Float64("value", deal.Value))
 }
 
-// LoseDeal marks a deal as lost with a reason
-func (s *DealService) LoseDeal(ctx context.Context, id uuid.UUID, reason string) (*domain.DealDTO, error) {
+// LoseDeal marks a deal as lost with a categorized reason and detailed notes
+func (s *DealService) LoseDeal(ctx context.Context, id uuid.UUID, req *domain.LoseDealRequest) (*domain.DealDTO, error) {
 	deal, err := s.dealRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deal: %w", err)
@@ -509,25 +509,26 @@ func (s *DealService) LoseDeal(ctx context.Context, id uuid.UUID, reason string)
 	oldStage := deal.Stage
 	closeDate := time.Now()
 
-	if err := s.dealRepo.MarkAsLost(ctx, id, closeDate, reason); err != nil {
+	if err := s.dealRepo.MarkAsLost(ctx, id, closeDate, req.Reason, req.Notes); err != nil {
 		return nil, fmt.Errorf("failed to mark deal as lost: %w", err)
 	}
 
-	// Record stage history
+	// Record stage history with both category and notes
+	historyNotes := fmt.Sprintf("[%s] %s", req.Reason, req.Notes)
 	var changedByID, changedByName string
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		changedByID = userCtx.UserID.String()
 		changedByName = userCtx.DisplayName
 	}
-	s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageLost, changedByID, changedByName, reason)
+	s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageLost, changedByID, changedByName, historyNotes)
 
-	// Create activity
+	// Create activity with category context
 	if changedByName != "" {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
 			Title:       "Deal lost",
-			Body:        fmt.Sprintf("Deal '%s' was lost. Reason: %s", deal.Title, reason),
+			Body:        fmt.Sprintf("Deal '%s' was lost. Category: %s. Details: %s", deal.Title, req.Reason, req.Notes),
 			CreatorName: changedByName,
 		}
 		s.activityRepo.Create(ctx, activity)
@@ -555,6 +556,7 @@ func (s *DealService) ReopenDeal(ctx context.Context, id uuid.UUID) (*domain.Dea
 	deal.Probability = stageProbabilities[domain.DealStageLead]
 	deal.ActualCloseDate = nil
 	deal.LostReason = ""
+	deal.LossReasonCategory = nil
 
 	if err := s.dealRepo.Update(ctx, deal); err != nil {
 		return nil, fmt.Errorf("failed to reopen deal: %w", err)

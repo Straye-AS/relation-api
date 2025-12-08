@@ -792,7 +792,14 @@ definitions:
       startDate:
         type: string
       status:
-        $ref: '#/definitions/domain.ProjectStatus'
+        allOf:
+        - $ref: '#/definitions/domain.ProjectStatus'
+        enum:
+        - planning
+        - active
+        - on_hold
+        - completed
+        - cancelled
       summary:
         type: string
       teamMembers:
@@ -1047,6 +1054,8 @@ definitions:
         type: string
       id:
         type: string
+      lossReasonCategory:
+        $ref: '#/definitions/domain.LossReasonCategory'
       lostReason:
         type: string
       notes:
@@ -1160,6 +1169,41 @@ definitions:
       project:
         $ref: '#/definitions/domain.ProjectDTO'
     type: object
+  domain.LoseDealRequest:
+    properties:
+      notes:
+        example: Lost to competitor XYZ who offered lower price
+        maxLength: 500
+        minLength: 10
+        type: string
+      reason:
+        allOf:
+        - $ref: '#/definitions/domain.LossReasonCategory'
+        enum:
+        - price
+        - timing
+        - competitor
+        - requirements
+        - other
+        example: competitor
+    required:
+    - notes
+    - reason
+    type: object
+  domain.LossReasonCategory:
+    enum:
+    - price
+    - timing
+    - competitor
+    - requirements
+    - other
+    type: string
+    x-enum-varnames:
+    - LossReasonPrice
+    - LossReasonTiming
+    - LossReasonCompetitor
+    - LossReasonRequirements
+    - LossReasonOther
   domain.NotificationDTO:
     properties:
       createdAt:
@@ -1998,13 +2042,6 @@ definitions:
         items:
           $ref: '#/definitions/domain.DealStageHistoryDTO'
         type: array
-    type: object
-  handler.LoseDealRequest:
-    properties:
-      reason:
-        type: string
-    required:
-    - reason
     type: object
   handler.OfferBudgetResponse:
     properties:
@@ -3775,19 +3812,19 @@ paths:
     post:
       consumes:
       - application/json
-      description: Mark a deal as lost with a reason
+      description: Mark a deal as lost with a categorized reason and detailed notes
       parameters:
       - description: Deal ID
         in: path
         name: id
         required: true
         type: string
-      - description: Lost reason
+      - description: Loss reason category and notes
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.LoseDealRequest'
+          $ref: '#/definitions/domain.LoseDealRequest'
       produces:
       - application/json
       responses:
@@ -3795,6 +3832,11 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/domain.DealDTO'
+        "400":
+          description: 'Invalid request - reason must be one of: price, timing, competitor,
+            requirements, other. Notes must be 10-500 characters.'
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
