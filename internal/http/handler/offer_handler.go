@@ -502,7 +502,9 @@ func (h *OfferHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default to include dimensions when cloning (if not explicitly set in JSON)
+	// Default IncludeDimensions to true when cloning.
+	// Using *bool allows distinguishing between "not specified" (nil -> default true)
+	// and "explicitly set to false" (user wants to exclude dimensions).
 	if req.IncludeDimensions == nil {
 		includeDims := true
 		req.IncludeDimensions = &includeDims
