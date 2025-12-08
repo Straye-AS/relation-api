@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/mapper"
@@ -21,6 +22,10 @@ var (
 	ErrActivityForbidden               = errors.New("access to activity denied")
 	ErrActivityAlreadyCompleted        = errors.New("activity is already completed")
 	ErrActivityCannotCompleteCancelled = errors.New("cannot complete a cancelled activity")
+	ErrActivityNotMeeting              = errors.New("attendees can only be added to meeting type activities")
+	ErrAttendeeAlreadyAdded            = errors.New("user is already an attendee")
+	ErrAttendeeNotFound                = errors.New("attendee not found")
+	ErrFollowUpRequiresCompletedParent = errors.New("follow-up can only be created from a completed activity")
 )
 
 // ActivityService handles business logic for activities (meetings, tasks, calls, emails, notes)
@@ -98,6 +103,17 @@ func (s *ActivityService) Create(ctx context.Context, req *domain.CreateActivity
 		CompanyID:       companyID,
 	}
 
+	// Handle attendees for meeting type activities
+	if len(req.Attendees) > 0 {
+		if req.ActivityType != domain.ActivityTypeMeeting {
+			s.logger.Warn("attendees provided for non-meeting activity, ignoring",
+				zap.String("activity_type", string(req.ActivityType)),
+			)
+		} else {
+			activity.Attendees = pq.StringArray(req.Attendees)
+		}
+	}
+
 	if err := s.activityRepo.Create(ctx, activity); err != nil {
 		return nil, fmt.Errorf("failed to create activity: %w", err)
 	}
@@ -111,6 +127,15 @@ func (s *ActivityService) Create(ctx context.Context, req *domain.CreateActivity
 	// Send notification if task is assigned to someone other than creator
 	if req.AssignedToID != "" && req.AssignedToID != userCtx.UserID.String() {
 		s.sendTaskAssignmentNotification(ctx, activity, userCtx.DisplayName)
+	}
+
+	// Send notifications to meeting attendees (excluding creator)
+	if activity.ActivityType == domain.ActivityTypeMeeting && len(activity.Attendees) > 0 {
+		for _, attendeeID := range activity.Attendees {
+			if attendeeID != userCtx.UserID.String() {
+				s.sendMeetingInviteNotification(ctx, activity, attendeeID, userCtx.DisplayName)
+			}
+		}
 	}
 
 	dto := mapper.ToActivityDTO(activity)
@@ -142,6 +167,12 @@ func (s *ActivityService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	oldAssignedToID := activity.AssignedToID
 	assignmentChanged := req.AssignedToID != oldAssignedToID && req.AssignedToID != ""
 
+	// Track old attendees for notification comparison
+	oldAttendees := make(map[string]bool)
+	for _, a := range activity.Attendees {
+		oldAttendees[a] = true
+	}
+
 	// Update fields
 	activity.Title = req.Title
 	activity.Body = req.Body
@@ -155,6 +186,14 @@ func (s *ActivityService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	activity.IsPrivate = req.IsPrivate
 	activity.AssignedToID = req.AssignedToID
 
+	// Handle attendee updates for meeting type activities
+	if len(req.Attendees) > 0 && activity.ActivityType == domain.ActivityTypeMeeting {
+		activity.Attendees = pq.StringArray(req.Attendees)
+	} else if activity.ActivityType == domain.ActivityTypeMeeting {
+		// If attendees is provided as empty array, clear it
+		activity.Attendees = pq.StringArray(req.Attendees)
+	}
+
 	if err := s.activityRepo.Update(ctx, activity); err != nil {
 		return nil, fmt.Errorf("failed to update activity: %w", err)
 	}
@@ -167,6 +206,16 @@ func (s *ActivityService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	// Send notification if assignment changed to a different user (not self)
 	if assignmentChanged && req.AssignedToID != userCtx.UserID.String() {
 		s.sendTaskAssignmentNotification(ctx, activity, userCtx.DisplayName)
+	}
+
+	// Send notifications to newly added meeting attendees
+	if activity.ActivityType == domain.ActivityTypeMeeting {
+		for _, attendeeID := range activity.Attendees {
+			// Only notify if attendee is new (not in old list) and is not the current user
+			if !oldAttendees[attendeeID] && attendeeID != userCtx.UserID.String() {
+				s.sendMeetingInviteNotification(ctx, activity, attendeeID, userCtx.DisplayName)
+			}
+		}
 	}
 
 	dto := mapper.ToActivityDTO(activity)
@@ -523,4 +572,242 @@ func (s *ActivityService) canViewActivity(userCtx *auth.UserContext, activity *d
 	}
 
 	return false
+}
+
+// AddAttendee adds a user as an attendee to a meeting activity
+func (s *ActivityService) AddAttendee(ctx context.Context, activityID uuid.UUID, userID string) (*domain.ActivityDTO, error) {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		return nil, ErrUserContextRequired
+	}
+
+	// Get existing activity
+	activity, err := s.activityRepo.GetByID(ctx, activityID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrActivityNotFound
+		}
+		return nil, fmt.Errorf("failed to get activity: %w", err)
+	}
+
+	// Check permission
+	if !s.canModifyActivity(userCtx, activity) {
+		return nil, ErrActivityForbidden
+	}
+
+	// Only meetings can have attendees
+	if activity.ActivityType != domain.ActivityTypeMeeting {
+		return nil, ErrActivityNotMeeting
+	}
+
+	// Check if user is already an attendee
+	for _, attendee := range activity.Attendees {
+		if attendee == userID {
+			return nil, ErrAttendeeAlreadyAdded
+		}
+	}
+
+	// Add the attendee
+	activity.Attendees = append(activity.Attendees, userID)
+
+	if err := s.activityRepo.Update(ctx, activity); err != nil {
+		return nil, fmt.Errorf("failed to add attendee: %w", err)
+	}
+
+	s.logger.Info("attendee added to activity",
+		zap.String("activity_id", activityID.String()),
+		zap.String("attendee_id", userID),
+		zap.String("added_by", userCtx.UserID.String()),
+	)
+
+	// Send notification to the new attendee (if not the current user)
+	if userID != userCtx.UserID.String() {
+		s.sendMeetingInviteNotification(ctx, activity, userID, userCtx.DisplayName)
+	}
+
+	dto := mapper.ToActivityDTO(activity)
+	return &dto, nil
+}
+
+// RemoveAttendee removes a user from the attendees list of a meeting activity
+func (s *ActivityService) RemoveAttendee(ctx context.Context, activityID uuid.UUID, userID string) (*domain.ActivityDTO, error) {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		return nil, ErrUserContextRequired
+	}
+
+	// Get existing activity
+	activity, err := s.activityRepo.GetByID(ctx, activityID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrActivityNotFound
+		}
+		return nil, fmt.Errorf("failed to get activity: %w", err)
+	}
+
+	// Check permission
+	if !s.canModifyActivity(userCtx, activity) {
+		return nil, ErrActivityForbidden
+	}
+
+	// Only meetings can have attendees
+	if activity.ActivityType != domain.ActivityTypeMeeting {
+		return nil, ErrActivityNotMeeting
+	}
+
+	// Find and remove the attendee
+	found := false
+	newAttendees := make([]string, 0, len(activity.Attendees))
+	for _, attendee := range activity.Attendees {
+		if attendee == userID {
+			found = true
+			continue
+		}
+		newAttendees = append(newAttendees, attendee)
+	}
+
+	if !found {
+		return nil, ErrAttendeeNotFound
+	}
+
+	activity.Attendees = pq.StringArray(newAttendees)
+
+	if err := s.activityRepo.Update(ctx, activity); err != nil {
+		return nil, fmt.Errorf("failed to remove attendee: %w", err)
+	}
+
+	s.logger.Info("attendee removed from activity",
+		zap.String("activity_id", activityID.String()),
+		zap.String("attendee_id", userID),
+		zap.String("removed_by", userCtx.UserID.String()),
+	)
+
+	dto := mapper.ToActivityDTO(activity)
+	return &dto, nil
+}
+
+// CreateFollowUp creates a follow-up task from a completed activity
+func (s *ActivityService) CreateFollowUp(ctx context.Context, parentActivityID uuid.UUID, req *domain.CreateFollowUpRequest) (*domain.ActivityDTO, error) {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		return nil, ErrUserContextRequired
+	}
+
+	// Get parent activity
+	parentActivity, err := s.activityRepo.GetByID(ctx, parentActivityID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrActivityNotFound
+		}
+		return nil, fmt.Errorf("failed to get parent activity: %w", err)
+	}
+
+	// Check permission on parent activity
+	if !s.canViewActivity(userCtx, parentActivity) {
+		return nil, ErrActivityForbidden
+	}
+
+	// Parent must be completed to create follow-up
+	if parentActivity.Status != domain.ActivityStatusCompleted {
+		return nil, ErrFollowUpRequiresCompletedParent
+	}
+
+	// Determine assigned user - defaults to current user if not specified
+	assignedToID := userCtx.UserID.String()
+	if req.AssignedToID != nil && *req.AssignedToID != "" {
+		assignedToID = *req.AssignedToID
+	}
+
+	// Build follow-up description including reference to parent activity
+	description := req.Description
+	if description == "" {
+		description = fmt.Sprintf("Follow-up from: %s", parentActivity.Title)
+	} else {
+		description = fmt.Sprintf("%s\n\nFollow-up from: %s", description, parentActivity.Title)
+	}
+
+	now := time.Now()
+	followUp := &domain.Activity{
+		TargetType:       parentActivity.TargetType,
+		TargetID:         parentActivity.TargetID,
+		Title:            req.Title,
+		Body:             description,
+		OccurredAt:       now,
+		ActivityType:     domain.ActivityTypeTask,
+		Status:           domain.ActivityStatusPlanned,
+		DueDate:          req.DueDate,
+		Priority:         parentActivity.Priority, // Inherit priority from parent
+		IsPrivate:        parentActivity.IsPrivate,
+		CreatorID:        userCtx.UserID.String(),
+		CreatorName:      userCtx.DisplayName,
+		AssignedToID:     assignedToID,
+		CompanyID:        parentActivity.CompanyID,
+		ParentActivityID: &parentActivityID,
+	}
+
+	if err := s.activityRepo.Create(ctx, followUp); err != nil {
+		return nil, fmt.Errorf("failed to create follow-up activity: %w", err)
+	}
+
+	s.logger.Info("follow-up activity created",
+		zap.String("follow_up_id", followUp.ID.String()),
+		zap.String("parent_activity_id", parentActivityID.String()),
+		zap.String("creator_id", followUp.CreatorID),
+	)
+
+	// Send notification if assigned to someone other than creator
+	if assignedToID != userCtx.UserID.String() {
+		s.sendTaskAssignmentNotification(ctx, followUp, userCtx.DisplayName)
+	}
+
+	dto := mapper.ToActivityDTO(followUp)
+	return &dto, nil
+}
+
+// sendMeetingInviteNotification sends a notification when a user is added to a meeting
+func (s *ActivityService) sendMeetingInviteNotification(ctx context.Context, activity *domain.Activity, attendeeID, inviterName string) {
+	if s.notificationService == nil {
+		s.logger.Warn("notification service not available, skipping meeting invite notification")
+		return
+	}
+
+	// Parse attendee ID to UUID
+	attendeeUUID, err := uuid.Parse(attendeeID)
+	if err != nil {
+		s.logger.Warn("invalid attendee ID for notification",
+			zap.String("attendee_id", attendeeID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Build notification message
+	title := "Meeting Invitation"
+	message := fmt.Sprintf("%s invited you to a meeting: %s", inviterName, activity.Title)
+	if activity.ScheduledAt != nil {
+		message += fmt.Sprintf(" (scheduled: %s)", activity.ScheduledAt.Format("2006-01-02 15:04"))
+	}
+
+	_, err = s.notificationService.CreateForUser(
+		ctx,
+		attendeeUUID,
+		domain.NotificationTypeActivityReminder,
+		title,
+		message,
+		"activity",
+		&activity.ID,
+	)
+	if err != nil {
+		s.logger.Warn("failed to send meeting invite notification",
+			zap.String("activity_id", activity.ID.String()),
+			zap.String("attendee_id", attendeeID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	s.logger.Info("meeting invite notification sent",
+		zap.String("activity_id", activity.ID.String()),
+		zap.String("attendee_id", attendeeID),
+	)
 }
