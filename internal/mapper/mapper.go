@@ -534,6 +534,42 @@ func ToProjectBudgetDTO(project *domain.Project) domain.ProjectBudgetDTO {
 	}
 }
 
+// ToProjectWithDetailsDTO converts Project with related data to ProjectWithDetailsDTO
+func ToProjectWithDetailsDTO(
+	project *domain.Project,
+	budgetSummary *domain.BudgetSummaryDTO,
+	activities []domain.Activity,
+	offer *domain.Offer,
+	deal *domain.Deal,
+) domain.ProjectWithDetailsDTO {
+	dto := domain.ProjectWithDetailsDTO{
+		ProjectDTO:    ToProjectDTO(project),
+		BudgetSummary: budgetSummary,
+	}
+
+	// Map activities
+	if len(activities) > 0 {
+		dto.RecentActivities = make([]domain.ActivityDTO, len(activities))
+		for i, act := range activities {
+			dto.RecentActivities[i] = ToActivityDTO(&act)
+		}
+	}
+
+	// Map related offer
+	if offer != nil {
+		offerDTO := ToOfferDTO(offer)
+		dto.Offer = &offerDTO
+	}
+
+	// Map related deal
+	if deal != nil {
+		dealDTO := ToDealDTO(deal)
+		dto.Deal = &dealDTO
+	}
+
+	return dto
+}
+
 // FormatError creates a formatted error message
 func FormatError(entity, operation string, err error) error {
 	return fmt.Errorf("failed to %s %s: %w", operation, entity, err)

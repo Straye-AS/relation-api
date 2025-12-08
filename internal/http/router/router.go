@@ -230,6 +230,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/", rt.projectHandler.Create)
 				r.Get("/{id}", rt.projectHandler.GetByID)
 				r.Put("/{id}", rt.projectHandler.Update)
+				r.Delete("/{id}", rt.projectHandler.Delete)
+				r.Put("/{id}/status", rt.projectHandler.UpdateStatus)
 				r.Get("/{id}/budget", rt.projectHandler.GetBudget)
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
