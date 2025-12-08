@@ -300,8 +300,8 @@ func TestActivityRepository_GetMyTasks(t *testing.T) {
 	}{
 		{domain.ActivityStatusPlanned},
 		{domain.ActivityStatusInProgress},
-		{domain.ActivityStatusCompleted},   // Should not be included
-		{domain.ActivityStatusCancelled},   // Should not be included
+		{domain.ActivityStatusCompleted}, // Should not be included
+		{domain.ActivityStatusCancelled}, // Should not be included
 		{domain.ActivityStatusPlanned},
 	}
 

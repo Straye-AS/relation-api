@@ -233,6 +233,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Delete("/{id}", rt.projectHandler.Delete)
 				r.Put("/{id}/status", rt.projectHandler.UpdateStatus)
 				r.Get("/{id}/budget", rt.projectHandler.GetBudget)
+				r.Post("/{id}/inherit-budget", rt.projectHandler.InheritBudget)
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 			})

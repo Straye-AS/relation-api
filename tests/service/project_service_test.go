@@ -415,8 +415,10 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 		assert.False(t, project.HasDetailedBudget)
 
 		// Inherit budget
-		err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
+		resp, err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
 		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, 2, resp.DimensionsCount)
 
 		// Verify dimensions were cloned
 		projectDims, err := fixtures.dimensionRepo.GetByParent(ctx, domain.BudgetParentProject, project.ID)
@@ -444,7 +446,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Non-Won Offer", domain.OfferPhaseDraft, customer.ID)
 		project, _ := fixtures.createTestProject(t, ctx, "Test Non-Won Project", domain.ProjectStatusPlanning)
 
-		err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
+		_, err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, service.ErrOfferNotWon)
 	})
@@ -453,7 +455,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 		customer := fixtures.createTestCustomer(t, ctx, "Test NotFound Customer")
 		offer := fixtures.createTestOffer(t, ctx, "Test NotFound Offer", domain.OfferPhaseWon, customer.ID)
 
-		err := svc.InheritBudgetFromOffer(ctx, uuid.New(), offer.ID)
+		_, err := svc.InheritBudgetFromOffer(ctx, uuid.New(), offer.ID)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, service.ErrProjectNotFound)
 	})
@@ -461,7 +463,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 	t.Run("offer not found", func(t *testing.T) {
 		project, _ := fixtures.createTestProject(t, ctx, "Test Offer NotFound Project", domain.ProjectStatusPlanning)
 
-		err := svc.InheritBudgetFromOffer(ctx, project.ID, uuid.New())
+		_, err := svc.InheritBudgetFromOffer(ctx, project.ID, uuid.New())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, service.ErrOfferNotFound)
 	})

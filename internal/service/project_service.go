@@ -445,53 +445,78 @@ func (s *ProjectService) ListWithFilters(ctx context.Context, page, pageSize int
 // Budget Inheritance Methods
 // ============================================================================
 
-// InheritBudgetFromOffer clones budget dimensions from an offer to the project
-// This is typically called when a project is created from a won offer
-func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, offerID uuid.UUID) error {
+// InheritBudgetFromOffer clones budget dimensions from an offer to the project.
+// This is typically called when a project is created from a won offer.
+// Returns the updated project and the count of dimensions cloned.
+func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, offerID uuid.UUID) (*domain.InheritBudgetResponse, error) {
 	// Verify project exists
 	project, err := s.projectRepo.GetByID(ctx, projectID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrProjectNotFound
+			return nil, ErrProjectNotFound
 		}
-		return fmt.Errorf("failed to get project: %w", err)
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Check permissions - must be manager or admin
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
 	}
 
 	// Verify offer exists and is won
 	if s.offerRepo == nil {
-		return fmt.Errorf("offer repository not available")
+		return nil, fmt.Errorf("offer repository not available")
 	}
 	offer, err := s.offerRepo.GetByID(ctx, offerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrOfferNotFound
+			return nil, ErrOfferNotFound
 		}
-		return fmt.Errorf("failed to get offer: %w", err)
+		return nil, fmt.Errorf("failed to get offer: %w", err)
 	}
 
 	if offer.Phase != domain.OfferPhaseWon {
-		return ErrOfferNotWon
+		return nil, ErrOfferNotWon
 	}
 
 	// Get budget dimensions from offer
 	if s.dimensionRepo == nil {
-		return fmt.Errorf("budget dimension repository not available")
+		return nil, fmt.Errorf("budget dimension repository not available")
 	}
 	dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, offerID)
 	if err != nil {
-		return fmt.Errorf("failed to get offer budget dimensions: %w", err)
+		return nil, fmt.Errorf("failed to get offer budget dimensions: %w", err)
 	}
 
-	if len(dimensions) == 0 {
+	dimensionsCount := len(dimensions)
+
+	if dimensionsCount == 0 {
 		s.logger.Info("no budget dimensions to inherit from offer",
 			zap.String("projectID", projectID.String()),
 			zap.String("offerID", offerID.String()))
-		return nil
+
+		// Still update project to link to offer even if no dimensions
+		project.OfferID = &offerID
+		project.Budget = offer.Value
+		if err := s.projectRepo.Update(ctx, project); err != nil {
+			return nil, fmt.Errorf("failed to update project: %w", err)
+		}
+
+		// Reload project
+		project, err = s.projectRepo.GetByID(ctx, projectID)
+		if err != nil {
+			s.logger.Warn("failed to reload project after budget inheritance", zap.Error(err))
+		}
+		dto := mapper.ToProjectDTO(project)
+		return &domain.InheritBudgetResponse{
+			Project:         &dto,
+			DimensionsCount: 0,
+		}, nil
 	}
 
 	// Use transaction for atomicity
 	if s.db == nil {
-		return fmt.Errorf("database connection not available for transaction")
+		return nil, fmt.Errorf("database connection not available for transaction")
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -528,14 +553,24 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Log activity
 	s.logActivity(ctx, projectID, "Budget inherited from offer",
-		fmt.Sprintf("Budget dimensions (%d items) inherited from offer '%s'", len(dimensions), offer.Title))
+		fmt.Sprintf("Budget dimensions (%d items) inherited from offer '%s'", dimensionsCount, offer.Title))
 
-	return nil
+	// Reload project to get updated data
+	project, err = s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		s.logger.Warn("failed to reload project after budget inheritance", zap.Error(err))
+	}
+	dto := mapper.ToProjectDTO(project)
+
+	return &domain.InheritBudgetResponse{
+		Project:         &dto,
+		DimensionsCount: dimensionsCount,
+	}, nil
 }
 
 // GetBudgetSummary returns aggregated budget totals for a project

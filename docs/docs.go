@@ -4995,6 +4995,86 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{id}/inherit-budget": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Inherit budget dimensions from a won offer to the project. The offer must be in 'won' phase.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Inherit budget from offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Offer ID to inherit budget from",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.InheritBudgetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.InheritBudgetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or offer not in won phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Project or offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{id}/status": {
             "put": {
                 "security": [
@@ -6836,6 +6916,30 @@ const docTemplate = `{
                 },
                 "size": {
                     "type": "integer"
+                }
+            }
+        },
+        "domain.InheritBudgetRequest": {
+            "type": "object",
+            "required": [
+                "offerId"
+            ],
+            "properties": {
+                "offerId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "domain.InheritBudgetResponse": {
+            "type": "object",
+            "properties": {
+                "dimensionsCount": {
+                    "type": "integer"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
                 }
             }
         },
