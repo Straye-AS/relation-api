@@ -533,7 +533,7 @@ type CreateProjectRequest struct {
 	Description             string         `json:"description,omitempty"`
 	CustomerID              uuid.UUID      `json:"customerId" validate:"required"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
-	Status                  ProjectStatus  `json:"status" validate:"required"`
+	Status                  ProjectStatus  `json:"status" validate:"required,oneof=planning active on_hold completed cancelled"`
 	StartDate               time.Time      `json:"startDate" validate:"required"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
 	Budget                  float64        `json:"budget" validate:"gte=0"`

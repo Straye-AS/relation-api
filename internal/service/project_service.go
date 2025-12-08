@@ -253,7 +253,10 @@ func (s *ProjectService) UpdateStatusAndHealth(ctx context.Context, id uuid.UUID
 	}
 
 	// Reload project
-	project, _ = s.projectRepo.GetByID(ctx, id)
+	project, err = s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload project after status update", zap.String("project_id", id.String()), zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, project.ID, "Project status changed",
@@ -324,11 +327,12 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 		if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
 			s.logger.Warn("failed to recalculate project health", zap.Error(err))
 		}
-		// Reload after health update
-		project, _ = s.projectRepo.GetByID(ctx, id)
-	} else {
-		// Reload with customer
-		project, _ = s.projectRepo.GetByID(ctx, id)
+	}
+
+	// Reload project
+	project, err = s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload project after update", zap.String("project_id", id.String()), zap.Error(err))
 	}
 
 	// Log activity
@@ -633,7 +637,10 @@ func (s *ProjectService) UpdateStatus(ctx context.Context, id uuid.UUID, newStat
 	}
 
 	// Reload project
-	project, _ = s.projectRepo.GetByID(ctx, id)
+	project, err = s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload project after status change", zap.String("project_id", id.String()), zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, project.ID, "Project status changed",
@@ -680,7 +687,10 @@ func (s *ProjectService) UpdateCompletionPercent(ctx context.Context, id uuid.UU
 	}
 
 	// Reload project
-	project, _ = s.projectRepo.GetByID(ctx, id)
+	project, err = s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload project after completion update", zap.String("project_id", id.String()), zap.Error(err))
+	}
 
 	// Log activity
 	s.logActivity(ctx, project.ID, "Project progress updated",
@@ -709,7 +719,10 @@ func (s *ProjectService) RecalculateHealth(ctx context.Context, id uuid.UUID) (*
 	}
 
 	// Reload project
-	project, _ = s.projectRepo.GetByID(ctx, id)
+	project, err = s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload project after health recalculation", zap.String("project_id", id.String()), zap.Error(err))
+	}
 
 	// Log activity if health changed
 	if oldHealth == nil || *oldHealth != *project.Health {

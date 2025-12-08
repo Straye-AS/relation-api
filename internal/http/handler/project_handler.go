@@ -75,8 +75,8 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse health filter
-	if h := r.URL.Query().Get("health"); h != "" {
-		health := domain.ProjectHealth(h)
+	if healthStr := r.URL.Query().Get("health"); healthStr != "" {
+		health := domain.ProjectHealth(healthStr)
 		filters.Health = &health
 	}
 
