@@ -36,6 +36,8 @@ type Router struct {
 	auditHandler            *handler.AuditHandler
 	contactHandler          *handler.ContactHandler
 	budgetDimensionHandler  *handler.BudgetDimensionHandler
+	notificationHandler     *handler.NotificationHandler
+	activityHandler         *handler.ActivityHandler
 }
 
 func NewRouter(
@@ -57,6 +59,8 @@ func NewRouter(
 	auditHandler *handler.AuditHandler,
 	contactHandler *handler.ContactHandler,
 	budgetDimensionHandler *handler.BudgetDimensionHandler,
+	notificationHandler *handler.NotificationHandler,
+	activityHandler *handler.ActivityHandler,
 ) *Router {
 	return &Router{
 		cfg:                     cfg,
@@ -77,6 +81,8 @@ func NewRouter(
 		auditHandler:            auditHandler,
 		contactHandler:          contactHandler,
 		budgetDimensionHandler:  budgetDimensionHandler,
+		notificationHandler:     notificationHandler,
+		activityHandler:         activityHandler,
 	}
 }
 
@@ -292,6 +298,28 @@ func (rt *Router) Setup() http.Handler {
 			// Dashboard & Search
 			r.Get("/dashboard/metrics", rt.dashboardHandler.GetMetrics)
 			r.Get("/search", rt.dashboardHandler.Search)
+
+			// Notifications
+			r.Route("/notifications", func(r chi.Router) {
+				r.Get("/", rt.notificationHandler.List)
+				r.Get("/count", rt.notificationHandler.GetUnreadCount)
+				r.Put("/read-all", rt.notificationHandler.MarkAllAsRead)
+				r.Get("/{id}", rt.notificationHandler.GetByID)
+				r.Put("/{id}/read", rt.notificationHandler.MarkAsRead)
+			})
+
+			// Activities
+			r.Route("/activities", func(r chi.Router) {
+				r.Get("/", rt.activityHandler.List)
+				r.Post("/", rt.activityHandler.Create)
+				r.Get("/my-tasks", rt.activityHandler.GetMyTasks)
+				r.Get("/upcoming", rt.activityHandler.GetUpcoming)
+				r.Get("/stats", rt.activityHandler.GetStats)
+				r.Get("/{id}", rt.activityHandler.GetByID)
+				r.Put("/{id}", rt.activityHandler.Update)
+				r.Delete("/{id}", rt.activityHandler.Delete)
+				r.Post("/{id}/complete", rt.activityHandler.Complete)
+			})
 		})
 	})
 
