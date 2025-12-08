@@ -73,7 +73,24 @@ func (r *OfferRepository) GetByIDWithBudgetDimensions(ctx context.Context, id uu
 	return &offer, dimensions, nil
 }
 
+// Update saves an offer after verifying company access
+// Returns error if offer not found or user lacks access
+// Applies company filter for multi-tenant isolation
 func (r *OfferRepository) Update(ctx context.Context, offer *domain.Offer) error {
+	// First verify the offer exists and belongs to the user's company
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", offer.ID)
+	query = ApplyCompanyFilter(ctx, query)
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
 	return r.db.WithContext(ctx).Save(offer).Error
 }
 
@@ -151,15 +168,33 @@ func (r *OfferRepository) ListWithFilters(ctx context.Context, page, pageSize in
 	return offers, total, err
 }
 
+// GetItemsCount returns the number of items for an offer
+// Applies company filter via subquery for multi-tenant isolation
 func (r *OfferRepository) GetItemsCount(ctx context.Context, offerID uuid.UUID) (int, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.OfferItem{}).Where("offer_id = ?", offerID).Count(&count).Error
+
+	// Build subquery to filter offers by company
+	offerSubquery := r.db.WithContext(ctx).Model(&domain.Offer{}).Select("id").Where("id = ?", offerID)
+	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
+
+	err := r.db.WithContext(ctx).Model(&domain.OfferItem{}).
+		Where("offer_id IN (?)", offerSubquery).
+		Count(&count).Error
 	return int(count), err
 }
 
+// GetFilesCount returns the number of files for an offer
+// Applies company filter via subquery for multi-tenant isolation
 func (r *OfferRepository) GetFilesCount(ctx context.Context, offerID uuid.UUID) (int, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.File{}).Where("offer_id = ?", offerID).Count(&count).Error
+
+	// Build subquery to filter offers by company
+	offerSubquery := r.db.WithContext(ctx).Model(&domain.Offer{}).Select("id").Where("id = ?", offerID)
+	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
+
+	err := r.db.WithContext(ctx).Model(&domain.File{}).
+		Where("offer_id IN (?)", offerSubquery).
+		Count(&count).Error
 	return int(count), err
 }
 
@@ -265,16 +300,23 @@ func (r *OfferRepository) CalculateTotalsFromDimensions(ctx context.Context, off
 }
 
 // GetBudgetDimensionsCount returns the number of budget dimensions for an offer
+// Applies company filter via subquery for multi-tenant isolation
 func (r *OfferRepository) GetBudgetDimensionsCount(ctx context.Context, offerID uuid.UUID) (int, error) {
 	var count int64
+
+	// Build subquery to filter offers by company
+	offerSubquery := r.db.WithContext(ctx).Model(&domain.Offer{}).Select("id").Where("id = ?", offerID)
+	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
+
 	err := r.db.WithContext(ctx).
 		Model(&domain.BudgetDimension{}).
-		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentOffer, offerID).
+		Where("parent_type = ? AND parent_id IN (?)", domain.BudgetParentOffer, offerSubquery).
 		Count(&count).Error
 	return int(count), err
 }
 
 // GetBudgetSummary returns aggregated budget totals for an offer
+// Applies company filter via subquery for multi-tenant isolation
 func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUID) (*domain.BudgetSummary, error) {
 	var result struct {
 		TotalCost      float64
@@ -282,9 +324,13 @@ func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUI
 		DimensionCount int
 	}
 
+	// Build subquery to filter offers by company
+	offerSubquery := r.db.WithContext(ctx).Model(&domain.Offer{}).Select("id").Where("id = ?", offerID)
+	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
+
 	err := r.db.WithContext(ctx).
 		Model(&domain.BudgetDimension{}).
-		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentOffer, offerID).
+		Where("parent_type = ? AND parent_id IN (?)", domain.BudgetParentOffer, offerSubquery).
 		Select("COALESCE(SUM(cost), 0) as total_cost, COALESCE(SUM(revenue), 0) as total_revenue, COUNT(*) as dimension_count").
 		Scan(&result).Error
 
