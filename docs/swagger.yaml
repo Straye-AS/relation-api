@@ -675,10 +675,8 @@ definitions:
         $ref: '#/definitions/domain.CustomerTier'
     required:
     - country
-    - email
     - name
     - orgNumber
-    - phone
     type: object
   domain.CreateDealRequest:
     properties:
@@ -1060,7 +1058,7 @@ definitions:
         type: array
       recentActivities:
         items:
-          $ref: '#/definitions/domain.NotificationDTO'
+          $ref: '#/definitions/domain.ActivityDTO'
         type: array
       recentOffers:
         items:
@@ -1924,10 +1922,8 @@ definitions:
         $ref: '#/definitions/domain.CustomerTier'
     required:
     - country
-    - email
     - name
     - orgNumber
-    - phone
     type: object
   domain.UpdateDealRequest:
     properties:
@@ -4248,6 +4244,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/domain.PipelineAnalyticsDTO'
+        "400":
+          description: Invalid date range - dateFrom must be before dateTo
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []

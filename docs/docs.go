@@ -2657,6 +2657,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/domain.PipelineAnalyticsDTO"
                         }
+                    },
+                    "400": {
+                        "description": "Invalid date range - dateFrom must be before dateTo",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -6571,10 +6577,8 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "country",
-                "email",
                 "name",
-                "orgNumber",
-                "phone"
+                "orgNumber"
             ],
             "properties": {
                 "address": {
@@ -7168,7 +7172,7 @@ const docTemplate = `{
                 "recentActivities": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.NotificationDTO"
+                        "$ref": "#/definitions/domain.ActivityDTO"
                     }
                 },
                 "recentOffers": {
@@ -8374,10 +8378,8 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "country",
-                "email",
                 "name",
-                "orgNumber",
-                "phone"
+                "orgNumber"
             ],
             "properties": {
                 "address": {

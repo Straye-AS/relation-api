@@ -352,3 +352,148 @@ func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUI
 
 	return summary, nil
 }
+
+// OfferStats holds aggregated offer statistics for dashboard
+type OfferStats struct {
+	TotalOffers    int64
+	ActiveOffers   int64
+	WonOffers      int64
+	LostOffers     int64
+	TotalValue     float64
+	WeightedValue  float64
+	ByPhase        map[domain.OfferPhase]int
+	AvgProbability float64
+}
+
+// GetOfferStats returns aggregated offer statistics for the dashboard
+func (r *OfferRepository) GetOfferStats(ctx context.Context) (*OfferStats, error) {
+	stats := &OfferStats{
+		ByPhase: make(map[domain.OfferPhase]int),
+	}
+
+	// Build base query with company filter
+	baseQuery := r.db.WithContext(ctx).Model(&domain.Offer{})
+	baseQuery = ApplyCompanyFilter(ctx, baseQuery)
+
+	// Total offers
+	if err := baseQuery.Count(&stats.TotalOffers).Error; err != nil {
+		return nil, fmt.Errorf("failed to count total offers: %w", err)
+	}
+
+	// Active offers (draft, in_progress, sent)
+	activeQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseDraft,
+			domain.OfferPhaseInProgress,
+			domain.OfferPhaseSent,
+		})
+	activeQuery = ApplyCompanyFilter(ctx, activeQuery)
+	if err := activeQuery.Count(&stats.ActiveOffers).Error; err != nil {
+		return nil, fmt.Errorf("failed to count active offers: %w", err)
+	}
+
+	// Won offers
+	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase = ?", domain.OfferPhaseWon)
+	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
+	if err := wonQuery.Count(&stats.WonOffers).Error; err != nil {
+		return nil, fmt.Errorf("failed to count won offers: %w", err)
+	}
+
+	// Lost offers
+	lostQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase = ?", domain.OfferPhaseLost)
+	lostQuery = ApplyCompanyFilter(ctx, lostQuery)
+	if err := lostQuery.Count(&stats.LostOffers).Error; err != nil {
+		return nil, fmt.Errorf("failed to count lost offers: %w", err)
+	}
+
+	// Total value of active offers
+	valueQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseDraft,
+			domain.OfferPhaseInProgress,
+			domain.OfferPhaseSent,
+		})
+	valueQuery = ApplyCompanyFilter(ctx, valueQuery)
+	if err := valueQuery.Select("COALESCE(SUM(value), 0)").Scan(&stats.TotalValue).Error; err != nil {
+		return nil, fmt.Errorf("failed to sum offer values: %w", err)
+	}
+
+	// Weighted value (value * probability / 100)
+	weightedQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseDraft,
+			domain.OfferPhaseInProgress,
+			domain.OfferPhaseSent,
+		})
+	weightedQuery = ApplyCompanyFilter(ctx, weightedQuery)
+	if err := weightedQuery.Select("COALESCE(SUM(value * probability / 100), 0)").Scan(&stats.WeightedValue).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate weighted value: %w", err)
+	}
+
+	// Count by phase
+	type phaseCount struct {
+		Phase domain.OfferPhase
+		Count int
+	}
+	var phaseCounts []phaseCount
+	phaseQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Select("phase, COUNT(*) as count").
+		Group("phase")
+	phaseQuery = ApplyCompanyFilter(ctx, phaseQuery)
+	if err := phaseQuery.Scan(&phaseCounts).Error; err != nil {
+		return nil, fmt.Errorf("failed to count offers by phase: %w", err)
+	}
+	for _, pc := range phaseCounts {
+		stats.ByPhase[pc.Phase] = pc.Count
+	}
+
+	// Average probability of active offers
+	avgProbQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseDraft,
+			domain.OfferPhaseInProgress,
+			domain.OfferPhaseSent,
+		})
+	avgProbQuery = ApplyCompanyFilter(ctx, avgProbQuery)
+	if err := avgProbQuery.Select("COALESCE(AVG(probability), 0)").Scan(&stats.AvgProbability).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate avg probability: %w", err)
+	}
+
+	return stats, nil
+}
+
+// GetRecentOffers returns the most recent offers
+func (r *OfferRepository) GetRecentOffers(ctx context.Context, limit int) ([]domain.Offer, error) {
+	var offers []domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Order("created_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&offers).Error
+	return offers, err
+}
+
+// GetWinRate calculates the win rate (won / (won + lost) * 100)
+func (r *OfferRepository) GetWinRate(ctx context.Context) (float64, error) {
+	var won, lost int64
+
+	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase = ?", domain.OfferPhaseWon)
+	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
+	if err := wonQuery.Count(&won).Error; err != nil {
+		return 0, err
+	}
+
+	lostQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase = ?", domain.OfferPhaseLost)
+	lostQuery = ApplyCompanyFilter(ctx, lostQuery)
+	if err := lostQuery.Count(&lost).Error; err != nil {
+		return 0, err
+	}
+
+	total := won + lost
+	if total == 0 {
+		return 0, nil
+	}
+
+	return float64(won) / float64(total) * 100, nil
+}

@@ -62,6 +62,16 @@ const (
 	CompanyMontasje   CompanyID = "montasje"
 )
 
+// IsValidCompanyID checks if a string is a valid company ID
+func IsValidCompanyID(id string) bool {
+	switch CompanyID(id) {
+	case CompanyGruppen, CompanyStalbygg, CompanyHybridbygg, CompanyIndustri, CompanyTak, CompanyMontasje:
+		return true
+	default:
+		return false
+	}
+}
+
 // Company represents a Straye group company (stored in database)
 type Company struct {
 	ID        CompanyID `gorm:"type:varchar(50);primaryKey" json:"id"`
@@ -690,7 +700,7 @@ type AuditLog struct {
 	OldValues   string      `gorm:"type:jsonb;column:old_values"`
 	NewValues   string      `gorm:"type:jsonb;column:new_values"`
 	Changes     string      `gorm:"type:jsonb"`
-	IPAddress   string      `gorm:"type:inet;column:ip_address"`
+	IPAddress   string      `gorm:"type:varchar(100);column:ip_address"`
 	UserAgent   string      `gorm:"type:text;column:user_agent"`
 	RequestID   string      `gorm:"type:varchar(100);column:request_id"`
 	Metadata    string      `gorm:"type:jsonb"`

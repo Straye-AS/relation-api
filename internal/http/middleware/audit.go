@@ -95,7 +95,8 @@ func (m *AuditMiddleware) Audit(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 
 		// Log the audit entry after the request is processed
-		go m.logAudit(r, rw.statusCode, requestBody)
+		// Use a detached context to avoid cancellation when HTTP response is sent
+		go m.logAudit(context.WithoutCancel(r.Context()), r, rw.statusCode, requestBody)
 	})
 }
 
@@ -125,7 +126,7 @@ func (m *AuditMiddleware) shouldAudit(r *http.Request) bool {
 }
 
 // logAudit creates an audit log entry for the request
-func (m *AuditMiddleware) logAudit(r *http.Request, statusCode int, requestBody []byte) {
+func (m *AuditMiddleware) logAudit(ctx context.Context, r *http.Request, statusCode int, requestBody []byte) {
 	// Skip if no audit service configured
 	if m.auditService == nil {
 		return
@@ -166,7 +167,7 @@ func (m *AuditMiddleware) logAudit(r *http.Request, statusCode int, requestBody 
 		NewValues:  values,
 	}
 
-	if err := m.auditService.Log(r.Context(), r, entry); err != nil {
+	if err := m.auditService.Log(ctx, r, entry); err != nil {
 		m.logger.Warn("failed to create audit log entry",
 			zap.String("path", r.URL.Path),
 			zap.String("method", r.Method),

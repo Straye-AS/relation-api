@@ -293,3 +293,14 @@ func (r *ActivityRepository) CountByStatus(ctx context.Context, userID string) (
 
 	return counts, nil
 }
+
+// GetRecentActivities returns the most recent activities
+func (r *ActivityRepository) GetRecentActivities(ctx context.Context, limit int) ([]domain.Activity, error) {
+	var activities []domain.Activity
+	query := r.db.WithContext(ctx).
+		Order("created_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&activities).Error
+	return activities, err
+}

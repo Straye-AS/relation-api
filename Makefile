@@ -1,4 +1,4 @@
-.PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger
+.PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed
 
 GO ?= go
 BIN_DIR ?= bin
@@ -88,5 +88,14 @@ format: ## Format code
 
 security: ## Run security checks
 	gosec ./...
+
+seed: ## Load seed data (LOCAL DEVELOPMENT ONLY - will not run in staging/production)
+	@if [ "$$APP_ENVIRONMENT" = "staging" ] || [ "$$APP_ENVIRONMENT" = "production" ] || [ "$$APP_ENVIRONMENT" = "prod" ]; then \
+		echo "ERROR: Seed data cannot be loaded in staging or production environments!"; \
+		exit 1; \
+	fi
+	@echo "Loading seed data into local database..."
+	PGPASSWORD=relation_password psql -h localhost -U relation_user -d relation -f testdata/seed.sql
+	@echo "Seed data loaded successfully!"
 
 .DEFAULT_GOAL := help

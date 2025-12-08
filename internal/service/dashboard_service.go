@@ -14,6 +14,7 @@ type DashboardService struct {
 	customerRepo     *repository.CustomerRepository
 	projectRepo      *repository.ProjectRepository
 	offerRepo        *repository.OfferRepository
+	activityRepo     *repository.ActivityRepository
 	notificationRepo *repository.NotificationRepository
 	logger           *zap.Logger
 }
@@ -22,6 +23,7 @@ func NewDashboardService(
 	customerRepo *repository.CustomerRepository,
 	projectRepo *repository.ProjectRepository,
 	offerRepo *repository.OfferRepository,
+	activityRepo *repository.ActivityRepository,
 	notificationRepo *repository.NotificationRepository,
 	logger *zap.Logger,
 ) *DashboardService {
@@ -29,40 +31,106 @@ func NewDashboardService(
 		customerRepo:     customerRepo,
 		projectRepo:      projectRepo,
 		offerRepo:        offerRepo,
+		activityRepo:     activityRepo,
 		notificationRepo: notificationRepo,
 		logger:           logger,
 	}
 }
 
 func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMetrics, error) {
-	pipelineValue, err := s.offerRepo.GetTotalPipelineValue(ctx)
+	// Get offer statistics
+	offerStats, err := s.offerRepo.GetOfferStats(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pipeline value: %w", err)
+		s.logger.Warn("failed to get offer stats", zap.Error(err))
+		offerStats = &repository.OfferStats{ByPhase: make(map[domain.OfferPhase]int)}
 	}
 
-	// TODO: Implement comprehensive dashboard metrics
-	// These would come from proper queries on offer repository
+	// Get win rate
+	winRate, err := s.offerRepo.GetWinRate(ctx)
+	if err != nil {
+		s.logger.Warn("failed to get win rate", zap.Error(err))
+	}
+
+	// Get recent offers
+	recentOffers, err := s.offerRepo.GetRecentOffers(ctx, 5)
+	if err != nil {
+		s.logger.Warn("failed to get recent offers", zap.Error(err))
+	}
+	recentOfferDTOs := make([]domain.OfferDTO, len(recentOffers))
+	for i, o := range recentOffers {
+		recentOfferDTOs[i] = mapper.ToOfferDTO(&o)
+	}
+
+	// Get active projects
+	activeProjects, err := s.projectRepo.GetActiveProjects(ctx, 5)
+	if err != nil {
+		s.logger.Warn("failed to get active projects", zap.Error(err))
+	}
+	activeProjectDTOs := make([]domain.ProjectDTO, len(activeProjects))
+	for i, p := range activeProjects {
+		activeProjectDTOs[i] = mapper.ToProjectDTO(&p)
+	}
+
+	// Get recent projects
+	recentProjects, err := s.projectRepo.GetRecentProjects(ctx, 5)
+	if err != nil {
+		s.logger.Warn("failed to get recent projects", zap.Error(err))
+	}
+	recentProjectDTOs := make([]domain.ProjectDTO, len(recentProjects))
+	for i, p := range recentProjects {
+		recentProjectDTOs[i] = mapper.ToProjectDTO(&p)
+	}
+
+	// Get top customers
+	topCustomers, err := s.customerRepo.GetTopCustomers(ctx, 5)
+	if err != nil {
+		s.logger.Warn("failed to get top customers", zap.Error(err))
+	}
+	topCustomerDTOs := make([]domain.CustomerDTO, len(topCustomers))
+	for i, c := range topCustomers {
+		topCustomerDTOs[i] = mapper.ToCustomerDTO(&c, 0, 0)
+	}
+
+	// Get recent activities
+	recentActivities, err := s.activityRepo.GetRecentActivities(ctx, 10)
+	if err != nil {
+		s.logger.Warn("failed to get recent activities", zap.Error(err))
+	}
+	recentActivityDTOs := make([]domain.ActivityDTO, len(recentActivities))
+	for i, a := range recentActivities {
+		recentActivityDTOs[i] = mapper.ToActivityDTO(&a)
+	}
+
+	// Build pipeline phase data
+	pipeline := []domain.PipelinePhaseData{}
+	for phase, count := range offerStats.ByPhase {
+		pipeline = append(pipeline, domain.PipelinePhaseData{
+			Phase: phase,
+			Count: count,
+		})
+	}
+
 	return &domain.DashboardMetrics{
-		TotalOffers:           0,
-		ActiveOffers:          0,
-		WonOffers:             0,
-		LostOffers:            0,
-		TotalValue:            pipelineValue,
-		WeightedValue:         pipelineValue,
-		AverageProbability:    0,
-		OffersByPhase:         make(map[domain.OfferPhase]int),
-		Pipeline:              []domain.PipelinePhaseData{},
-		OfferReserve:          pipelineValue,
-		WinRate:               0,
-		RevenueForecast30Days: 0,
-		RevenueForecast90Days: 0,
+		TotalOffers:           int(offerStats.TotalOffers),
+		ActiveOffers:          int(offerStats.ActiveOffers),
+		WonOffers:             int(offerStats.WonOffers),
+		LostOffers:            int(offerStats.LostOffers),
+		TotalValue:            offerStats.TotalValue,
+		WeightedValue:         offerStats.WeightedValue,
+		AverageProbability:    offerStats.AvgProbability,
+		OffersByPhase:         offerStats.ByPhase,
+		Pipeline:              pipeline,
+		OfferReserve:          offerStats.TotalValue,
+		WinRate:               winRate,
+		RevenueForecast30Days: offerStats.WeightedValue * 0.3, // Simple estimate
+		RevenueForecast90Days: offerStats.WeightedValue * 0.7, // Simple estimate
 		TopDisciplines:        []domain.DisciplineStats{},
-		ActiveProjects:        []domain.ProjectDTO{},
-		TopCustomers:          []domain.CustomerDTO{},
+		ActiveProjects:        activeProjectDTOs,
+		TopCustomers:          topCustomerDTOs,
 		TeamPerformance:       []domain.TeamMemberStats{},
-		RecentOffers:          []domain.OfferDTO{},
-		RecentProjects:        []domain.ProjectDTO{},
-		RecentActivities:      []domain.NotificationDTO{},
+		RecentOffers:          recentOfferDTOs,
+		RecentProjects:        recentProjectDTOs,
+		RecentActivities:      recentActivityDTOs,
 	}, nil
 }
 

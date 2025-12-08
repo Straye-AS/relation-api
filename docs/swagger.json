@@ -2651,6 +2651,12 @@
                         "schema": {
                             "$ref": "#/definitions/domain.PipelineAnalyticsDTO"
                         }
+                    },
+                    "400": {
+                        "description": "Invalid date range - dateFrom must be before dateTo",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -6565,10 +6571,8 @@
             "type": "object",
             "required": [
                 "country",
-                "email",
                 "name",
-                "orgNumber",
-                "phone"
+                "orgNumber"
             ],
             "properties": {
                 "address": {
@@ -7162,7 +7166,7 @@
                 "recentActivities": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.NotificationDTO"
+                        "$ref": "#/definitions/domain.ActivityDTO"
                     }
                 },
                 "recentOffers": {
@@ -8368,10 +8372,8 @@
             "type": "object",
             "required": [
                 "country",
-                "email",
                 "name",
-                "orgNumber",
-                "phone"
+                "orgNumber"
             ],
             "properties": {
                 "address": {

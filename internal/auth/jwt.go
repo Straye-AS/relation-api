@@ -116,6 +116,7 @@ func (v *JWTValidator) ValidateToken(tokenString string) (*UserContext, error) {
 		IPAddress:    extractString(claims, "ipaddr"),
 		AzureADRoles: extractStringArray(claims, "wids"),
 		Department:   extractString(claims, "department"),
+		CompanyID:    domain.CompanyGruppen, // Default to main company
 	}
 
 	// Extract user ID

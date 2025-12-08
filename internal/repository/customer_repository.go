@@ -45,9 +45,7 @@ func (r *CustomerRepository) Create(ctx context.Context, customer *domain.Custom
 
 func (r *CustomerRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Customer, error) {
 	var customer domain.Customer
-	query := r.db.WithContext(ctx).Where("id = ?", id)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.First(&customer).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&customer).Error
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +72,10 @@ func (r *CustomerRepository) ListWithFilters(ctx context.Context, page, pageSize
 
 	query := r.db.WithContext(ctx).Model(&domain.Customer{})
 
-	// Apply multi-tenant company filter
-	query = ApplyCompanyFilter(ctx, query)
+	// Exclude inactive customers by default unless explicitly filtering by status
+	if filters == nil || filters.Status == nil {
+		query = query.Where("status != ?", domain.CustomerStatusInactive)
+	}
 
 	// Apply filters
 	if filters != nil {
@@ -153,28 +153,26 @@ func (r *CustomerRepository) GetOffersCount(ctx context.Context, customerID uuid
 
 func (r *CustomerRepository) Count(ctx context.Context) (int, error) {
 	var count int64
-	query := r.db.WithContext(ctx).Model(&domain.Customer{})
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&domain.Customer{}).
+		Where("status != ?", domain.CustomerStatusInactive).
+		Count(&count).Error
 	return int(count), err
 }
 
 func (r *CustomerRepository) Search(ctx context.Context, searchQuery string, limit int) ([]domain.Customer, error) {
 	var customers []domain.Customer
 	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
-	query := r.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.Limit(limit).Find(&customers).Error
+	err := r.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern).
+		Where("status != ?", domain.CustomerStatusInactive).
+		Limit(limit).Find(&customers).Error
 	return customers, err
 }
 
 // GetByOrgNumber finds a customer by organization number
 func (r *CustomerRepository) GetByOrgNumber(ctx context.Context, orgNumber string) (*domain.Customer, error) {
 	var customer domain.Customer
-	query := r.db.WithContext(ctx).Where("org_number = ?", orgNumber)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.First(&customer).Error
+	err := r.db.WithContext(ctx).Where("org_number = ?", orgNumber).First(&customer).Error
 	if err != nil {
 		return nil, err
 	}
@@ -245,13 +243,12 @@ func (r *CustomerRepository) GetCustomerStats(ctx context.Context, customerID uu
 // GetCustomerWithRelations returns a customer with preloaded contacts
 func (r *CustomerRepository) GetCustomerWithRelations(ctx context.Context, id uuid.UUID) (*domain.Customer, error) {
 	var customer domain.Customer
-	query := r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Preload("Contacts", func(db *gorm.DB) *gorm.DB {
 			return db.Where("is_active = ?", true).Limit(10)
 		}).
-		Where("id = ?", id)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.First(&customer).Error
+		Where("id = ?", id).
+		First(&customer).Error
 	if err != nil {
 		return nil, err
 	}
@@ -297,4 +294,16 @@ func (r *CustomerRepository) HasActiveRelations(ctx context.Context, customerID 
 	}
 
 	return false, "", nil
+}
+
+// GetTopCustomers returns customers with the most active offers/projects
+func (r *CustomerRepository) GetTopCustomers(ctx context.Context, limit int) ([]domain.Customer, error) {
+	var customers []domain.Customer
+	query := r.db.WithContext(ctx).
+		Where("status = ?", domain.CustomerStatusActive).
+		Order("updated_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&customers).Error
+	return customers, err
 }

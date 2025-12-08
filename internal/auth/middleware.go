@@ -38,13 +38,21 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		// Try API key first
 		if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
 			if m.validateAPIKey(apiKey) {
+				// Determine company ID from header, default to gruppen
+				companyID := domain.CompanyGruppen
+				if companyHeader := r.Header.Get("X-Company-ID"); companyHeader != "" {
+					if domain.IsValidCompanyID(companyHeader) {
+						companyID = domain.CompanyID(companyHeader)
+					}
+				}
+
 				// Create system user context with API service role
 				userCtx := &UserContext{
 					UserID:      uuid.MustParse("00000000-0000-0000-0000-000000000000"),
 					DisplayName: "System",
 					Email:       "system@straye.io",
 					Roles:       []domain.UserRoleType{domain.RoleSuperAdmin, domain.RoleAPIService},
-					CompanyID:   domain.CompanyGruppen,
+					CompanyID:   companyID,
 				}
 				ctx := WithUserContext(r.Context(), userCtx)
 
@@ -121,12 +129,20 @@ func (m *Middleware) OptionalAuthenticate(next http.Handler) http.Handler {
 		// Try API key first
 		if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
 			if m.validateAPIKey(apiKey) {
+				// Determine company ID from header, default to gruppen
+				companyID := domain.CompanyGruppen
+				if companyHeader := r.Header.Get("X-Company-ID"); companyHeader != "" {
+					if domain.IsValidCompanyID(companyHeader) {
+						companyID = domain.CompanyID(companyHeader)
+					}
+				}
+
 				userCtx := &UserContext{
 					UserID:      uuid.MustParse("00000000-0000-0000-0000-000000000000"),
 					DisplayName: "System",
 					Email:       "system@straye.io",
 					Roles:       []domain.UserRoleType{domain.RoleSuperAdmin, domain.RoleAPIService},
-					CompanyID:   domain.CompanyGruppen,
+					CompanyID:   companyID,
 				}
 				ctx := WithUserContext(r.Context(), userCtx)
 				next.ServeHTTP(w, r.WithContext(ctx))

@@ -378,7 +378,7 @@ type DashboardMetrics struct {
 	TeamPerformance       []TeamMemberStats   `json:"teamPerformance"`
 	RecentOffers          []OfferDTO          `json:"recentOffers"`
 	RecentProjects        []ProjectDTO        `json:"recentProjects"`
-	RecentActivities      []NotificationDTO   `json:"recentActivities"`
+	RecentActivities      []ActivityDTO       `json:"recentActivities"`
 }
 
 // Search DTOs
@@ -412,8 +412,8 @@ type APIResponse struct {
 type CreateCustomerRequest struct {
 	Name          string           `json:"name" validate:"required,max=200"`
 	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
-	Email         string           `json:"email" validate:"required,email"`
-	Phone         string           `json:"phone" validate:"required,max=50"`
+	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
+	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
 	City          string           `json:"city,omitempty" validate:"max=100"`
 	PostalCode    string           `json:"postalCode,omitempty" validate:"max=20"`
@@ -429,8 +429,8 @@ type CreateCustomerRequest struct {
 type UpdateCustomerRequest struct {
 	Name          string           `json:"name" validate:"required,max=200"`
 	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
-	Email         string           `json:"email" validate:"required,email"`
-	Phone         string           `json:"phone" validate:"required,max=50"`
+	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
+	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
 	City          string           `json:"city,omitempty" validate:"max=100"`
 	PostalCode    string           `json:"postalCode,omitempty" validate:"max=20"`

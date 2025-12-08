@@ -366,3 +366,26 @@ func (r *ProjectRepository) CountByHealth(ctx context.Context) (map[domain.Proje
 
 	return counts, nil
 }
+
+// GetActiveProjects returns active projects with optional limit
+func (r *ProjectRepository) GetActiveProjects(ctx context.Context, limit int) ([]domain.Project, error) {
+	var projects []domain.Project
+	query := r.db.WithContext(ctx).
+		Where("status = ?", domain.ProjectStatusActive).
+		Order("updated_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&projects).Error
+	return projects, err
+}
+
+// GetRecentProjects returns the most recently updated projects
+func (r *ProjectRepository) GetRecentProjects(ctx context.Context, limit int) ([]domain.Project, error) {
+	var projects []domain.Project
+	query := r.db.WithContext(ctx).
+		Order("updated_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&projects).Error
+	return projects, err
+}
