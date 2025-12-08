@@ -200,7 +200,7 @@ func TestNotificationService_GetForCurrentUser(t *testing.T) {
 	}
 
 	t.Run("get all notifications", func(t *testing.T) {
-		result, err := svc.GetForCurrentUser(ctx, 1, 10, false)
+		result, err := svc.GetForCurrentUser(ctx, 1, 10, false, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, int64(5), result.Total)
@@ -208,46 +208,59 @@ func TestNotificationService_GetForCurrentUser(t *testing.T) {
 	})
 
 	t.Run("get only unread notifications", func(t *testing.T) {
-		result, err := svc.GetForCurrentUser(ctx, 1, 10, true)
+		result, err := svc.GetForCurrentUser(ctx, 1, 10, true, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, int64(2), result.Total) // Only 2 unread (indexes 1 and 3)
 	})
 
 	t.Run("pagination", func(t *testing.T) {
-		result, err := svc.GetForCurrentUser(ctx, 1, 2, false)
+		result, err := svc.GetForCurrentUser(ctx, 1, 2, false, "")
 		assert.NoError(t, err)
 		assert.Len(t, result.Data, 2)
 		assert.Equal(t, int64(5), result.Total)
 		assert.Equal(t, 3, result.TotalPages)
 
-		result, err = svc.GetForCurrentUser(ctx, 2, 2, false)
+		result, err = svc.GetForCurrentUser(ctx, 2, 2, false, "")
 		assert.NoError(t, err)
 		assert.Len(t, result.Data, 2)
 	})
 
 	t.Run("clamp page size to minimum", func(t *testing.T) {
-		result, err := svc.GetForCurrentUser(ctx, 1, 0, false)
+		result, err := svc.GetForCurrentUser(ctx, 1, 0, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, 20, result.PageSize)
 	})
 
 	t.Run("clamp page size to maximum", func(t *testing.T) {
-		result, err := svc.GetForCurrentUser(ctx, 1, 500, false)
+		result, err := svc.GetForCurrentUser(ctx, 1, 500, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, 200, result.PageSize)
 	})
 
 	t.Run("clamp page to minimum", func(t *testing.T) {
-		result, err := svc.GetForCurrentUser(ctx, 0, 10, false)
+		result, err := svc.GetForCurrentUser(ctx, 0, 10, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, 1, result.Page)
 	})
 
 	t.Run("error without user context", func(t *testing.T) {
-		_, err := svc.GetForCurrentUser(context.Background(), 1, 10, false)
+		_, err := svc.GetForCurrentUser(context.Background(), 1, 10, false, "")
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, service.ErrUserContextRequired)
+	})
+
+	t.Run("filter by notification type", func(t *testing.T) {
+		result, err := svc.GetForCurrentUser(ctx, 1, 10, false, string(domain.NotificationTypeTaskAssigned))
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, int64(5), result.Total) // All notifications are task_assigned
+	})
+
+	t.Run("filter by type returns empty when no match", func(t *testing.T) {
+		result, err := svc.GetForCurrentUser(ctx, 1, 10, false, string(domain.NotificationTypeBudgetAlert))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), result.Total)
 	})
 }
 
@@ -426,13 +439,13 @@ func TestNotificationService_MarkAllAsReadForUser(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify all user's notifications are read
-		result, err := svc.GetForCurrentUser(ctx, 1, 10, true)
+		result, err := svc.GetForCurrentUser(ctx, 1, 10, true, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(0), result.Total) // No unread notifications
 
 		// Verify other user's notification is still unread
 		otherCtx := createNotificationTestContext(otherUserID)
-		otherResult, err := svc.GetForCurrentUser(otherCtx, 1, 10, true)
+		otherResult, err := svc.GetForCurrentUser(otherCtx, 1, 10, true, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(1), otherResult.Total)
 	})
@@ -554,7 +567,7 @@ func TestNotificationService_Integration(t *testing.T) {
 		assert.False(t, retrieved.Read)
 
 		// 4. List notifications
-		result, err := svc.GetForCurrentUser(ctx, 1, 10, false)
+		result, err := svc.GetForCurrentUser(ctx, 1, 10, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), result.Total)
 

@@ -4042,6 +4042,18 @@ paths:
         in: query
         name: unreadOnly
         type: boolean
+      - description: Filter by notification type
+        enum:
+        - task_assigned
+        - budget_alert
+        - deal_stage_changed
+        - offer_accepted
+        - offer_rejected
+        - activity_reminder
+        - project_update
+        in: query
+        name: type
+        type: string
       produces:
       - application/json
       responses:

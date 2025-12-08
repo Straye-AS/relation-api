@@ -12,6 +12,22 @@ import (
 	"go.uber.org/zap"
 )
 
+// validNotificationTypes contains all valid notification type values
+var validNotificationTypes = map[string]bool{
+	string(domain.NotificationTypeTaskAssigned):     true,
+	string(domain.NotificationTypeBudgetAlert):      true,
+	string(domain.NotificationTypeDealStageChanged): true,
+	string(domain.NotificationTypeOfferAccepted):    true,
+	string(domain.NotificationTypeOfferRejected):    true,
+	string(domain.NotificationTypeActivityReminder): true,
+	string(domain.NotificationTypeProjectUpdate):    true,
+}
+
+// isValidNotificationType checks if the given type string is a valid NotificationType
+func isValidNotificationType(t string) bool {
+	return validNotificationTypes[t]
+}
+
 // NotificationHandler handles HTTP requests for notifications
 type NotificationHandler struct {
 	notificationService *service.NotificationService
@@ -35,6 +51,7 @@ func NewNotificationHandler(notificationService *service.NotificationService, lo
 // @Param page query int false "Page number" default(1)
 // @Param pageSize query int false "Items per page (max 200)" default(20)
 // @Param unreadOnly query bool false "Filter to show only unread notifications" default(false)
+// @Param type query string false "Filter by notification type" Enums(task_assigned, budget_alert, deal_stage_changed, offer_accepted, offer_rejected, activity_reminder, project_update)
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.NotificationDTO}
 // @Failure 401 {object} domain.ErrorResponse
 // @Failure 500 {object} domain.ErrorResponse
@@ -56,8 +73,18 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	unreadOnly := r.URL.Query().Get("unreadOnly") == "true"
+	notificationType := r.URL.Query().Get("type")
 
-	result, err := h.notificationService.GetForCurrentUser(r.Context(), page, pageSize, unreadOnly)
+	// Validate notification type if provided
+	if notificationType != "" && !isValidNotificationType(notificationType) {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "invalid notification type: must be one of task_assigned, budget_alert, deal_stage_changed, offer_accepted, offer_rejected, activity_reminder, project_update",
+		})
+		return
+	}
+
+	result, err := h.notificationService.GetForCurrentUser(r.Context(), page, pageSize, unreadOnly, notificationType)
 	if err != nil {
 		if errors.Is(err, service.ErrUserContextRequired) {
 			respondJSON(w, http.StatusUnauthorized, domain.ErrorResponse{
