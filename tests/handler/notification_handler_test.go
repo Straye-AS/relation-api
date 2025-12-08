@@ -201,6 +201,24 @@ func TestNotificationHandler_List(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, int64(0), result.Total)
 	})
+
+	t.Run("400 for invalid type filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/notifications?type=invalid_type", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.List(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+		var result domain.ErrorResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.Equal(t, "Bad Request", result.Error)
+		assert.Contains(t, result.Message, "invalid notification type")
+		assert.Contains(t, result.Message, "task_assigned")
+		assert.Contains(t, result.Message, "budget_alert")
+	})
 }
 
 // TestNotificationHandler_GetUnreadCount tests the GetUnreadCount endpoint
