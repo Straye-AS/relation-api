@@ -737,21 +737,23 @@ type Notification struct {
 
 // User represents a user in the system
 type User struct {
-	ID          string         `gorm:"type:varchar(100);primaryKey" json:"id"`
-	AzureADOID  string         `gorm:"type:varchar(100);unique;column:azure_ad_oid" json:"azureAdOid,omitempty"`
-	Email       string         `gorm:"type:varchar(255);not null;unique" json:"email"`
-	FirstName   string         `gorm:"type:varchar(100);column:first_name" json:"firstName,omitempty"`
-	LastName    string         `gorm:"type:varchar(100);column:last_name" json:"lastName,omitempty"`
-	DisplayName string         `gorm:"type:varchar(200);not null;column:name" json:"displayName"`
-	Roles       pq.StringArray `gorm:"type:text[];not null" json:"roles"`
-	Department  string         `gorm:"type:varchar(100)" json:"department,omitempty"`
-	Avatar      string         `gorm:"type:varchar(500)" json:"avatar,omitempty"`
-	CompanyID   *CompanyID     `gorm:"type:varchar(50);column:company_id" json:"companyId,omitempty"`
-	Company     *Company       `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
-	IsActive    bool           `gorm:"not null;default:true;column:is_active" json:"isActive"`
-	LastLoginAt *time.Time     `gorm:"column:last_login_at" json:"lastLoginAt,omitempty"`
-	CreatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	ID            string         `gorm:"type:varchar(100);primaryKey" json:"id"`
+	AzureADOID    string         `gorm:"type:varchar(100);unique;column:azure_ad_oid" json:"azureAdOid,omitempty"`
+	Email         string         `gorm:"type:varchar(255);not null;unique" json:"email"`
+	FirstName     string         `gorm:"type:varchar(100);column:first_name" json:"firstName,omitempty"`
+	LastName      string         `gorm:"type:varchar(100);column:last_name" json:"lastName,omitempty"`
+	DisplayName   string         `gorm:"type:varchar(200);not null;column:name" json:"displayName"`
+	Roles         pq.StringArray `gorm:"type:text[];not null" json:"roles"`
+	AzureADRoles  pq.StringArray `gorm:"type:text[];column:azure_ad_roles" json:"azureAdRoles,omitempty"`
+	Department    string         `gorm:"type:varchar(100)" json:"department,omitempty"`
+	Avatar        string         `gorm:"type:varchar(500)" json:"avatar,omitempty"`
+	CompanyID     *CompanyID     `gorm:"type:varchar(50);column:company_id" json:"companyId,omitempty"`
+	Company       *Company       `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
+	IsActive      bool           `gorm:"not null;default:true;column:is_active" json:"isActive"`
+	LastIPAddress string         `gorm:"type:varchar(100);column:last_ip_address" json:"lastIpAddress,omitempty"`
+	LastLoginAt   *time.Time     `gorm:"column:last_login_at" json:"lastLoginAt,omitempty"`
+	CreatedAt     time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt     time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 // FullName returns the user's full name, or display name if first/last not set

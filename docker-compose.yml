@@ -51,6 +51,8 @@ services:
       STORAGE_LOCALBASEPATH: /app/storage
       ADMIN_API_KEY: dev-admin-key-change-in-production
       LOGGING_LEVEL: info
+      AZUREAD_TENANTID: ${AZUREAD_TENANTID}
+      AZUREAD_CLIENTID: ${AZUREAD_CLIENTID}
     ports:
       - "8080:8080"
     volumes:

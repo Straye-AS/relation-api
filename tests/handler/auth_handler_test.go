@@ -49,13 +49,21 @@ func (m *MockPermissionService) GetEffectivePermissions(ctx context.Context, use
 	}, nil
 }
 
+// MockGraphClient implements a mock Graph client for testing
+type MockGraphClient struct{}
+
+func (m *MockGraphClient) GetUserProfile(ctx context.Context, accessToken string) (*auth.GraphUserProfile, error) {
+	return nil, nil // Return nil to simulate Graph API not configured
+}
+
 // createTestAuthHandlerWithMocks creates an auth handler with mock dependencies
 func createTestAuthHandlerWithMocks(permissions []domain.PermissionType) *handler.AuthHandler {
 	logger := zap.NewNop()
 	mockUserRepo := &MockUserRepository{}
 	mockPermService := &MockPermissionService{permissions: permissions}
+	mockGraphClient := &MockGraphClient{}
 
-	return handler.NewAuthHandlerWithMocks(mockUserRepo, mockPermService, logger)
+	return handler.NewAuthHandlerWithMocks(mockUserRepo, mockPermService, mockGraphClient, logger)
 }
 
 func TestAuthHandler_Me_Success(t *testing.T) {

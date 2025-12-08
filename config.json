@@ -16,10 +16,8 @@
     "connMaxLifetime": 300
   },
   "azureAd": {
-    "tenantId": "23b5a73e-2b59-42e5-aa09-8366e83684b6",
-    "clientId": "35f9cd56-615f-4c4c-abab-20ffe94940e1",
     "instanceUrl": "https://login.microsoftonline.com/",
-    "requiredScopes": "api://relation-api/access"
+    "requiredScopes": "access_as_user"
   },
   "apiKey": {
     "secretName": "admin-api-key",

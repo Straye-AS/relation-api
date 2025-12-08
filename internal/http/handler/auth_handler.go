@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/lib/pq"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
@@ -22,20 +24,28 @@ type PermissionServiceInterface interface {
 	GetEffectivePermissions(ctx context.Context, userCtx *auth.UserContext) ([]domain.PermissionType, error)
 }
 
+// GraphClientInterface for dependency injection
+type GraphClientInterface interface {
+	GetUserProfile(ctx context.Context, accessToken string) (*auth.GraphUserProfile, error)
+}
+
 type AuthHandler struct {
 	userRepo          UserRepository
 	permissionService PermissionServiceInterface
+	graphClient       GraphClientInterface
 	logger            *zap.Logger
 }
 
 func NewAuthHandler(
 	userRepo *repository.UserRepository,
 	permissionService *service.PermissionService,
+	graphClient *auth.GraphClient,
 	logger *zap.Logger,
 ) *AuthHandler {
 	return &AuthHandler{
 		userRepo:          userRepo,
 		permissionService: permissionService,
+		graphClient:       graphClient,
 		logger:            logger,
 	}
 }
@@ -44,11 +54,13 @@ func NewAuthHandler(
 func NewAuthHandlerWithMocks(
 	userRepo UserRepository,
 	permissionService PermissionServiceInterface,
+	graphClient GraphClientInterface,
 	logger *zap.Logger,
 ) *AuthHandler {
 	return &AuthHandler{
 		userRepo:          userRepo,
 		permissionService: permissionService,
+		graphClient:       graphClient,
 		logger:            logger,
 	}
 }
@@ -88,12 +100,43 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upsert user in database
+	// Fetch additional profile data from Microsoft Graph API (if configured)
+	var graphProfile *auth.GraphUserProfile
+	if h.graphClient != nil && userCtx.AccessToken != "" {
+		profile, err := h.graphClient.GetUserProfile(r.Context(), userCtx.AccessToken)
+		if err != nil {
+			h.logger.Warn("failed to fetch user profile from Graph API",
+				zap.String("user_id", userCtx.UserID.String()),
+				zap.Error(err))
+		} else {
+			graphProfile = profile
+		}
+	}
+
+	// Upsert user in database with all available info from token and Graph API
+	now := time.Now()
 	user := &domain.User{
-		ID:          userCtx.UserID.String(),
-		DisplayName: userCtx.DisplayName,
-		Email:       userCtx.Email,
-		Roles:       userCtx.RolesAsStrings(),
+		ID:            userCtx.UserID.String(),
+		DisplayName:   userCtx.DisplayName,
+		Email:         userCtx.Email,
+		Roles:         userCtx.RolesAsStrings(),
+		AzureADRoles:  pq.StringArray(userCtx.AzureADRoles),
+		LastIPAddress: userCtx.IPAddress,
+		LastLoginAt:   &now,
+		Department:    userCtx.Department,
+	}
+
+	// Enrich with Graph API data if available
+	if graphProfile != nil {
+		if graphProfile.Department != "" {
+			user.Department = graphProfile.Department
+		}
+		if graphProfile.GivenName != "" {
+			user.FirstName = graphProfile.GivenName
+		}
+		if graphProfile.Surname != "" {
+			user.LastName = graphProfile.Surname
+		}
 	}
 
 	if err := h.userRepo.Upsert(r.Context(), user); err != nil {

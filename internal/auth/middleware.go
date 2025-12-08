@@ -33,6 +33,8 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
+		authHeader := r.Header.Get("Authorization")
+
 		// Try API key first
 		if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
 			if m.validateAPIKey(apiKey) {
@@ -69,7 +71,6 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		}
 
 		// Try JWT Bearer token
-		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "Unauthorized: missing authorization header", http.StatusUnauthorized)
 			return
@@ -93,6 +94,9 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
+
+		// Store the access token for OBO flow (to call Graph API)
+		userCtx.AccessToken = token
 
 		// Log successful JWT authentication
 		m.logger.Info("request authenticated",

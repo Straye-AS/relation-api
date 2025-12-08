@@ -110,9 +110,12 @@ func (v *JWTValidator) ValidateToken(tokenString string) (*UserContext, error) {
 
 	// Extract user information
 	userCtx := &UserContext{
-		DisplayName: extractString(claims, "name", "unique_name", "preferred_username"),
-		Email:       extractString(claims, "email", "upn", "unique_name"),
-		Roles:       ExtractRoles(claims),
+		DisplayName:  extractString(claims, "name", "unique_name", "preferred_username"),
+		Email:        extractString(claims, "email", "upn", "unique_name"),
+		Roles:        ExtractRoles(claims),
+		IPAddress:    extractString(claims, "ipaddr"),
+		AzureADRoles: extractStringArray(claims, "wids"),
+		Department:   extractString(claims, "department"),
 	}
 
 	// Extract user ID
@@ -222,6 +225,28 @@ func extractString(claims jwt.MapClaims, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func extractStringArray(claims jwt.MapClaims, keys ...string) []string {
+	result := []string{}
+	for _, key := range keys {
+		if val, ok := claims[key]; ok {
+			switch v := val.(type) {
+			case []interface{}:
+				for _, item := range v {
+					if str, ok := item.(string); ok {
+						result = append(result, str)
+					}
+				}
+			case []string:
+				result = append(result, v...)
+			}
+			if len(result) > 0 {
+				return result
+			}
+		}
+	}
+	return result
 }
 
 // ExtractRoles extracts roles from JWT claims and returns them as UserRoleType

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"github.com/straye-as/relation-api/internal/secrets"
 	"go.uber.org/zap"
@@ -48,6 +49,7 @@ type DatabaseConfig struct {
 type AzureAdConfig struct {
 	TenantId       string
 	ClientId       string
+	ClientSecret   string // Required for On-Behalf-Of flow to call MS Graph
 	InstanceUrl    string
 	RequiredScopes string
 }
@@ -175,6 +177,9 @@ func (d *DatabaseConfig) ConnMaxLifetimeDuration() time.Duration {
 // This is a basic load that doesn't fetch secrets from vault
 // Use LoadWithSecrets for full secret resolution
 func Load() (*Config, error) {
+	// Load .env file if it exists (ignore error if not found)
+	_ = godotenv.Load()
+
 	v := viper.New()
 
 	// Set defaults
@@ -204,6 +209,17 @@ func Load() (*Config, error) {
 	// Load API key from environment if not in config
 	if cfg.ApiKey.Value == "" {
 		cfg.ApiKey.Value = v.GetString("ADMIN_API_KEY")
+	}
+
+	// Load Azure AD config from environment if not in config
+	if cfg.AzureAd.TenantId == "" {
+		cfg.AzureAd.TenantId = v.GetString("AZUREAD_TENANTID")
+	}
+	if cfg.AzureAd.ClientId == "" {
+		cfg.AzureAd.ClientId = v.GetString("AZUREAD_CLIENTID")
+	}
+	if cfg.AzureAd.ClientSecret == "" {
+		cfg.AzureAd.ClientSecret = v.GetString("AZUREAD_CLIENTSECRET")
 	}
 
 	return &cfg, nil
@@ -323,6 +339,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("secrets.source", "auto")
 	v.SetDefault("secrets.cacheEnabled", true)
 	v.SetDefault("secrets.cacheTTL", 300) // 5 minutes
+
+	// Azure AD defaults
+	v.SetDefault("azuread.instanceUrl", "https://login.microsoftonline.com/")
 
 	// Storage defaults
 	v.SetDefault("storage.mode", "local")

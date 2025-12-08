@@ -10,11 +10,15 @@ import (
 
 // UserContext holds authenticated user information
 type UserContext struct {
-	UserID      uuid.UUID
-	DisplayName string
-	Email       string
-	Roles       []domain.UserRoleType
-	CompanyID   domain.CompanyID
+	UserID       uuid.UUID
+	DisplayName  string
+	Email        string
+	Roles        []domain.UserRoleType
+	CompanyID    domain.CompanyID
+	IPAddress    string   // From token ipaddr claim
+	AzureADRoles []string // From token wids claim (Azure AD directory roles)
+	Department   string   // From token department claim (optional claim)
+	AccessToken  string   `json:"-"` // Original access token for OBO flow (excluded from JSON, not stored in DB)
 }
 
 type contextKey string
