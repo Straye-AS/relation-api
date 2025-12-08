@@ -489,6 +489,24 @@ const (
 	ActivityStatusCancelled  ActivityStatus = "cancelled"
 )
 
+// IsValid checks if the ActivityType is a valid enum value
+func (at ActivityType) IsValid() bool {
+	switch at {
+	case ActivityTypeMeeting, ActivityTypeCall, ActivityTypeEmail, ActivityTypeTask, ActivityTypeNote, ActivityTypeSystem:
+		return true
+	}
+	return false
+}
+
+// IsValid checks if the ActivityStatus is a valid enum value
+func (as ActivityStatus) IsValid() bool {
+	switch as {
+	case ActivityStatusPlanned, ActivityStatusInProgress, ActivityStatusCompleted, ActivityStatusCancelled:
+		return true
+	}
+	return false
+}
+
 // Activity represents an event log entry for any entity
 type Activity struct {
 	BaseModel

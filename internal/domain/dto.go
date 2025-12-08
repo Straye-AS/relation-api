@@ -887,3 +887,40 @@ type CustomerWithStatsResponse struct {
 	CustomerDTO
 	Stats CustomerStatsResponse `json:"stats"`
 }
+
+// Activity Request DTOs
+
+// CreateActivityRequest contains the data needed to create a new activity
+type CreateActivityRequest struct {
+	TargetType      ActivityTargetType `json:"targetType" validate:"required"`
+	TargetID        uuid.UUID          `json:"targetId" validate:"required"`
+	Title           string             `json:"title" validate:"required,max=200"`
+	Body            string             `json:"body,omitempty" validate:"max=2000"`
+	ActivityType    ActivityType       `json:"activityType" validate:"required"`
+	Status          ActivityStatus     `json:"status,omitempty"`
+	ScheduledAt     *time.Time         `json:"scheduledAt,omitempty"`
+	DueDate         *time.Time         `json:"dueDate,omitempty"`
+	DurationMinutes *int               `json:"durationMinutes,omitempty" validate:"omitempty,min=1"`
+	Priority        int                `json:"priority,omitempty" validate:"min=0,max=5"`
+	IsPrivate       bool               `json:"isPrivate,omitempty"`
+	AssignedToID    string             `json:"assignedToId,omitempty" validate:"max=100"`
+	CompanyID       *CompanyID         `json:"companyId,omitempty"`
+}
+
+// UpdateActivityRequest contains the data for updating an existing activity
+type UpdateActivityRequest struct {
+	Title           string         `json:"title" validate:"required,max=200"`
+	Body            string         `json:"body,omitempty" validate:"max=2000"`
+	Status          ActivityStatus `json:"status,omitempty"`
+	ScheduledAt     *time.Time     `json:"scheduledAt,omitempty"`
+	DueDate         *time.Time     `json:"dueDate,omitempty"`
+	DurationMinutes *int           `json:"durationMinutes,omitempty" validate:"omitempty,min=1"`
+	Priority        int            `json:"priority,omitempty" validate:"min=0,max=5"`
+	IsPrivate       bool           `json:"isPrivate,omitempty"`
+	AssignedToID    string         `json:"assignedToId,omitempty" validate:"max=100"`
+}
+
+// CompleteActivityRequest contains optional outcome when completing an activity
+type CompleteActivityRequest struct {
+	Outcome string `json:"outcome,omitempty" validate:"max=500"`
+}

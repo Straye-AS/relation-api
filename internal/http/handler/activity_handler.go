@@ -70,12 +70,26 @@ func (h *ActivityHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Activity type filter
 	if activityType := r.URL.Query().Get("type"); activityType != "" {
 		at := domain.ActivityType(activityType)
+		if !at.IsValid() {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: "Invalid activity type. Valid values: meeting, call, email, task, note, system",
+			})
+			return
+		}
 		filters.ActivityType = &at
 	}
 
 	// Status filter
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := domain.ActivityStatus(status)
+		if !s.IsValid() {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: "Invalid status. Valid values: planned, in_progress, completed, cancelled",
+			})
+			return
+		}
 		filters.Status = &s
 	}
 
@@ -373,6 +387,24 @@ func (h *ActivityHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate activity type enum
+	if !req.ActivityType.IsValid() {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid activity type. Valid values: meeting, call, email, task, note, system",
+		})
+		return
+	}
+
+	// Validate status enum if provided
+	if req.Status != "" && !req.Status.IsValid() {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid status. Valid values: planned, in_progress, completed, cancelled",
+		})
+		return
+	}
+
 	activity, err := h.activityService.Create(r.Context(), &req)
 	if err != nil {
 		if errors.Is(err, service.ErrUserContextRequired) {
@@ -432,6 +464,15 @@ func (h *ActivityHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Validate request
 	if err := validate.Struct(req); err != nil {
 		respondValidationError(w, err)
+		return
+	}
+
+	// Validate status enum if provided
+	if req.Status != "" && !req.Status.IsValid() {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid status. Valid values: planned, in_progress, completed, cancelled",
+		})
 		return
 	}
 
@@ -597,7 +638,7 @@ func (h *ActivityHandler) Complete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Check for specific business logic errors
-		if err.Error() == "activity is already completed" || err.Error() == "cannot complete a cancelled activity" {
+		if errors.Is(err, service.ErrActivityAlreadyCompleted) || errors.Is(err, service.ErrActivityCannotCompleteCancelled) {
 			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
 				Error:   "Bad Request",
 				Message: err.Error(),
