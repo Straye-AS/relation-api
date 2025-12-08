@@ -17,9 +17,9 @@ import (
 
 // Activity service errors
 var (
-	ErrActivityNotFound           = errors.New("activity not found")
-	ErrActivityForbidden          = errors.New("access to activity denied")
-	ErrActivityAlreadyCompleted   = errors.New("activity is already completed")
+	ErrActivityNotFound                = errors.New("activity not found")
+	ErrActivityForbidden               = errors.New("access to activity denied")
+	ErrActivityAlreadyCompleted        = errors.New("activity is already completed")
 	ErrActivityCannotCompleteCancelled = errors.New("cannot complete a cancelled activity")
 )
 
