@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -10,15 +12,39 @@ import (
 	"github.com/straye-as/relation-api/internal/mapper"
 	"github.com/straye-as/relation-api/internal/repository"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
+// Project-specific service errors
+var (
+	// ErrProjectNotFound is returned when a project is not found
+	ErrProjectNotFound = errors.New("project not found")
+
+	// ErrInvalidStatusTransition is returned when trying to make an invalid status transition
+	ErrInvalidStatusTransition = errors.New("invalid project status transition")
+
+	// ErrInvalidCompletionPercent is returned when completion percent is out of range
+	ErrInvalidCompletionPercent = errors.New("completion percent must be between 0 and 100")
+
+	// ErrOfferNotWon is returned when trying to inherit from an offer that is not won
+	ErrOfferNotWon = errors.New("can only inherit budget from won offers")
+
+	// ErrProjectNotManager is returned when user is not the project manager
+	ErrProjectNotManager = errors.New("user is not the project manager")
+)
+
+// ProjectService handles business logic for projects
 type ProjectService struct {
-	projectRepo  *repository.ProjectRepository
-	customerRepo *repository.CustomerRepository
-	activityRepo *repository.ActivityRepository
-	logger       *zap.Logger
+	projectRepo   *repository.ProjectRepository
+	offerRepo     *repository.OfferRepository
+	customerRepo  *repository.CustomerRepository
+	dimensionRepo *repository.BudgetDimensionRepository
+	activityRepo  *repository.ActivityRepository
+	logger        *zap.Logger
+	db            *gorm.DB
 }
 
+// NewProjectService creates a new ProjectService with basic dependencies
 func NewProjectService(
 	projectRepo *repository.ProjectRepository,
 	customerRepo *repository.CustomerRepository,
@@ -33,53 +59,93 @@ func NewProjectService(
 	}
 }
 
+// NewProjectServiceWithDeps creates a ProjectService with all dependencies for full feature support
+func NewProjectServiceWithDeps(
+	projectRepo *repository.ProjectRepository,
+	offerRepo *repository.OfferRepository,
+	customerRepo *repository.CustomerRepository,
+	dimensionRepo *repository.BudgetDimensionRepository,
+	activityRepo *repository.ActivityRepository,
+	logger *zap.Logger,
+	db *gorm.DB,
+) *ProjectService {
+	return &ProjectService{
+		projectRepo:   projectRepo,
+		offerRepo:     offerRepo,
+		customerRepo:  customerRepo,
+		dimensionRepo: dimensionRepo,
+		activityRepo:  activityRepo,
+		logger:        logger,
+		db:            db,
+	}
+}
+
+// Create creates a new project with activity logging
 func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRequest) (*domain.ProjectDTO, error) {
-	// Verify customer exists
-	if _, err := s.customerRepo.GetByID(ctx, req.CustomerID); err != nil {
-		return nil, fmt.Errorf("customer not found: %w", err)
+	// Verify customer exists and get name for denormalized field
+	customer, err := s.customerRepo.GetByID(ctx, req.CustomerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to verify customer: %w", err)
+	}
+
+	// Set default health if not provided
+	health := req.Health
+	if health == nil {
+		defaultHealth := domain.ProjectHealthOnTrack
+		health = &defaultHealth
 	}
 
 	project := &domain.Project{
-		CustomerID:    req.CustomerID,
-		Name:          req.Name,
-		ProjectNumber: req.ProjectNumber,
-		Summary:       req.Summary,
-		Description:   req.Description,
-		Budget:        req.Budget,
-		Spent:         req.Spent,
-		Status:        req.Status,
-		StartDate:     req.StartDate,
-		EndDate:       req.EndDate,
-		CompanyID:     req.CompanyID,
-		ManagerID:     req.ManagerID,
+		CustomerID:              req.CustomerID,
+		CustomerName:            customer.Name,
+		Name:                    req.Name,
+		ProjectNumber:           req.ProjectNumber,
+		Summary:                 req.Summary,
+		Description:             req.Description,
+		Budget:                  req.Budget,
+		Spent:                   req.Spent,
+		Status:                  req.Status,
+		StartDate:               req.StartDate,
+		EndDate:                 req.EndDate,
+		CompanyID:               req.CompanyID,
+		ManagerID:               req.ManagerID,
+		TeamMembers:             req.TeamMembers,
+		OfferID:                 req.OfferID,
+		DealID:                  req.DealID,
+		HasDetailedBudget:       req.HasDetailedBudget,
+		Health:                  health,
+		CompletionPercent:       req.CompletionPercent,
+		EstimatedCompletionDate: req.EstimatedCompletionDate,
 	}
 
 	if err := s.projectRepo.Create(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
-	// Reload with customer
-	project, _ = s.projectRepo.GetByID(ctx, project.ID)
-
-	// Create activity
-	if userCtx, ok := auth.FromContext(ctx); ok {
-		activity := &domain.Activity{
-			TargetType:  domain.ActivityTargetProject,
-			TargetID:    project.ID,
-			Title:       "Project created",
-			Body:        fmt.Sprintf("Project '%s' was created", project.Name),
-			CreatorName: userCtx.DisplayName,
-		}
-		s.activityRepo.Create(ctx, activity)
+	// Reload with customer relation
+	project, err = s.projectRepo.GetByID(ctx, project.ID)
+	if err != nil {
+		s.logger.Warn("failed to reload project after create", zap.Error(err))
 	}
+
+	// Log activity
+	s.logActivity(ctx, project.ID, "Project created",
+		fmt.Sprintf("Project '%s' was created for customer %s", project.Name, project.CustomerName))
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
 }
 
+// GetByID retrieves a project by ID
 func (s *ProjectService) GetByID(ctx context.Context, id uuid.UUID) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
@@ -87,12 +153,50 @@ func (s *ProjectService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pro
 	return &dto, nil
 }
 
+// GetByIDWithRelations retrieves a project with all related data
+func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.ProjectDTO, []domain.BudgetDimensionDTO, []domain.ActivityDTO, error) {
+	project, dimensions, activities, err := s.projectRepo.GetByIDWithRelations(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil, ErrProjectNotFound
+		}
+		return nil, nil, nil, fmt.Errorf("failed to get project with relations: %w", err)
+	}
+
+	projectDTO := mapper.ToProjectDTO(project)
+
+	dimensionDTOs := make([]domain.BudgetDimensionDTO, len(dimensions))
+	for i, dim := range dimensions {
+		dimensionDTOs[i] = mapper.ToBudgetDimensionDTO(&dim)
+	}
+
+	activityDTOs := make([]domain.ActivityDTO, len(activities))
+	for i, act := range activities {
+		activityDTOs[i] = mapper.ToActivityDTO(&act)
+	}
+
+	return &projectDTO, dimensionDTOs, activityDTOs, nil
+}
+
+// Update updates an existing project with permission check
 func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.UpdateProjectRequest) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
+	// Check permissions - must be manager or admin
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	// Track changes for activity logging
+	changes := s.trackChanges(project, req)
+
+	// Update fields
 	project.Name = req.Name
 	project.ProjectNumber = req.ProjectNumber
 	project.Summary = req.Summary
@@ -104,38 +208,85 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	project.EndDate = req.EndDate
 	project.CompanyID = req.CompanyID
 	project.ManagerID = req.ManagerID
+	project.TeamMembers = req.TeamMembers
+
+	// Optional fields
+	if req.DealID != nil {
+		project.DealID = req.DealID
+	}
+	if req.HasDetailedBudget != nil {
+		project.HasDetailedBudget = *req.HasDetailedBudget
+	}
+	if req.Health != nil {
+		project.Health = req.Health
+	}
+	if req.CompletionPercent != nil {
+		if *req.CompletionPercent < 0 || *req.CompletionPercent > 100 {
+			return nil, ErrInvalidCompletionPercent
+		}
+		project.CompletionPercent = req.CompletionPercent
+	}
+	if req.EstimatedCompletionDate != nil {
+		project.EstimatedCompletionDate = req.EstimatedCompletionDate
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
 
-	// Reload with customer
-	project, _ = s.projectRepo.GetByID(ctx, id)
-
-	// Create activity
-	if userCtx, ok := auth.FromContext(ctx); ok {
-		activity := &domain.Activity{
-			TargetType:  domain.ActivityTargetProject,
-			TargetID:    project.ID,
-			Title:       "Project updated",
-			Body:        fmt.Sprintf("Project '%s' was updated", project.Name),
-			CreatorName: userCtx.DisplayName,
+	// Recalculate health if budget changed
+	if changes != "" {
+		if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+			s.logger.Warn("failed to recalculate project health", zap.Error(err))
 		}
-		s.activityRepo.Create(ctx, activity)
+		// Reload after health update
+		project, _ = s.projectRepo.GetByID(ctx, id)
+	} else {
+		// Reload with customer
+		project, _ = s.projectRepo.GetByID(ctx, id)
 	}
+
+	// Log activity
+	activityBody := fmt.Sprintf("Project '%s' was updated", project.Name)
+	if changes != "" {
+		activityBody = fmt.Sprintf("Project '%s' was updated: %s", project.Name, changes)
+	}
+	s.logActivity(ctx, project.ID, "Project updated", activityBody)
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
 }
 
+// Delete removes a project with permission check
 func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrProjectNotFound
+		}
+		return fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Check permissions - must be manager or admin
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return err
+	}
+
+	projectName := project.Name
+	customerID := project.CustomerID
+
 	if err := s.projectRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}
 
+	// Log activity on customer since project is deleted
+	s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, customerID,
+		"Project deleted", fmt.Sprintf("Project '%s' was deleted", projectName))
+
 	return nil
 }
 
+// List returns a paginated list of projects with optional filters
 func (s *ProjectService) List(ctx context.Context, page, pageSize int, customerID *uuid.UUID, status *domain.ProjectStatus) (*domain.PaginatedResponse, error) {
 	// Clamp page size
 	if pageSize < 1 {
@@ -168,9 +319,172 @@ func (s *ProjectService) List(ctx context.Context, page, pageSize int, customerI
 	}, nil
 }
 
+// ListWithFilters returns a paginated list of projects with filter options
+func (s *ProjectService) ListWithFilters(ctx context.Context, page, pageSize int, filters *repository.ProjectFilters) (*domain.PaginatedResponse, error) {
+	// Clamp page size
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	if page < 1 {
+		page = 1
+	}
+
+	projects, total, err := s.projectRepo.ListWithFilters(ctx, page, pageSize, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects: %w", err)
+	}
+
+	dtos := make([]domain.ProjectDTO, len(projects))
+	for i, project := range projects {
+		dtos[i] = mapper.ToProjectDTO(&project)
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	return &domain.PaginatedResponse{
+		Data:       dtos,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// ============================================================================
+// Budget Inheritance Methods
+// ============================================================================
+
+// InheritBudgetFromOffer clones budget dimensions from an offer to the project
+// This is typically called when a project is created from a won offer
+func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, offerID uuid.UUID) error {
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrProjectNotFound
+		}
+		return fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Verify offer exists and is won
+	if s.offerRepo == nil {
+		return fmt.Errorf("offer repository not available")
+	}
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrOfferNotFound
+		}
+		return fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if offer.Phase != domain.OfferPhaseWon {
+		return ErrOfferNotWon
+	}
+
+	// Get budget dimensions from offer
+	if s.dimensionRepo == nil {
+		return fmt.Errorf("budget dimension repository not available")
+	}
+	dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, offerID)
+	if err != nil {
+		return fmt.Errorf("failed to get offer budget dimensions: %w", err)
+	}
+
+	if len(dimensions) == 0 {
+		s.logger.Info("no budget dimensions to inherit from offer",
+			zap.String("projectID", projectID.String()),
+			zap.String("offerID", offerID.String()))
+		return nil
+	}
+
+	// Use transaction for atomicity
+	if s.db == nil {
+		return fmt.Errorf("database connection not available for transaction")
+	}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// Clone each dimension
+		for _, dim := range dimensions {
+			cloned := domain.BudgetDimension{
+				ParentType:          domain.BudgetParentProject,
+				ParentID:            projectID,
+				CategoryID:          dim.CategoryID,
+				CustomName:          dim.CustomName,
+				Cost:                dim.Cost,
+				Revenue:             dim.Revenue,
+				TargetMarginPercent: dim.TargetMarginPercent,
+				MarginOverride:      dim.MarginOverride,
+				Description:         dim.Description,
+				Quantity:            dim.Quantity,
+				Unit:                dim.Unit,
+				DisplayOrder:        dim.DisplayOrder,
+			}
+			if err := tx.Create(&cloned).Error; err != nil {
+				return fmt.Errorf("failed to clone budget dimension: %w", err)
+			}
+		}
+
+		// Update project to reflect detailed budget and link to offer
+		project.HasDetailedBudget = true
+		project.OfferID = &offerID
+		project.Budget = offer.Value
+		if err := tx.Save(project).Error; err != nil {
+			return fmt.Errorf("failed to update project: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Log activity
+	s.logActivity(ctx, projectID, "Budget inherited from offer",
+		fmt.Sprintf("Budget dimensions (%d items) inherited from offer '%s'", len(dimensions), offer.Title))
+
+	return nil
+}
+
+// GetBudgetSummary returns aggregated budget totals for a project
+func (s *ProjectService) GetBudgetSummary(ctx context.Context, id uuid.UUID) (*domain.BudgetSummaryDTO, error) {
+	// Verify project exists
+	_, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	summary, err := s.projectRepo.GetBudgetSummary(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get budget summary: %w", err)
+	}
+
+	dto := &domain.BudgetSummaryDTO{
+		ParentType:           domain.BudgetParentProject,
+		ParentID:             id,
+		DimensionCount:       summary.DimensionCount,
+		TotalCost:            summary.TotalCost,
+		TotalRevenue:         summary.TotalRevenue,
+		OverallMarginPercent: summary.MarginPercent,
+		TotalProfit:          summary.TotalMargin,
+	}
+
+	return dto, nil
+}
+
+// GetBudget returns budget information for a project
 func (s *ProjectService) GetBudget(ctx context.Context, id uuid.UUID) (*domain.ProjectBudgetDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
@@ -178,7 +492,169 @@ func (s *ProjectService) GetBudget(ctx context.Context, id uuid.UUID) (*domain.P
 	return &dto, nil
 }
 
+// GetBudgetMetrics calculates detailed budget metrics for a project
+func (s *ProjectService) GetBudgetMetrics(ctx context.Context, id uuid.UUID) (*repository.ProjectBudgetMetrics, error) {
+	metrics, err := s.projectRepo.CalculateBudgetMetrics(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to calculate budget metrics: %w", err)
+	}
+	return metrics, nil
+}
+
+// ============================================================================
+// Status and Lifecycle Methods
+// ============================================================================
+
+// UpdateStatus updates the project status with validation and health recalculation
+func (s *ProjectService) UpdateStatus(ctx context.Context, id uuid.UUID, newStatus domain.ProjectStatus) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Check permissions
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	// Validate status transition
+	if !s.isValidStatusTransition(project.Status, newStatus) {
+		return nil, fmt.Errorf("%w: cannot transition from %s to %s",
+			ErrInvalidStatusTransition, project.Status, newStatus)
+	}
+
+	oldStatus := project.Status
+	project.Status = newStatus
+
+	// Auto-update completion percent on completion
+	if newStatus == domain.ProjectStatusCompleted {
+		hundred := 100.0
+		project.CompletionPercent = &hundred
+	}
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project status: %w", err)
+	}
+
+	// Recalculate health after status change
+	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+		s.logger.Warn("failed to update project health", zap.Error(err))
+	}
+
+	// Reload project
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	// Log activity
+	s.logActivity(ctx, project.ID, "Project status changed",
+		fmt.Sprintf("Project '%s' status changed from %s to %s", project.Name, oldStatus, newStatus))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateCompletionPercent updates the project completion percentage with validation
+func (s *ProjectService) UpdateCompletionPercent(ctx context.Context, id uuid.UUID, percent float64) (*domain.ProjectDTO, error) {
+	// Validate range
+	if percent < 0 || percent > 100 {
+		return nil, ErrInvalidCompletionPercent
+	}
+
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Check permissions
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldPercent := float64(0)
+	if project.CompletionPercent != nil {
+		oldPercent = *project.CompletionPercent
+	}
+
+	project.CompletionPercent = &percent
+
+	// Auto-update status when reaching 100%
+	if percent == 100 && project.Status == domain.ProjectStatusActive {
+		project.Status = domain.ProjectStatusCompleted
+	}
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update completion percent: %w", err)
+	}
+
+	// Reload project
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	// Log activity
+	s.logActivity(ctx, project.ID, "Project progress updated",
+		fmt.Sprintf("Project '%s' completion updated from %.1f%% to %.1f%%", project.Name, oldPercent, percent))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// RecalculateHealth recalculates and updates the project health status
+func (s *ProjectService) RecalculateHealth(ctx context.Context, id uuid.UUID) (*domain.ProjectDTO, error) {
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	oldHealth := project.Health
+
+	// Recalculate health
+	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+		return nil, fmt.Errorf("failed to recalculate health: %w", err)
+	}
+
+	// Reload project
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	// Log activity if health changed
+	if oldHealth == nil || *oldHealth != *project.Health {
+		oldHealthStr := "unknown"
+		if oldHealth != nil {
+			oldHealthStr = string(*oldHealth)
+		}
+		s.logActivity(ctx, project.ID, "Project health updated",
+			fmt.Sprintf("Project '%s' health changed from %s to %s", project.Name, oldHealthStr, *project.Health))
+	}
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// ============================================================================
+// Activity Methods
+// ============================================================================
+
+// GetActivities returns activities for a project
 func (s *ProjectService) GetActivities(ctx context.Context, id uuid.UUID, limit int) ([]domain.ActivityDTO, error) {
+	// Verify project exists
+	_, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
 	activities, err := s.activityRepo.ListByTarget(ctx, domain.ActivityTargetProject, id, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activities: %w", err)
@@ -190,4 +666,180 @@ func (s *ProjectService) GetActivities(ctx context.Context, id uuid.UUID, limit 
 	}
 
 	return dtos, nil
+}
+
+// ============================================================================
+// Query Methods
+// ============================================================================
+
+// GetByManager returns all projects managed by a specific user
+func (s *ProjectService) GetByManager(ctx context.Context, managerID string) ([]domain.ProjectDTO, error) {
+	projects, err := s.projectRepo.GetByManager(ctx, managerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get projects by manager: %w", err)
+	}
+
+	dtos := make([]domain.ProjectDTO, len(projects))
+	for i, project := range projects {
+		dtos[i] = mapper.ToProjectDTO(&project)
+	}
+
+	return dtos, nil
+}
+
+// GetByHealth returns all projects with a specific health status
+func (s *ProjectService) GetByHealth(ctx context.Context, health domain.ProjectHealth) ([]domain.ProjectDTO, error) {
+	projects, err := s.projectRepo.GetByHealth(ctx, health)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get projects by health: %w", err)
+	}
+
+	dtos := make([]domain.ProjectDTO, len(projects))
+	for i, project := range projects {
+		dtos[i] = mapper.ToProjectDTO(&project)
+	}
+
+	return dtos, nil
+}
+
+// GetHealthSummary returns project counts grouped by health status
+func (s *ProjectService) GetHealthSummary(ctx context.Context) (map[domain.ProjectHealth]int64, error) {
+	return s.projectRepo.CountByHealth(ctx)
+}
+
+// ============================================================================
+// Helper Methods
+// ============================================================================
+
+// checkProjectPermission verifies the user has permission to modify the project
+// Users must be the project manager or have admin role
+func (s *ProjectService) checkProjectPermission(ctx context.Context, project *domain.Project) error {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		return ErrUnauthorized
+	}
+
+	// Check if user is admin
+	for _, role := range userCtx.Roles {
+		if role == domain.RoleSuperAdmin || role == domain.RoleCompanyAdmin || role == domain.RoleManager {
+			return nil
+		}
+	}
+
+	// Check if user is the project manager
+	if project.ManagerID == userCtx.UserID.String() {
+		return nil
+	}
+
+	return ErrProjectNotManager
+}
+
+// isValidStatusTransition validates project status transitions
+func (s *ProjectService) isValidStatusTransition(from, to domain.ProjectStatus) bool {
+	// Define valid transitions
+	validTransitions := map[domain.ProjectStatus][]domain.ProjectStatus{
+		domain.ProjectStatusPlanning: {
+			domain.ProjectStatusActive,
+			domain.ProjectStatusOnHold,
+			domain.ProjectStatusCancelled,
+		},
+		domain.ProjectStatusActive: {
+			domain.ProjectStatusOnHold,
+			domain.ProjectStatusCompleted,
+			domain.ProjectStatusCancelled,
+		},
+		domain.ProjectStatusOnHold: {
+			domain.ProjectStatusActive,
+			domain.ProjectStatusCancelled,
+			domain.ProjectStatusPlanning,
+		},
+		domain.ProjectStatusCompleted: {
+			// Terminal state - no transitions allowed
+		},
+		domain.ProjectStatusCancelled: {
+			// Terminal state - no transitions allowed
+		},
+	}
+
+	// Same status is always valid
+	if from == to {
+		return true
+	}
+
+	allowed, exists := validTransitions[from]
+	if !exists {
+		return false
+	}
+
+	for _, validTo := range allowed {
+		if validTo == to {
+			return true
+		}
+	}
+
+	return false
+}
+
+// trackChanges creates a summary of changes between the project and update request
+func (s *ProjectService) trackChanges(project *domain.Project, req *domain.UpdateProjectRequest) string {
+	var changes []string
+
+	if project.Name != req.Name {
+		changes = append(changes, fmt.Sprintf("name: '%s' -> '%s'", project.Name, req.Name))
+	}
+	if project.Status != req.Status {
+		changes = append(changes, fmt.Sprintf("status: %s -> %s", project.Status, req.Status))
+	}
+	if project.Budget != req.Budget {
+		changes = append(changes, fmt.Sprintf("budget: %.2f -> %.2f", project.Budget, req.Budget))
+	}
+	if project.Spent != req.Spent {
+		changes = append(changes, fmt.Sprintf("spent: %.2f -> %.2f", project.Spent, req.Spent))
+	}
+	if project.ManagerID != req.ManagerID {
+		changes = append(changes, fmt.Sprintf("manager: %s -> %s", project.ManagerID, req.ManagerID))
+	}
+
+	if len(changes) == 0 {
+		return ""
+	}
+	if len(changes) > 3 {
+		return fmt.Sprintf("%d fields updated", len(changes))
+	}
+	result := ""
+	for i, c := range changes {
+		if i > 0 {
+			result += ", "
+		}
+		result += c
+	}
+	return result
+}
+
+// logActivity creates an activity log entry for a project
+func (s *ProjectService) logActivity(ctx context.Context, projectID uuid.UUID, title, body string) {
+	s.logActivityOnTarget(ctx, domain.ActivityTargetProject, projectID, title, body)
+}
+
+// logActivityOnTarget creates an activity log entry for any target
+func (s *ProjectService) logActivityOnTarget(ctx context.Context, targetType domain.ActivityTargetType, targetID uuid.UUID, title, body string) {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		s.logger.Warn("no user context for activity logging")
+		return
+	}
+
+	activity := &domain.Activity{
+		TargetType:  targetType,
+		TargetID:    targetID,
+		Title:       title,
+		Body:        body,
+		OccurredAt:  time.Now(),
+		CreatorName: userCtx.DisplayName,
+		CreatorID:   userCtx.UserID.String(),
+	}
+
+	if err := s.activityRepo.Create(ctx, activity); err != nil {
+		s.logger.Warn("failed to log activity", zap.Error(err))
+	}
 }
