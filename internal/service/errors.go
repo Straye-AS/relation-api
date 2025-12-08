@@ -65,4 +65,15 @@ var (
 
 	// ErrProjectCreationFailed is returned when project creation fails during offer acceptance
 	ErrProjectCreationFailed = errors.New("failed to create project from offer")
+
+	// Deal lifecycle errors
+
+	// ErrDealNotFound is returned when a deal is not found
+	ErrDealNotFound = errors.New("deal not found")
+
+	// ErrDealAlreadyHasOffer is returned when trying to create an offer for a deal that already has one
+	ErrDealAlreadyHasOffer = errors.New("deal already has a linked offer")
+
+	// ErrDealInvalidStageForOffer is returned when deal is in invalid stage for creating an offer
+	ErrDealInvalidStageForOffer = errors.New("deal must be in lead or qualified stage to create an offer")
 )

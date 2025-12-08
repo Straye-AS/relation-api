@@ -602,3 +602,60 @@ func (h *DealHandler) GetForecast(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, forecast)
 }
+
+// @Summary Create offer from deal
+// @Description Create an offer linked to a deal, advancing the deal to proposal stage
+// @Tags Deals
+// @Accept json
+// @Produce json
+// @Param id path string true "Deal ID"
+// @Param request body domain.CreateOfferFromDealRequest false "Optional: template offer ID and title"
+// @Success 201 {object} domain.CreateOfferFromDealResponse
+// @Failure 400 {object} domain.ErrorResponse "Invalid request or deal already has offer or invalid stage"
+// @Failure 404 {object} domain.ErrorResponse "Deal not found"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /deals/{id}/create-offer [post]
+func (h *DealHandler) CreateOffer(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
+		return
+	}
+
+	// Parse optional request body
+	var req domain.CreateOfferFromDealRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+			return
+		}
+
+		if err := validate.Struct(req); err != nil {
+			respondValidationError(w, err)
+			return
+		}
+	}
+
+	result, err := h.dealService.CreateOfferFromDeal(r.Context(), id, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrDealNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		if errors.Is(err, service.ErrDealAlreadyHasOffer) {
+			respondWithError(w, http.StatusBadRequest, "Deal already has a linked offer")
+			return
+		}
+		if errors.Is(err, service.ErrDealInvalidStageForOffer) {
+			respondWithError(w, http.StatusBadRequest, "Deal must be in lead or qualified stage to create an offer")
+			return
+		}
+		h.logger.Error("failed to create offer from deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to create offer from deal")
+		return
+	}
+
+	w.Header().Set("Location", "/api/v1/offers/"+result.Offer.ID.String())
+	respondJSON(w, http.StatusCreated, result)
+}

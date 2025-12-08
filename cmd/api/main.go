@@ -123,7 +123,7 @@ func run() error {
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, log)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetDimensionRepo, fileRepo, activityRepo, log, db)
-	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, notificationRepo, log)
+	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, notificationRepo, log)
 	companyService := service.NewCompanyService(log)
