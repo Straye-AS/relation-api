@@ -52,8 +52,8 @@ swagger: ## Generate Swagger documentation
 docker-build: swagger ## Build Docker images (regenerates Swagger docs first)
 	docker compose build
 
-docker-up: swagger ## Start all services with Docker Compose (regenerates Swagger docs first)
-	docker compose up -d
+docker-up: swagger ## Start all services with Docker Compose (regenerates Swagger docs first, loads .env)
+	docker compose --env-file .env up -d
 
 docker-down: ## Stop all services
 	docker compose down
