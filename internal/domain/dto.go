@@ -92,27 +92,28 @@ type ContactRelationshipDTO struct {
 }
 
 type DealDTO struct {
-	ID                uuid.UUID  `json:"id"`
-	Title             string     `json:"title"`
-	Description       string     `json:"description,omitempty"`
-	CustomerID        uuid.UUID  `json:"customerId"`
-	CustomerName      string     `json:"customerName,omitempty"`
-	CompanyID         CompanyID  `json:"companyId"`
-	Stage             DealStage  `json:"stage"`
-	Probability       int        `json:"probability"`
-	Value             float64    `json:"value"`
-	WeightedValue     float64    `json:"weightedValue"`
-	Currency          string     `json:"currency"`
-	ExpectedCloseDate *string    `json:"expectedCloseDate,omitempty"`
-	ActualCloseDate   *string    `json:"actualCloseDate,omitempty"`
-	OwnerID           string     `json:"ownerId"`
-	OwnerName         string     `json:"ownerName,omitempty"`
-	Source            string     `json:"source,omitempty"`
-	Notes             string     `json:"notes,omitempty"`
-	LostReason        string     `json:"lostReason,omitempty"`
-	OfferID           *uuid.UUID `json:"offerId,omitempty"`
-	CreatedAt         string     `json:"createdAt"`
-	UpdatedAt         string     `json:"updatedAt"`
+	ID                 uuid.UUID           `json:"id"`
+	Title              string              `json:"title"`
+	Description        string              `json:"description,omitempty"`
+	CustomerID         uuid.UUID           `json:"customerId"`
+	CustomerName       string              `json:"customerName,omitempty"`
+	CompanyID          CompanyID           `json:"companyId"`
+	Stage              DealStage           `json:"stage"`
+	Probability        int                 `json:"probability"`
+	Value              float64             `json:"value"`
+	WeightedValue      float64             `json:"weightedValue"`
+	Currency           string              `json:"currency"`
+	ExpectedCloseDate  *string             `json:"expectedCloseDate,omitempty"`
+	ActualCloseDate    *string             `json:"actualCloseDate,omitempty"`
+	OwnerID            string              `json:"ownerId"`
+	OwnerName          string              `json:"ownerName,omitempty"`
+	Source             string              `json:"source,omitempty"`
+	Notes              string              `json:"notes,omitempty"`
+	LostReason         string              `json:"lostReason,omitempty"`
+	LossReasonCategory *LossReasonCategory `json:"lossReasonCategory,omitempty"`
+	OfferID            *uuid.UUID          `json:"offerId,omitempty"`
+	CreatedAt          string              `json:"createdAt"`
+	UpdatedAt          string              `json:"updatedAt"`
 }
 
 type DealStageHistoryDTO struct {
@@ -524,6 +525,12 @@ type UpdateDealRequest struct {
 type UpdateDealStageRequest struct {
 	Stage DealStage `json:"stage" validate:"required"`
 	Notes string    `json:"notes,omitempty"`
+}
+
+// LoseDealRequest contains the categorized reason and detailed notes for losing a deal
+type LoseDealRequest struct {
+	Reason LossReasonCategory `json:"reason" validate:"required,oneof=price timing competitor requirements other" example:"competitor"`
+	Notes  string             `json:"notes" validate:"required,min=10,max=500" example:"Lost to competitor XYZ who offered lower price"`
 }
 
 type CreateProjectRequest struct {

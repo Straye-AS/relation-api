@@ -173,30 +173,51 @@ const (
 	DealStageLost        DealStage = "lost"
 )
 
+// LossReasonCategory represents the categorized reason for losing a deal
+type LossReasonCategory string
+
+const (
+	LossReasonPrice        LossReasonCategory = "price"
+	LossReasonTiming       LossReasonCategory = "timing"
+	LossReasonCompetitor   LossReasonCategory = "competitor"
+	LossReasonRequirements LossReasonCategory = "requirements"
+	LossReasonOther        LossReasonCategory = "other"
+)
+
+// IsValid checks if the LossReasonCategory is a valid enum value
+func (lrc LossReasonCategory) IsValid() bool {
+	switch lrc {
+	case LossReasonPrice, LossReasonTiming, LossReasonCompetitor, LossReasonRequirements, LossReasonOther:
+		return true
+	}
+	return false
+}
+
 // Deal represents a sales opportunity in the pipeline
 type Deal struct {
 	BaseModel
-	Title             string     `gorm:"type:varchar(200);not null"`
-	Description       string     `gorm:"type:text"`
-	CustomerID        uuid.UUID  `gorm:"type:uuid;not null;index;column:customer_id"`
-	Customer          *Customer  `gorm:"foreignKey:CustomerID"`
-	CompanyID         CompanyID  `gorm:"type:varchar(50);not null;index;column:company_id"`
-	Company           *Company   `gorm:"foreignKey:CompanyID"`
-	CustomerName      string     `gorm:"type:varchar(200);column:customer_name"`
-	Stage             DealStage  `gorm:"type:varchar(50);not null;default:'lead'"`
-	Probability       int        `gorm:"type:int;not null;default:0"`
-	Value             float64    `gorm:"type:decimal(15,2);not null;default:0"`
-	WeightedValue     float64    `gorm:"type:decimal(15,2);column:weighted_value;->"` // Read-only, computed by DB
-	Currency          string     `gorm:"type:varchar(3);not null;default:'NOK'"`
-	ExpectedCloseDate *time.Time `gorm:"type:date;column:expected_close_date"`
-	ActualCloseDate   *time.Time `gorm:"type:date;column:actual_close_date"`
-	OwnerID           string     `gorm:"type:varchar(100);not null;column:owner_id"`
-	OwnerName         string     `gorm:"type:varchar(200);column:owner_name"`
-	Source            string     `gorm:"type:varchar(100)"`
-	Notes             string     `gorm:"type:text"`
-	LostReason        string     `gorm:"type:varchar(500);column:lost_reason"`
-	OfferID           *uuid.UUID `gorm:"type:uuid;index;column:offer_id"`
-	Offer             *Offer     `gorm:"foreignKey:OfferID"`
+	Title              string              `gorm:"type:varchar(200);not null"`
+	Description        string              `gorm:"type:text"`
+	CustomerID         uuid.UUID           `gorm:"type:uuid;not null;index;column:customer_id"`
+	Customer           *Customer           `gorm:"foreignKey:CustomerID"`
+	CompanyID          CompanyID           `gorm:"type:varchar(50);not null;index;column:company_id"`
+	Company            *Company            `gorm:"foreignKey:CompanyID"`
+	CustomerName       string              `gorm:"type:varchar(200);column:customer_name"`
+	Stage              DealStage           `gorm:"type:varchar(50);not null;default:'lead'"`
+	Probability        int                 `gorm:"type:int;not null;default:0"`
+	Value              float64             `gorm:"type:decimal(15,2);not null;default:0"`
+	WeightedValue      float64             `gorm:"type:decimal(15,2);column:weighted_value;->"` // Read-only, computed by DB
+	Currency           string              `gorm:"type:varchar(3);not null;default:'NOK'"`
+	ExpectedCloseDate  *time.Time          `gorm:"type:date;column:expected_close_date"`
+	ActualCloseDate    *time.Time          `gorm:"type:date;column:actual_close_date"`
+	OwnerID            string              `gorm:"type:varchar(100);not null;column:owner_id"`
+	OwnerName          string              `gorm:"type:varchar(200);column:owner_name"`
+	Source             string              `gorm:"type:varchar(100)"`
+	Notes              string              `gorm:"type:text"`
+	LostReason         string              `gorm:"type:varchar(500);column:lost_reason"`
+	LossReasonCategory *LossReasonCategory `gorm:"type:varchar(50);column:loss_reason_category"`
+	OfferID            *uuid.UUID          `gorm:"type:uuid;index;column:offer_id"`
+	Offer              *Offer              `gorm:"foreignKey:OfferID"`
 }
 
 // DealStageHistory tracks stage changes for audit purposes

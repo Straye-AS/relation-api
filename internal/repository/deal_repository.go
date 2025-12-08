@@ -312,14 +312,15 @@ func (r *DealRepository) MarkAsWon(ctx context.Context, id uuid.UUID, closeDate 
 	return r.db.WithContext(ctx).Model(&domain.Deal{}).Where("id = ?", id).Updates(updates).Error
 }
 
-// MarkAsLost marks a deal as lost with the close date and reason
-func (r *DealRepository) MarkAsLost(ctx context.Context, id uuid.UUID, closeDate time.Time, reason string) error {
+// MarkAsLost marks a deal as lost with the close date, reason category, and notes
+func (r *DealRepository) MarkAsLost(ctx context.Context, id uuid.UUID, closeDate time.Time, reasonCategory domain.LossReasonCategory, notes string) error {
 	updates := map[string]interface{}{
-		"stage":             domain.DealStageLost,
-		"actual_close_date": closeDate,
-		"probability":       0,
-		"lost_reason":       reason,
-		"updated_at":        time.Now(),
+		"stage":                domain.DealStageLost,
+		"actual_close_date":    closeDate,
+		"probability":          0,
+		"loss_reason_category": reasonCategory,
+		"lost_reason":          notes,
+		"updated_at":           time.Now(),
 	}
 	return r.db.WithContext(ctx).Model(&domain.Deal{}).Where("id = ?", id).Updates(updates).Error
 }

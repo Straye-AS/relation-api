@@ -331,15 +331,18 @@ func TestDealRepository_MarkAsLost(t *testing.T) {
 	require.NoError(t, err)
 
 	closeDate := time.Now()
-	reason := "Competitor won"
-	err = repo.MarkAsLost(context.Background(), deal.ID, closeDate, reason)
+	reasonCategory := domain.LossReasonCompetitor
+	notes := "Lost to competitor who offered lower price"
+	err = repo.MarkAsLost(context.Background(), deal.ID, closeDate, reasonCategory, notes)
 	assert.NoError(t, err)
 
 	found, err := repo.GetByID(context.Background(), deal.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, domain.DealStageLost, found.Stage)
 	assert.Equal(t, 0, found.Probability)
-	assert.Equal(t, reason, found.LostReason)
+	assert.Equal(t, notes, found.LostReason)
+	assert.NotNil(t, found.LossReasonCategory)
+	assert.Equal(t, reasonCategory, *found.LossReasonCategory)
 	assert.NotNil(t, found.ActualCloseDate)
 }
 

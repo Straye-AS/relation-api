@@ -2730,7 +2730,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Mark a deal as lost with a reason",
+                "description": "Mark a deal as lost with a categorized reason and detailed notes",
                 "consumes": [
                     "application/json"
                 ],
@@ -2750,12 +2750,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Lost reason",
+                        "description": "Loss reason category and notes",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.LoseDealRequest"
+                            "$ref": "#/definitions/domain.LoseDealRequest"
                         }
                     }
                 ],
@@ -2764,6 +2764,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.DealDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request - reason must be one of: price, timing, competitor, requirements, other. Notes must be 10-500 characters.",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -6417,7 +6423,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "$ref": "#/definitions/domain.ProjectStatus"
+                    "enum": [
+                        "planning",
+                        "active",
+                        "on_hold",
+                        "completed",
+                        "cancelled"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectStatus"
+                        }
+                    ]
                 },
                 "summary": {
                     "type": "string"
@@ -6776,6 +6793,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "lossReasonCategory": {
+                    "$ref": "#/definitions/domain.LossReasonCategory"
+                },
                 "lostReason": {
                     "type": "string"
                 },
@@ -6942,6 +6962,53 @@ const docTemplate = `{
                     "$ref": "#/definitions/domain.ProjectDTO"
                 }
             }
+        },
+        "domain.LoseDealRequest": {
+            "type": "object",
+            "required": [
+                "notes",
+                "reason"
+            ],
+            "properties": {
+                "notes": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 10,
+                    "example": "Lost to competitor XYZ who offered lower price"
+                },
+                "reason": {
+                    "enum": [
+                        "price",
+                        "timing",
+                        "competitor",
+                        "requirements",
+                        "other"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.LossReasonCategory"
+                        }
+                    ],
+                    "example": "competitor"
+                }
+            }
+        },
+        "domain.LossReasonCategory": {
+            "type": "string",
+            "enum": [
+                "price",
+                "timing",
+                "competitor",
+                "requirements",
+                "other"
+            ],
+            "x-enum-varnames": [
+                "LossReasonPrice",
+                "LossReasonTiming",
+                "LossReasonCompetitor",
+                "LossReasonRequirements",
+                "LossReasonOther"
+            ]
         },
         "domain.NotificationDTO": {
             "type": "object",
@@ -8156,17 +8223,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/domain.DealStageHistoryDTO"
                     }
-                }
-            }
-        },
-        "handler.LoseDealRequest": {
-            "type": "object",
-            "required": [
-                "reason"
-            ],
-            "properties": {
-                "reason": {
-                    "type": "string"
                 }
             }
         },
