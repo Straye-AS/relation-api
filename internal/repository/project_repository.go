@@ -230,6 +230,10 @@ func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectI
 //   - over_budget: variance > 20%
 //
 // Variance = (actual_cost / budget) * 100
+//
+// Edge case: If budget is zero or negative, returns on_track to avoid
+// division errors and assumes unbudgeted projects are healthy by default.
+//
 // Returns the calculated health status without updating the project
 func (r *ProjectRepository) CalculateHealth(ctx context.Context, projectID uuid.UUID) (domain.ProjectHealth, error) {
 	metrics, err := r.CalculateBudgetMetrics(ctx, projectID)
