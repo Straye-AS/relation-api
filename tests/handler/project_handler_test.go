@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,6 +39,29 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 	activityRepo := repository.NewActivityRepository(db)
 
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, logger)
+
+	return handler.NewProjectHandler(projectService, logger)
+}
+
+// createProjectHandlerWithDeps creates a handler with all dependencies for full feature support
+// This is needed for tests that require offer/budget dimension support
+func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
+	logger := zap.NewNop()
+	projectRepo := repository.NewProjectRepository(db)
+	customerRepo := repository.NewCustomerRepository(db)
+	activityRepo := repository.NewActivityRepository(db)
+	offerRepo := repository.NewOfferRepository(db)
+	dimensionRepo := repository.NewBudgetDimensionRepository(db)
+
+	projectService := service.NewProjectServiceWithDeps(
+		projectRepo,
+		offerRepo,
+		customerRepo,
+		dimensionRepo,
+		activityRepo,
+		logger,
+		db,
+	)
 
 	return handler.NewProjectHandler(projectService, logger)
 }
@@ -754,5 +778,254 @@ func TestProjectHandler_GetActivities(t *testing.T) {
 		h.GetActivities(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+}
+
+// Helper to create a test offer with optional budget dimensions
+func createTestOffer(t *testing.T, db *gorm.DB, customer *domain.Customer, title string, phase domain.OfferPhase, value float64, userID string) *domain.Offer {
+	offer := &domain.Offer{
+		Title:               title,
+		CustomerID:          customer.ID,
+		CustomerName:        customer.Name,
+		CompanyID:           domain.CompanyStalbygg,
+		Phase:               phase,
+		Probability:         80,
+		Value:               value,
+		Status:              domain.OfferStatusActive,
+		ResponsibleUserID:   userID,
+		ResponsibleUserName: "Test User",
+	}
+	err := db.Create(offer).Error
+	require.NoError(t, err)
+	return offer
+}
+
+// Helper to create budget dimensions for an offer
+func createTestBudgetDimensions(t *testing.T, db *gorm.DB, offerID uuid.UUID, count int) []domain.BudgetDimension {
+	dimensions := make([]domain.BudgetDimension, count)
+	for i := 0; i < count; i++ {
+		dim := domain.BudgetDimension{
+			ParentType:   domain.BudgetParentOffer,
+			ParentID:     offerID,
+			CustomName:   fmt.Sprintf("Test Dimension %d", i+1),
+			Cost:         float64(10000 * (i + 1)),
+			Revenue:      float64(15000 * (i + 1)),
+			DisplayOrder: i,
+		}
+		err := db.Create(&dim).Error
+		require.NoError(t, err)
+		dimensions[i] = dim
+	}
+	return dimensions
+}
+
+// TestProjectHandler_InheritBudget tests the InheritBudget endpoint
+func TestProjectHandler_InheritBudget(t *testing.T) {
+	db := setupProjectHandlerTestDB(t)
+	h := createProjectHandlerWithDeps(t, db)
+	ctx := createProjectTestContext()
+	userCtx, _ := auth.FromContext(ctx)
+
+	customer := testutil.CreateTestCustomer(t, db, "Inherit Budget Customer")
+
+	t.Run("inherit budget from won offer successfully", func(t *testing.T) {
+		// Create a won offer with budget dimensions
+		offer := createTestOffer(t, db, customer, "Won Offer", domain.OfferPhaseWon, 150000, userCtx.UserID.String())
+		createTestBudgetDimensions(t, db, offer.ID, 3)
+
+		// Create a project to inherit into
+		project := createTestProject(t, db, customer, "Project for Inheritance", domain.ProjectStatusPlanning, userCtx.UserID.String())
+
+		reqBody := domain.InheritBudgetRequest{
+			OfferID: offer.ID,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.InheritBudgetResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.NotNil(t, result.Project)
+		assert.Equal(t, project.ID, result.Project.ID)
+		assert.Equal(t, 3, result.DimensionsCount)
+		assert.Equal(t, 150000.0, result.Project.Budget)
+		assert.True(t, result.Project.HasDetailedBudget)
+		assert.NotNil(t, result.Project.OfferID)
+		assert.Equal(t, offer.ID, *result.Project.OfferID)
+	})
+
+	t.Run("inherit budget from won offer without dimensions", func(t *testing.T) {
+		// Create a won offer without budget dimensions
+		offer := createTestOffer(t, db, customer, "Won Offer No Dims", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
+
+		// Create a project to inherit into
+		project := createTestProject(t, db, customer, "Project No Dims", domain.ProjectStatusPlanning, userCtx.UserID.String())
+
+		reqBody := domain.InheritBudgetRequest{
+			OfferID: offer.ID,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.InheritBudgetResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.NotNil(t, result.Project)
+		assert.Equal(t, 0, result.DimensionsCount)
+		assert.Equal(t, 100000.0, result.Project.Budget)
+		assert.NotNil(t, result.Project.OfferID)
+	})
+
+	t.Run("inherit budget fails for non-won offer", func(t *testing.T) {
+		// Create an offer in draft phase (not won)
+		offer := createTestOffer(t, db, customer, "Draft Offer", domain.OfferPhaseDraft, 50000, userCtx.UserID.String())
+
+		project := createTestProject(t, db, customer, "Project Draft Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
+
+		reqBody := domain.InheritBudgetRequest{
+			OfferID: offer.ID,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("inherit budget fails for non-existent offer", func(t *testing.T) {
+		project := createTestProject(t, db, customer, "Project No Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		nonExistentOfferID := uuid.New()
+
+		reqBody := domain.InheritBudgetRequest{
+			OfferID: nonExistentOfferID,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("inherit budget fails for non-existent project", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, "Won Offer 2", domain.OfferPhaseWon, 75000, userCtx.UserID.String())
+		nonExistentProjectID := uuid.New()
+
+		reqBody := domain.InheritBudgetRequest{
+			OfferID: offer.ID,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+nonExistentProjectID.String()+"/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", nonExistentProjectID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("inherit budget with invalid project ID", func(t *testing.T) {
+		reqBody := domain.InheritBudgetRequest{
+			OfferID: uuid.New(),
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/invalid-id/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "invalid-id")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("inherit budget with invalid JSON body", func(t *testing.T) {
+		project := createTestProject(t, db, customer, "Project Invalid JSON", domain.ProjectStatusPlanning, userCtx.UserID.String())
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader([]byte("invalid json")))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("inherit budget with missing offer ID", func(t *testing.T) {
+		project := createTestProject(t, db, customer, "Project Missing Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
+
+		// Empty request body - missing required offerId
+		reqBody := map[string]interface{}{}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.InheritBudget(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }

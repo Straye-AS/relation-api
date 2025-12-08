@@ -934,6 +934,17 @@ type UpdateProjectStatusRequest struct {
 	CompletionPercent *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
 }
 
+// InheritBudgetRequest for POST /projects/{id}/inherit-budget
+type InheritBudgetRequest struct {
+	OfferID uuid.UUID `json:"offerId" validate:"required"`
+}
+
+// InheritBudgetResponse contains the result of budget inheritance from an offer
+type InheritBudgetResponse struct {
+	Project         *ProjectDTO `json:"project"`
+	DimensionsCount int         `json:"dimensionsCount"`
+}
+
 // ProjectWithDetailsDTO includes project data with related entities and budget summary
 type ProjectWithDetailsDTO struct {
 	ProjectDTO

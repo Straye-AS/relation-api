@@ -1144,6 +1144,20 @@ definitions:
       size:
         type: integer
     type: object
+  domain.InheritBudgetRequest:
+    properties:
+      offerId:
+        type: string
+    required:
+    - offerId
+    type: object
+  domain.InheritBudgetResponse:
+    properties:
+      dimensionsCount:
+        type: integer
+      project:
+        $ref: '#/definitions/domain.ProjectDTO'
+    type: object
   domain.NotificationDTO:
     properties:
       createdAt:
@@ -5233,6 +5247,58 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Get project budget
+      tags:
+      - Projects
+  /projects/{id}/inherit-budget:
+    post:
+      consumes:
+      - application/json
+      description: Inherit budget dimensions from a won offer to the project. The
+        offer must be in 'won' phase.
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Offer ID to inherit budget from
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.InheritBudgetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.InheritBudgetResponse'
+        "400":
+          description: Invalid request or offer not in won phase
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: User is not the project manager
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Project or offer not found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Inherit budget from offer
       tags:
       - Projects
   /projects/{id}/status:

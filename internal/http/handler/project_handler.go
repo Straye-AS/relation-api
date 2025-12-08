@@ -359,6 +359,54 @@ func (h *ProjectHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, activities)
 }
 
+// InheritBudget godoc
+// @Summary Inherit budget from offer
+// @Description Inherit budget dimensions from a won offer to the project. The offer must be in 'won' phase.
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Param id path string true "Project ID" format(uuid)
+// @Param request body domain.InheritBudgetRequest true "Offer ID to inherit budget from"
+// @Success 200 {object} domain.InheritBudgetResponse
+// @Failure 400 {object} domain.APIError "Invalid request or offer not in won phase"
+// @Failure 401 {object} domain.APIError
+// @Failure 403 {object} domain.APIError "User is not the project manager"
+// @Failure 404 {object} domain.APIError "Project or offer not found"
+// @Failure 500 {object} domain.APIError
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /projects/{id}/inherit-budget [post]
+func (h *ProjectHandler) InheritBudget(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.InheritBudgetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	result, err := h.projectService.InheritBudgetFromOffer(r.Context(), id, req.OfferID)
+	if err != nil {
+		h.logger.Error("failed to inherit budget from offer",
+			zap.Error(err),
+			zap.String("project_id", id.String()),
+			zap.String("offer_id", req.OfferID.String()))
+		h.handleProjectError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
 // handleProjectError maps service errors to HTTP status codes
 func (h *ProjectHandler) handleProjectError(w http.ResponseWriter, err error) {
 	switch {
@@ -366,6 +414,10 @@ func (h *ProjectHandler) handleProjectError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusNotFound, "Project not found")
 	case errors.Is(err, service.ErrCustomerNotFound):
 		respondWithError(w, http.StatusBadRequest, "Customer not found")
+	case errors.Is(err, service.ErrOfferNotFound):
+		respondWithError(w, http.StatusNotFound, "Offer not found")
+	case errors.Is(err, service.ErrOfferNotWon):
+		respondWithError(w, http.StatusBadRequest, "Can only inherit budget from won offers")
 	case errors.Is(err, service.ErrProjectNotManager):
 		respondWithError(w, http.StatusForbidden, "User is not the project manager")
 	case errors.Is(err, service.ErrInvalidStatusTransition):
