@@ -724,6 +724,22 @@ definitions:
     required:
     - title
     type: object
+  domain.CreateOfferFromDealRequest:
+    properties:
+      templateOfferId:
+        description: 'Optional: copy budget dimensions from this offer'
+        type: string
+      title:
+        maxLength: 200
+        type: string
+    type: object
+  domain.CreateOfferFromDealResponse:
+    properties:
+      deal:
+        $ref: '#/definitions/domain.DealDTO'
+      offer:
+        $ref: '#/definitions/domain.OfferDTO'
+    type: object
   domain.CreateOfferItemRequest:
     properties:
       cost:
@@ -3972,6 +3988,44 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Advance deal stage
+      tags:
+      - Deals
+  /deals/{id}/create-offer:
+    post:
+      consumes:
+      - application/json
+      description: Create an offer linked to a deal, advancing the deal to proposal
+        stage
+      parameters:
+      - description: Deal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Optional: template offer ID and title'
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/domain.CreateOfferFromDealRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.CreateOfferFromDealResponse'
+        "400":
+          description: Invalid request or deal already has offer or invalid stage
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Deal not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create offer from deal
       tags:
       - Deals
   /deals/{id}/history:

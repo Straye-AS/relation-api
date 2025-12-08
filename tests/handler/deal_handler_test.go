@@ -42,9 +42,10 @@ func createDealHandler(t *testing.T, db *gorm.DB) *handler.DealHandler {
 	projectRepo := repository.NewProjectRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
+	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 
-	dealService := service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, notificationRepo, logger)
+	dealService := service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, logger, db)
 
 	return handler.NewDealHandler(dealService, logger)
 }

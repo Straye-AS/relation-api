@@ -977,3 +977,15 @@ type ProjectWithDetailsDTO struct {
 	Offer            *OfferDTO         `json:"offer,omitempty"`
 	Deal             *DealDTO          `json:"deal,omitempty"`
 }
+
+// CreateOfferFromDealRequest contains options for creating an offer from a deal
+type CreateOfferFromDealRequest struct {
+	TemplateOfferID *uuid.UUID `json:"templateOfferId,omitempty"` // Optional: copy budget dimensions from this offer
+	Title           string     `json:"title,omitempty" validate:"max=200"`
+}
+
+// CreateOfferFromDealResponse contains the result of creating an offer from a deal
+type CreateOfferFromDealResponse struct {
+	Offer *OfferDTO `json:"offer"`
+	Deal  *DealDTO  `json:"deal"`
+}

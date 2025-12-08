@@ -286,6 +286,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/win", rt.dealHandler.WinDeal)
 				r.Post("/{id}/lose", rt.dealHandler.LoseDeal)
 				r.Post("/{id}/reopen", rt.dealHandler.ReopenDeal)
+				r.Post("/{id}/create-offer", rt.dealHandler.CreateOffer)
 				r.Get("/{id}/history", rt.dealHandler.GetStageHistory)
 				r.Get("/{id}/activities", rt.dealHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)

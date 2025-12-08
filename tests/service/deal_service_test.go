@@ -37,9 +37,10 @@ func createDealService(t *testing.T, db *gorm.DB) *service.DealService {
 	projectRepo := repository.NewProjectRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
+	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 
-	return service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, notificationRepo, logger)
+	return service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, logger, db)
 }
 
 func createTestContext() context.Context {
@@ -646,4 +647,239 @@ func TestDealService_GetForecast(t *testing.T) {
 	forecast, err := svc.GetForecast(ctx, 3)
 	assert.NoError(t, err)
 	assert.Len(t, forecast, 3)
+}
+
+func TestDealService_CreateOfferFromDeal(t *testing.T) {
+	db := setupDealServiceTestDB(t)
+	svc := createDealService(t, db)
+	customer := createDealServiceTestCustomer(t, db)
+	ctx := createTestContext()
+
+	t.Run("create offer successfully from lead deal", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:       "Lead Deal for Offer",
+			CustomerID:  customer.ID,
+			CompanyID:   domain.CompanyStalbygg,
+			OwnerID:     userCtx.UserID.String(),
+			Value:       150000,
+			Description: "Test description",
+			Stage:       domain.DealStageLead,
+		})
+		require.NoError(t, err)
+
+		req := &domain.CreateOfferFromDealRequest{}
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.NotNil(t, result.Offer)
+		require.NotNil(t, result.Deal)
+
+		// Verify offer was created with deal data
+		assert.Equal(t, "Lead Deal for Offer", result.Offer.Title)
+		assert.Equal(t, customer.ID, result.Offer.CustomerID)
+		assert.Equal(t, domain.CompanyStalbygg, result.Offer.CompanyID)
+		assert.Equal(t, float64(150000), result.Offer.Value)
+		assert.Equal(t, domain.OfferPhaseDraft, result.Offer.Phase)
+		assert.Equal(t, 50, result.Offer.Probability) // Proposal stage probability
+
+		// Verify deal was advanced to proposal and linked to offer
+		assert.Equal(t, domain.DealStageProposal, result.Deal.Stage)
+		assert.NotNil(t, result.Deal.OfferID)
+		assert.Equal(t, result.Offer.ID, *result.Deal.OfferID)
+	})
+
+	t.Run("create offer successfully from qualified deal", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:      "Qualified Deal for Offer",
+			CustomerID: customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			OwnerID:    userCtx.UserID.String(),
+			Value:      200000,
+			Stage:      domain.DealStageQualified,
+		})
+		require.NoError(t, err)
+
+		req := &domain.CreateOfferFromDealRequest{
+			Title: "Custom Offer Title",
+		}
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Custom title should be used
+		assert.Equal(t, "Custom Offer Title", result.Offer.Title)
+		assert.Equal(t, domain.DealStageProposal, result.Deal.Stage)
+	})
+
+	t.Run("error when deal not found", func(t *testing.T) {
+		req := &domain.CreateOfferFromDealRequest{}
+		result, err := svc.CreateOfferFromDeal(ctx, uuid.New(), req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrDealNotFound)
+	})
+
+	t.Run("error when deal already has offer", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:      "Deal with Existing Offer",
+			CustomerID: customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			OwnerID:    userCtx.UserID.String(),
+			Stage:      domain.DealStageLead,
+		})
+		require.NoError(t, err)
+
+		// Create first offer
+		req := &domain.CreateOfferFromDealRequest{}
+		_, err = svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		require.NoError(t, err)
+
+		// Try to create second offer - should fail
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrDealAlreadyHasOffer)
+	})
+
+	t.Run("error when deal in invalid stage - proposal", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:      "Proposal Stage Deal",
+			CustomerID: customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			OwnerID:    userCtx.UserID.String(),
+			Stage:      domain.DealStageLead,
+		})
+		require.NoError(t, err)
+
+		// Manually set to proposal stage
+		db.Model(&domain.Deal{}).Where("id = ?", deal.ID).Update("stage", domain.DealStageProposal)
+
+		req := &domain.CreateOfferFromDealRequest{}
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrDealInvalidStageForOffer)
+	})
+
+	t.Run("error when deal in invalid stage - won", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:      "Won Deal",
+			CustomerID: customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			OwnerID:    userCtx.UserID.String(),
+			Stage:      domain.DealStageLead,
+		})
+		require.NoError(t, err)
+
+		// Manually set to won stage
+		db.Model(&domain.Deal{}).Where("id = ?", deal.ID).Update("stage", domain.DealStageWon)
+
+		req := &domain.CreateOfferFromDealRequest{}
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrDealInvalidStageForOffer)
+	})
+
+	t.Run("deal advances to proposal with correct probability", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:      "Check Probability Deal",
+			CustomerID: customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			OwnerID:    userCtx.UserID.String(),
+			Stage:      domain.DealStageLead,
+		})
+		require.NoError(t, err)
+
+		req := &domain.CreateOfferFromDealRequest{}
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		require.NoError(t, err)
+
+		// Proposal stage should have 50% probability
+		assert.Equal(t, 50, result.Deal.Probability)
+	})
+}
+
+func TestDealService_CreateOfferFromDealWithTemplate(t *testing.T) {
+	db := setupDealServiceTestDB(t)
+	svc := createDealService(t, db)
+	customer := createDealServiceTestCustomer(t, db)
+	ctx := createTestContext()
+
+	t.Run("create offer with template copies budget dimensions", func(t *testing.T) {
+		userCtx, _ := auth.FromContext(ctx)
+
+		// Create a template offer with budget dimensions
+		templateOffer := &domain.Offer{
+			Title:             "Template Offer",
+			CustomerID:        customer.ID,
+			CustomerName:      customer.Name,
+			CompanyID:         domain.CompanyStalbygg,
+			Phase:             domain.OfferPhaseDraft,
+			Value:             100000,
+			Status:            domain.OfferStatusActive,
+			ResponsibleUserID: userCtx.UserID.String(),
+		}
+		require.NoError(t, db.Create(templateOffer).Error)
+
+		// Add budget dimensions to template
+		dim1 := &domain.BudgetDimension{
+			ParentType:   domain.BudgetParentOffer,
+			ParentID:     templateOffer.ID,
+			CustomName:   "Labor",
+			Cost:         10000,
+			Revenue:      15000,
+			DisplayOrder: 0,
+		}
+		dim2 := &domain.BudgetDimension{
+			ParentType:   domain.BudgetParentOffer,
+			ParentID:     templateOffer.ID,
+			CustomName:   "Materials",
+			Cost:         5000,
+			Revenue:      8000,
+			DisplayOrder: 1,
+		}
+		require.NoError(t, db.Create(dim1).Error)
+		require.NoError(t, db.Create(dim2).Error)
+
+		// Create deal
+		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
+			Title:      "Deal with Template",
+			CustomerID: customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			OwnerID:    userCtx.UserID.String(),
+			Value:      50000,
+			Stage:      domain.DealStageLead,
+		})
+		require.NoError(t, err)
+
+		// Create offer from deal with template
+		req := &domain.CreateOfferFromDealRequest{
+			TemplateOfferID: &templateOffer.ID,
+		}
+		result, err := svc.CreateOfferFromDeal(ctx, deal.ID, req)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Verify budget dimensions were copied
+		var newDimensions []domain.BudgetDimension
+		err = db.Where("parent_type = ? AND parent_id = ?", domain.BudgetParentOffer, result.Offer.ID).
+			Order("display_order ASC").
+			Find(&newDimensions).Error
+		require.NoError(t, err)
+		assert.Len(t, newDimensions, 2)
+		assert.Equal(t, "Labor", newDimensions[0].CustomName)
+		assert.Equal(t, float64(10000), newDimensions[0].Cost)
+		assert.Equal(t, float64(15000), newDimensions[0].Revenue)
+		assert.Equal(t, "Materials", newDimensions[1].CustomName)
+
+		// Offer value should be updated from dimensions
+		assert.Equal(t, float64(23000), result.Offer.Value) // 15000 + 8000
+	})
 }

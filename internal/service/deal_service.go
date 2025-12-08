@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/straye-as/relation-api/internal/mapper"
 	"github.com/straye-as/relation-api/internal/repository"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // Stage transition rules: defines valid transitions between deal stages
@@ -40,8 +42,10 @@ type DealService struct {
 	projectRepo      *repository.ProjectRepository
 	activityRepo     *repository.ActivityRepository
 	offerRepo        *repository.OfferRepository
+	dimensionRepo    *repository.BudgetDimensionRepository
 	notificationRepo *repository.NotificationRepository
 	logger           *zap.Logger
+	db               *gorm.DB
 }
 
 func NewDealService(
@@ -51,8 +55,10 @@ func NewDealService(
 	projectRepo *repository.ProjectRepository,
 	activityRepo *repository.ActivityRepository,
 	offerRepo *repository.OfferRepository,
+	dimensionRepo *repository.BudgetDimensionRepository,
 	notificationRepo *repository.NotificationRepository,
 	logger *zap.Logger,
+	db *gorm.DB,
 ) *DealService {
 	return &DealService{
 		dealRepo:         dealRepo,
@@ -61,8 +67,10 @@ func NewDealService(
 		projectRepo:      projectRepo,
 		activityRepo:     activityRepo,
 		offerRepo:        offerRepo,
+		dimensionRepo:    dimensionRepo,
 		notificationRepo: notificationRepo,
 		logger:           logger,
+		db:               db,
 	}
 }
 
@@ -664,4 +672,178 @@ func (s *DealService) isValidTransition(from, to domain.DealStage) bool {
 		}
 	}
 	return false
+}
+
+// CreateOfferFromDeal creates an offer linked to a deal, advancing the deal to proposal stage
+func (s *DealService) CreateOfferFromDeal(ctx context.Context, dealID uuid.UUID, req *domain.CreateOfferFromDealRequest) (*domain.CreateOfferFromDealResponse, error) {
+	// Get deal
+	deal, err := s.dealRepo.GetByID(ctx, dealID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrDealNotFound
+		}
+		return nil, fmt.Errorf("failed to get deal: %w", err)
+	}
+
+	// Validate deal stage - only lead or qualified can create an offer
+	if deal.Stage != domain.DealStageLead && deal.Stage != domain.DealStageQualified {
+		return nil, ErrDealInvalidStageForOffer
+	}
+
+	// Ensure deal doesn't already have a linked offer
+	if deal.OfferID != nil {
+		return nil, ErrDealAlreadyHasOffer
+	}
+
+	// Determine offer title
+	offerTitle := req.Title
+	if offerTitle == "" {
+		offerTitle = deal.Title
+	}
+
+	// Get user context
+	var creatorName, ownerID string
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		creatorName = userCtx.DisplayName
+		ownerID = userCtx.UserID.String()
+	}
+
+	// Use deal owner as responsible user if no user context
+	responsibleUserID := ownerID
+	responsibleUserName := creatorName
+	if responsibleUserID == "" {
+		responsibleUserID = deal.OwnerID
+		responsibleUserName = deal.OwnerName
+	}
+
+	var createdOffer *domain.Offer
+	oldStage := deal.Stage
+
+	// Use transaction for atomicity
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// Create the offer
+		createdOffer = &domain.Offer{
+			Title:               offerTitle,
+			CustomerID:          deal.CustomerID,
+			CustomerName:        deal.CustomerName,
+			CompanyID:           deal.CompanyID,
+			Phase:               domain.OfferPhaseDraft,
+			Probability:         stageProbabilities[domain.DealStageProposal], // 50%
+			Value:               deal.Value,
+			Status:              domain.OfferStatusActive,
+			ResponsibleUserID:   responsibleUserID,
+			ResponsibleUserName: responsibleUserName,
+			Description:         deal.Description,
+			Notes:               deal.Notes,
+		}
+
+		if err := tx.Create(createdOffer).Error; err != nil {
+			return fmt.Errorf("failed to create offer: %w", err)
+		}
+
+		// If template offer provided, copy budget dimensions
+		if req.TemplateOfferID != nil && s.dimensionRepo != nil {
+			dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, *req.TemplateOfferID)
+			if err == nil && len(dimensions) > 0 {
+				s.logger.Info("copying budget dimensions from template offer",
+					zap.String("template_offer_id", req.TemplateOfferID.String()),
+					zap.String("new_offer_id", createdOffer.ID.String()),
+					zap.Int("dimension_count", len(dimensions)))
+
+				totalRevenue := 0.0
+				for _, dim := range dimensions {
+					cloned := domain.BudgetDimension{
+						ParentType:          domain.BudgetParentOffer,
+						ParentID:            createdOffer.ID,
+						CategoryID:          dim.CategoryID,
+						CustomName:          dim.CustomName,
+						Cost:                dim.Cost,
+						Revenue:             dim.Revenue,
+						TargetMarginPercent: dim.TargetMarginPercent,
+						MarginOverride:      dim.MarginOverride,
+						Description:         dim.Description,
+						Quantity:            dim.Quantity,
+						Unit:                dim.Unit,
+						DisplayOrder:        dim.DisplayOrder,
+					}
+					if err := tx.Create(&cloned).Error; err != nil {
+						s.logger.Warn("failed to clone budget dimension",
+							zap.Error(err),
+							zap.String("dimension_id", dim.ID.String()))
+					}
+					totalRevenue += dim.Revenue
+				}
+
+				// Update offer value from dimensions if template was used
+				if totalRevenue > 0 {
+					createdOffer.Value = totalRevenue
+					if err := tx.Save(createdOffer).Error; err != nil {
+						s.logger.Warn("failed to update offer value from dimensions", zap.Error(err))
+					}
+				}
+			}
+		}
+
+		// Update deal: link to offer and advance to proposal stage
+		deal.OfferID = &createdOffer.ID
+		deal.Stage = domain.DealStageProposal
+		deal.Probability = stageProbabilities[domain.DealStageProposal]
+
+		if err := tx.Save(deal).Error; err != nil {
+			return fmt.Errorf("failed to update deal: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Record stage history (outside transaction for non-critical operation)
+	if creatorName != "" {
+		s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageProposal, ownerID, creatorName, "Offer created from deal")
+	}
+
+	// Log activity on deal
+	if creatorName != "" {
+		activity := &domain.Activity{
+			TargetType:  domain.ActivityTargetDeal,
+			TargetID:    deal.ID,
+			Title:       "Offer created from deal",
+			Body:        fmt.Sprintf("Deal '%s' advanced to proposal stage with new offer '%s'", deal.Title, createdOffer.Title),
+			CreatorName: creatorName,
+		}
+		s.activityRepo.Create(ctx, activity)
+
+		// Log activity on offer
+		offerActivity := &domain.Activity{
+			TargetType:  domain.ActivityTargetOffer,
+			TargetID:    createdOffer.ID,
+			Title:       "Offer created from deal",
+			Body:        fmt.Sprintf("Offer '%s' was created from deal '%s'", createdOffer.Title, deal.Title),
+			CreatorName: creatorName,
+		}
+		s.activityRepo.Create(ctx, offerActivity)
+	}
+
+	// Reload offer with relations
+	if s.offerRepo != nil {
+		reloadedOffer, err := s.offerRepo.GetByID(ctx, createdOffer.ID)
+		if err == nil {
+			createdOffer = reloadedOffer
+		}
+	}
+
+	// Reload deal
+	deal, _ = s.dealRepo.GetByID(ctx, dealID)
+
+	// Build response
+	offerDTO := mapper.ToOfferDTO(createdOffer)
+	dealDTO := mapper.ToDealDTO(deal)
+
+	return &domain.CreateOfferFromDealResponse{
+		Offer: &offerDTO,
+		Deal:  &dealDTO,
+	}, nil
 }

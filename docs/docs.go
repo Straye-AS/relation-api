@@ -2918,6 +2918,66 @@ const docTemplate = `{
                 }
             }
         },
+        "/deals/{id}/create-offer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create an offer linked to a deal, advancing the deal to proposal stage",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Create offer from deal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deal ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional: template offer ID and title",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateOfferFromDealRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateOfferFromDealResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or deal already has offer or invalid stage",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Deal not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/deals/{id}/history": {
             "get": {
                 "security": [
@@ -6573,6 +6633,30 @@ const docTemplate = `{
                 "title": {
                     "type": "string",
                     "maxLength": 200
+                }
+            }
+        },
+        "domain.CreateOfferFromDealRequest": {
+            "type": "object",
+            "properties": {
+                "templateOfferId": {
+                    "description": "Optional: copy budget dimensions from this offer",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "domain.CreateOfferFromDealResponse": {
+            "type": "object",
+            "properties": {
+                "deal": {
+                    "$ref": "#/definitions/domain.DealDTO"
+                },
+                "offer": {
+                    "$ref": "#/definitions/domain.OfferDTO"
                 }
             }
         },
