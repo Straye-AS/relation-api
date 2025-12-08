@@ -623,9 +623,10 @@ func TestOfferHandler_Clone(t *testing.T) {
 	t.Run("clone offer with new title", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
 
+		includeDimensions := true
 		reqBody := domain.CloneOfferRequest{
 			NewTitle:          "Cloned Offer",
-			IncludeDimensions: true,
+			IncludeDimensions: &includeDimensions,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -650,8 +651,9 @@ func TestOfferHandler_Clone(t *testing.T) {
 	t.Run("clone offer without title uses default", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseDraft)
 
+		includeDimensions := true
 		reqBody := domain.CloneOfferRequest{
-			IncludeDimensions: true,
+			IncludeDimensions: &includeDimensions,
 		}
 		body, _ := json.Marshal(reqBody)
 

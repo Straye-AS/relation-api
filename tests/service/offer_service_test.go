@@ -3,7 +3,6 @@ package service_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -17,6 +16,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// Helper functions for pointer values
+func boolPtr(b bool) *bool { return &b }
 
 // TestOfferService is an integration test suite for OfferService
 // Requires a running PostgreSQL database with migrations applied
@@ -404,7 +406,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Clone Default", domain.OfferPhaseDraft)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: true,
+			IncludeDimensions: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -420,7 +422,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 
 		req := &domain.CloneOfferRequest{
 			NewTitle:          "My Custom Clone Title",
-			IncludeDimensions: true,
+			IncludeDimensions: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -436,7 +438,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Clone Dim 2", 2000, 3000, 1)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: true,
+			IncludeDimensions: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -456,7 +458,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "No Clone Dim", 1000, 1500, 0)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: false, // Explicitly don't clone dimensions
+			IncludeDimensions: boolPtr(false), // Explicitly don't clone dimensions
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -473,7 +475,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Clone Won", domain.OfferPhaseWon)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: true,
+			IncludeDimensions: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -731,7 +733,7 @@ func TestOfferService_ActivityLogging(t *testing.T) {
 	t.Run("clone offer logs activities on both offers", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Activity Clone", domain.OfferPhaseDraft)
 
-		req := &domain.CloneOfferRequest{IncludeDimensions: true}
+		req := &domain.CloneOfferRequest{IncludeDimensions: boolPtr(true)}
 		cloned, err := svc.CloneOffer(ctx, offer.ID, req)
 		require.NoError(t, err)
 

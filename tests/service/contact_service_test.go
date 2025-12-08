@@ -28,12 +28,10 @@ func setupContactServiceTestDB(t *testing.T) *gorm.DB {
 func createContactService(db *gorm.DB) *service.ContactService {
 	contactRepo := repository.NewContactRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
-	dealRepo := repository.NewDealRepository(db)
-	projectRepo := repository.NewProjectRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	logger := zap.NewNop()
 
-	return service.NewContactService(contactRepo, customerRepo, dealRepo, projectRepo, activityRepo, logger)
+	return service.NewContactService(contactRepo, customerRepo, activityRepo, logger)
 }
 
 func createContactTestContext() context.Context {
@@ -453,11 +451,11 @@ func TestContactService_RemoveRelationship(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove relationship
-	err = svc.RemoveRelationship(ctx, rel.ID)
+	err = svc.RemoveRelationship(ctx, contact.ID, rel.ID)
 	assert.NoError(t, err)
 
 	// Verify relationship is removed (contact should no longer appear in customer's contacts)
-	contacts, err := svc.GetContactsForEntity(ctx, domain.ContactEntityCustomer, customer.ID)
+	contacts, err := svc.ListByEntity(ctx, domain.ContactEntityCustomer, customer.ID)
 	require.NoError(t, err)
 	for _, c := range contacts {
 		assert.NotEqual(t, contact.ID, c.ID)
@@ -470,92 +468,23 @@ func TestContactService_RemoveRelationship_NotFound(t *testing.T) {
 	svc := createContactService(db)
 	ctx := createContactTestContext()
 
-	err := svc.RemoveRelationship(ctx, uuid.New())
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-}
-
-// TestContactService_SetPrimaryContact tests setting primary contact
-func TestContactService_SetPrimaryContact(t *testing.T) {
-	db := setupContactServiceTestDB(t)
-	svc := createContactService(db)
-	ctx := createContactTestContext()
-
-	// Create prerequisites
-	customer := testutil.CreateTestCustomer(t, db, "Primary Test Customer")
-
-	// Create two contacts and link them to the customer
-	contact1, err := svc.Create(ctx, &domain.CreateContactRequest{
-		FirstName: "Primary",
-		LastName:  "One",
-	})
-	require.NoError(t, err)
-
-	contact2, err := svc.Create(ctx, &domain.CreateContactRequest{
-		FirstName: "Primary",
-		LastName:  "Two",
-	})
-	require.NoError(t, err)
-
-	// Link both to customer
-	rel1, err := svc.AddRelationship(ctx, contact1.ID, &domain.AddContactRelationshipRequest{
-		EntityType: domain.ContactEntityCustomer,
-		EntityID:   customer.ID,
-		IsPrimary:  true,
-	})
-	require.NoError(t, err)
-	assert.True(t, rel1.IsPrimary)
-
-	_, err = svc.AddRelationship(ctx, contact2.ID, &domain.AddContactRelationshipRequest{
-		EntityType: domain.ContactEntityCustomer,
-		EntityID:   customer.ID,
-		IsPrimary:  false,
-	})
-	require.NoError(t, err)
-
-	// Set contact2 as primary
-	err = svc.SetPrimaryContact(ctx, domain.ContactEntityCustomer, customer.ID, contact2.ID)
-	require.NoError(t, err)
-
-	// Verify contact2 is now primary (check via GetContactsForEntity)
-	contacts, err := svc.GetContactsForEntity(ctx, domain.ContactEntityCustomer, customer.ID)
-	require.NoError(t, err)
-
-	var foundPrimary bool
-	for _, c := range contacts {
-		for _, rel := range c.Relationships {
-			if rel.ContactID == contact2.ID && rel.EntityType == domain.ContactEntityCustomer && rel.EntityID == customer.ID {
-				if rel.IsPrimary {
-					foundPrimary = true
-				}
-			}
-		}
-	}
-	assert.True(t, foundPrimary, "contact2 should be the primary contact")
-}
-
-// TestContactService_SetPrimaryContact_NotRelated tests setting primary for unrelated contact
-func TestContactService_SetPrimaryContact_NotRelated(t *testing.T) {
-	db := setupContactServiceTestDB(t)
-	svc := createContactService(db)
-	ctx := createContactTestContext()
-
-	// Create customer and unrelated contact
-	customer := testutil.CreateTestCustomer(t, db, "Unrelated Customer")
+	// Create a contact first
 	contact, err := svc.Create(ctx, &domain.CreateContactRequest{
-		FirstName: "Unrelated",
+		FirstName: "Test",
 		LastName:  "Contact",
 	})
 	require.NoError(t, err)
 
-	// Try to set as primary without relationship
-	err = svc.SetPrimaryContact(ctx, domain.ContactEntityCustomer, customer.ID, contact.ID)
+	err = svc.RemoveRelationship(ctx, contact.ID, uuid.New())
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not related")
+	assert.Contains(t, err.Error(), "not found")
 }
 
-// TestContactService_GetContactsForEntity tests retrieving contacts for an entity
-func TestContactService_GetContactsForEntity(t *testing.T) {
+// Note: SetPrimaryContact was removed from the service API.
+// Primary contact is set via the IsPrimary field when calling AddRelationship.
+
+// TestContactService_ListByEntity tests retrieving contacts for an entity
+func TestContactService_ListByEntity(t *testing.T) {
 	db := setupContactServiceTestDB(t)
 	svc := createContactService(db)
 	ctx := createContactTestContext()
@@ -580,20 +509,9 @@ func TestContactService_GetContactsForEntity(t *testing.T) {
 	}
 
 	// Get contacts for customer
-	contacts, err := svc.GetContactsForEntity(ctx, domain.ContactEntityCustomer, customer.ID)
+	contacts, err := svc.ListByEntity(ctx, domain.ContactEntityCustomer, customer.ID)
 	require.NoError(t, err)
 	assert.Len(t, contacts, 3)
-}
-
-// TestContactService_GetContactsForEntity_InvalidType tests invalid entity type
-func TestContactService_GetContactsForEntity_InvalidType(t *testing.T) {
-	db := setupContactServiceTestDB(t)
-	svc := createContactService(db)
-	ctx := createContactTestContext()
-
-	_, err := svc.GetContactsForEntity(ctx, "invalid", uuid.New())
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid entity type")
 }
 
 // TestContactService_List tests listing contacts with pagination
@@ -626,42 +544,8 @@ func TestContactService_List(t *testing.T) {
 	assert.NotEqual(t, contacts[0].ID, contacts2[0].ID)
 }
 
-// TestContactService_Search tests contact search
-func TestContactService_Search(t *testing.T) {
-	db := setupContactServiceTestDB(t)
-	svc := createContactService(db)
-	ctx := createContactTestContext()
-
-	// Create contacts with searchable names
-	_, err := svc.Create(ctx, &domain.CreateContactRequest{
-		FirstName: "Searchable",
-		LastName:  "Person",
-		Email:     "searchable@example.com",
-	})
-	require.NoError(t, err)
-
-	_, err = svc.Create(ctx, &domain.CreateContactRequest{
-		FirstName: "Other",
-		LastName:  "Searchable",
-	})
-	require.NoError(t, err)
-
-	_, err = svc.Create(ctx, &domain.CreateContactRequest{
-		FirstName: "No",
-		LastName:  "Match",
-	})
-	require.NoError(t, err)
-
-	// Search by name
-	results, err := svc.Search(ctx, "Searchable", 10)
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(results), 2)
-
-	// Search by email
-	results, err = svc.Search(ctx, "searchable@example", 10)
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(results), 1)
-}
+// Note: Search method was removed from ContactService.
+// Search functionality is available via ListWithFilters with the Search filter field.
 
 // TestContactService_Create_WithPrimaryCustomer tests creating contact with primary customer
 func TestContactService_Create_WithPrimaryCustomer(t *testing.T) {
