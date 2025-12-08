@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -137,7 +138,7 @@ func (h *DealHandler) List(w http.ResponseWriter, r *http.Request) {
 	result, err := h.dealService.List(r.Context(), page, pageSize, filters, sortBy)
 	if err != nil {
 		h.logger.Error("failed to list deals", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to list deals")
 		return
 	}
 
@@ -157,7 +158,7 @@ func (h *DealHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateDealRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -168,12 +169,16 @@ func (h *DealHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	deal, err := h.dealService.Create(r.Context(), &req)
 	if err != nil {
+		if errors.Is(err, service.ErrCustomerNotFound) {
+			respondWithError(w, http.StatusBadRequest, "Customer not found")
+			return
+		}
 		h.logger.Error("failed to create deal", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to create deal")
 		return
 	}
 
-	w.Header().Set("Location", "/deals/"+deal.ID.String())
+	w.Header().Set("Location", "/api/v1/deals/"+deal.ID.String())
 	respondJSON(w, http.StatusCreated, deal)
 }
 
@@ -189,13 +194,18 @@ func (h *DealHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	deal, err := h.dealService.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Deal not found", http.StatusNotFound)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to get deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get deal")
 		return
 	}
 
@@ -230,13 +240,13 @@ type DealWithHistoryResponse struct {
 func (h *DealHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.UpdateDealRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -247,12 +257,16 @@ func (h *DealHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	deal, err := h.dealService.Update(r.Context(), id, &req)
 	if err != nil {
-		if err == service.ErrForbidden {
-			http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
+		if errors.Is(err, service.ErrForbidden) {
+			respondWithError(w, http.StatusForbidden, "Insufficient permissions to update this deal")
 			return
 		}
-		h.logger.Error("failed to update deal", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to update deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to update deal")
 		return
 	}
 
@@ -270,17 +284,21 @@ func (h *DealHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	if err := h.dealService.Delete(r.Context(), id); err != nil {
-		if err == service.ErrForbidden {
-			http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
+		if errors.Is(err, service.ErrForbidden) {
+			respondWithError(w, http.StatusForbidden, "Insufficient permissions to delete this deal")
 			return
 		}
-		h.logger.Error("failed to delete deal", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to delete deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to delete deal")
 		return
 	}
 
@@ -301,13 +319,13 @@ func (h *DealHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) AdvanceStage(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	var req domain.UpdateDealStageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
@@ -318,8 +336,12 @@ func (h *DealHandler) AdvanceStage(w http.ResponseWriter, r *http.Request) {
 
 	deal, err := h.dealService.AdvanceStage(r.Context(), id, &req)
 	if err != nil {
-		h.logger.Error("failed to advance deal stage", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to advance deal stage", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusBadRequest, "Failed to advance deal stage: "+err.Error())
 		return
 	}
 
@@ -340,7 +362,7 @@ func (h *DealHandler) AdvanceStage(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) WinDeal(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
@@ -351,8 +373,12 @@ func (h *DealHandler) WinDeal(w http.ResponseWriter, r *http.Request) {
 
 	deal, project, err := h.dealService.WinDeal(r.Context(), id, createProject)
 	if err != nil {
-		h.logger.Error("failed to win deal", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to win deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusBadRequest, "Failed to win deal: "+err.Error())
 		return
 	}
 
@@ -382,20 +408,24 @@ type WinDealResponse struct {
 func (h *DealHandler) LoseDeal(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	var req LoseDealRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
 	}
 
 	deal, err := h.dealService.LoseDeal(r.Context(), id, req.Reason)
 	if err != nil {
-		h.logger.Error("failed to lose deal", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to lose deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusBadRequest, "Failed to mark deal as lost: "+err.Error())
 		return
 	}
 
@@ -419,14 +449,18 @@ type LoseDealRequest struct {
 func (h *DealHandler) ReopenDeal(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	deal, err := h.dealService.ReopenDeal(r.Context(), id)
 	if err != nil {
-		h.logger.Error("failed to reopen deal", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to reopen deal", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusBadRequest, "Failed to reopen deal: "+err.Error())
 		return
 	}
 
@@ -445,14 +479,18 @@ func (h *DealHandler) ReopenDeal(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) GetStageHistory(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
 	history, err := h.dealService.GetStageHistory(r.Context(), id)
 	if err != nil {
-		h.logger.Error("failed to get stage history", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to get stage history", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get stage history")
 		return
 	}
 
@@ -472,7 +510,7 @@ func (h *DealHandler) GetStageHistory(w http.ResponseWriter, r *http.Request) {
 func (h *DealHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid deal ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid deal ID: must be a valid UUID")
 		return
 	}
 
@@ -480,11 +518,18 @@ func (h *DealHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 {
 		limit = 50
 	}
+	if limit > 200 {
+		limit = 200
+	}
 
 	activities, err := h.dealService.GetActivities(r.Context(), id, limit)
 	if err != nil {
-		h.logger.Error("failed to get activities", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Deal not found")
+			return
+		}
+		h.logger.Error("failed to get deal activities", zap.Error(err), zap.String("deal_id", id.String()))
+		respondWithError(w, http.StatusInternalServerError, "Failed to get deal activities")
 		return
 	}
 
@@ -503,7 +548,7 @@ func (h *DealHandler) GetPipelineOverview(w http.ResponseWriter, r *http.Request
 	pipeline, err := h.dealService.GetPipelineOverview(r.Context())
 	if err != nil {
 		h.logger.Error("failed to get pipeline overview", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to get pipeline overview")
 		return
 	}
 
@@ -522,7 +567,7 @@ func (h *DealHandler) GetPipelineStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.dealService.GetPipelineStats(r.Context())
 	if err != nil {
 		h.logger.Error("failed to get pipeline stats", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to get pipeline statistics")
 		return
 	}
 
@@ -543,11 +588,14 @@ func (h *DealHandler) GetForecast(w http.ResponseWriter, r *http.Request) {
 	if months < 1 {
 		months = 3
 	}
+	if months > 12 {
+		months = 12
+	}
 
 	forecast, err := h.dealService.GetForecast(r.Context(), months)
 	if err != nil {
 		h.logger.Error("failed to get forecast", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to get forecast")
 		return
 	}
 
