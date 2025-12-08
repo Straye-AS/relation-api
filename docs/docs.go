@@ -2607,6 +2607,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/deals/analytics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get comprehensive sales pipeline analytics including stage summary, forecasts, conversion rates, and win rate analysis",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deals"
+                ],
+                "summary": "Get pipeline analytics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by company ID",
+                        "name": "companyId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by owner ID",
+                        "name": "ownerId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by date from (YYYY-MM-DD)",
+                        "name": "dateFrom",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by date to (YYYY-MM-DD)",
+                        "name": "dateTo",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PipelineAnalyticsDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/deals/forecast": {
             "get": {
                 "security": [
@@ -6361,6 +6415,26 @@ const docTemplate = `{
                 "ContactTypeOther"
             ]
         },
+        "domain.ConversionRateDTO": {
+            "type": "object",
+            "properties": {
+                "conversionRate": {
+                    "type": "number"
+                },
+                "dealsConverted": {
+                    "type": "integer"
+                },
+                "fromStage": {
+                    "type": "string"
+                },
+                "toStage": {
+                    "type": "string"
+                },
+                "totalDeals": {
+                    "type": "integer"
+                }
+            }
+        },
         "domain.CreateActivityRequest": {
             "type": "object",
             "required": [
@@ -7724,6 +7798,35 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.PipelineAnalyticsDTO": {
+            "type": "object",
+            "properties": {
+                "conversionRates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ConversionRateDTO"
+                    }
+                },
+                "forecast30Days": {
+                    "$ref": "#/definitions/domain.RevenueForecastDTO"
+                },
+                "forecast90Days": {
+                    "$ref": "#/definitions/domain.RevenueForecastDTO"
+                },
+                "generatedAt": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.StageSummaryDTO"
+                    }
+                },
+                "winRateAnalysis": {
+                    "$ref": "#/definitions/domain.WinRateAnalysisDTO"
+                }
+            }
+        },
         "domain.PipelinePhaseData": {
             "type": "object",
             "properties": {
@@ -8003,6 +8106,24 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.RevenueForecastDTO": {
+            "type": "object",
+            "properties": {
+                "dealCount": {
+                    "type": "integer"
+                },
+                "period": {
+                    "description": "\"30d\" or \"90d\"",
+                    "type": "string"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "weightedValue": {
+                    "type": "number"
+                }
+            }
+        },
         "domain.SearchResult": {
             "type": "object",
             "properties": {
@@ -8020,6 +8141,32 @@ const docTemplate = `{
                 },
                 "type": {
                     "type": "string"
+                }
+            }
+        },
+        "domain.StageSummaryDTO": {
+            "type": "object",
+            "properties": {
+                "avgDealValue": {
+                    "type": "number"
+                },
+                "avgProbability": {
+                    "type": "number"
+                },
+                "dealCount": {
+                    "type": "integer"
+                },
+                "overdueCount": {
+                    "type": "integer"
+                },
+                "stage": {
+                    "type": "string"
+                },
+                "totalValue": {
+                    "type": "number"
+                },
+                "weightedValue": {
+                    "type": "number"
                 }
             }
         },
@@ -8501,6 +8648,38 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.WinRateAnalysisDTO": {
+            "type": "object",
+            "properties": {
+                "avgDaysToClose": {
+                    "type": "number"
+                },
+                "avgLostDealValue": {
+                    "type": "number"
+                },
+                "avgWonDealValue": {
+                    "type": "number"
+                },
+                "lostValue": {
+                    "type": "number"
+                },
+                "totalClosed": {
+                    "type": "integer"
+                },
+                "totalLost": {
+                    "type": "integer"
+                },
+                "totalWon": {
+                    "type": "integer"
+                },
+                "winRate": {
+                    "type": "number"
+                },
+                "wonValue": {
+                    "type": "number"
                 }
             }
         },

@@ -881,3 +881,146 @@ func TestDealHandler_GetForecast(t *testing.T) {
 		assert.Len(t, forecast, 6)
 	})
 }
+
+func TestDealHandler_GetPipelineAnalytics(t *testing.T) {
+	db := setupDealHandlerTestDB(t)
+	h := createDealHandler(t, db)
+	customer := createDealHandlerTestCustomer(t, db)
+	ctx := createDealTestContext()
+	userCtx, _ := auth.FromContext(ctx)
+
+	t.Run("get analytics successfully with no deals", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, analytics.GeneratedAt)
+		assert.NotNil(t, analytics.Summary)
+		assert.NotNil(t, analytics.ConversionRates)
+		// With no deals, win rate should have zeros
+		assert.Equal(t, int64(0), analytics.WinRateAnalysis.TotalClosed)
+		assert.Equal(t, float64(0), analytics.WinRateAnalysis.WinRate)
+	})
+
+	t.Run("get analytics with deals", func(t *testing.T) {
+		// Create deals in different stages
+		stages := []domain.DealStage{
+			domain.DealStageLead,
+			domain.DealStageQualified,
+			domain.DealStageProposal,
+		}
+		for i, stage := range stages {
+			err := db.Create(&domain.Deal{
+				Title:        "Analytics Deal " + string(rune('A'+i)),
+				CustomerID:   customer.ID,
+				CustomerName: customer.Name,
+				CompanyID:    domain.CompanyStalbygg,
+				Stage:        stage,
+				Probability:  10 + i*20,
+				Value:        float64((i + 1) * 100000),
+				Currency:     "NOK",
+				OwnerID:      userCtx.UserID.String(),
+			}).Error
+			require.NoError(t, err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, analytics.GeneratedAt)
+		// The summary should include data from the view
+		// Note: The view aggregates by stage, so we should see entries
+	})
+
+	t.Run("get analytics with company filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics?companyId=stalbygg", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, analytics.GeneratedAt)
+	})
+
+	t.Run("get analytics with owner filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics?ownerId="+userCtx.UserID.String(), nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, analytics.GeneratedAt)
+	})
+
+	t.Run("get analytics with date range filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics?dateFrom=2024-01-01&dateTo=2025-12-31", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, analytics.GeneratedAt)
+	})
+
+	t.Run("analytics returns forecasts", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		assert.Equal(t, "30d", analytics.Forecast30Days.Period)
+		assert.Equal(t, "90d", analytics.Forecast90Days.Period)
+	})
+
+	t.Run("analytics returns conversion rates", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/deals/analytics", nil)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		h.GetPipelineAnalytics(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var analytics domain.PipelineAnalyticsDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &analytics)
+		assert.NoError(t, err)
+		// Should have conversion rates for each stage transition
+		assert.Len(t, analytics.ConversionRates, 4) // lead->qualified, qualified->proposal, proposal->negotiation, negotiation->won
+	})
+}

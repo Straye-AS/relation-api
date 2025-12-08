@@ -526,6 +526,19 @@ definitions:
     - ContactTypeTechnical
     - ContactTypeExecutive
     - ContactTypeOther
+  domain.ConversionRateDTO:
+    properties:
+      conversionRate:
+        type: number
+      dealsConverted:
+        type: integer
+      fromStage:
+        type: string
+      toStage:
+        type: string
+      totalDeals:
+        type: integer
+    type: object
   domain.CreateActivityRequest:
     properties:
       activityType:
@@ -1476,6 +1489,25 @@ definitions:
           type: string
         type: array
     type: object
+  domain.PipelineAnalyticsDTO:
+    properties:
+      conversionRates:
+        items:
+          $ref: '#/definitions/domain.ConversionRateDTO'
+        type: array
+      forecast30Days:
+        $ref: '#/definitions/domain.RevenueForecastDTO'
+      forecast90Days:
+        $ref: '#/definitions/domain.RevenueForecastDTO'
+      generatedAt:
+        type: string
+      summary:
+        items:
+          $ref: '#/definitions/domain.StageSummaryDTO'
+        type: array
+      winRateAnalysis:
+        $ref: '#/definitions/domain.WinRateAnalysisDTO'
+    type: object
   domain.PipelinePhaseData:
     properties:
       count:
@@ -1668,6 +1700,18 @@ definitions:
     required:
     - orderedIds
     type: object
+  domain.RevenueForecastDTO:
+    properties:
+      dealCount:
+        type: integer
+      period:
+        description: '"30d" or "90d"'
+        type: string
+      totalValue:
+        type: number
+      weightedValue:
+        type: number
+    type: object
   domain.SearchResult:
     properties:
       id:
@@ -1680,6 +1724,23 @@ definitions:
         type: string
       type:
         type: string
+    type: object
+  domain.StageSummaryDTO:
+    properties:
+      avgDealValue:
+        type: number
+      avgProbability:
+        type: number
+      dealCount:
+        type: integer
+      overdueCount:
+        type: integer
+      stage:
+        type: string
+      totalValue:
+        type: number
+      weightedValue:
+        type: number
     type: object
   domain.TeamMemberStats:
     properties:
@@ -2019,6 +2080,27 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  domain.WinRateAnalysisDTO:
+    properties:
+      avgDaysToClose:
+        type: number
+      avgLostDealValue:
+        type: number
+      avgWonDealValue:
+        type: number
+      lostValue:
+        type: number
+      totalClosed:
+        type: integer
+      totalLost:
+        type: integer
+      totalWon:
+        type: integer
+      winRate:
+        type: number
+      wonValue:
+        type: number
     type: object
   handler.AuditLogDTO:
     properties:
@@ -4136,6 +4218,40 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Win deal
+      tags:
+      - Deals
+  /deals/analytics:
+    get:
+      description: Get comprehensive sales pipeline analytics including stage summary,
+        forecasts, conversion rates, and win rate analysis
+      parameters:
+      - description: Filter by company ID
+        in: query
+        name: companyId
+        type: string
+      - description: Filter by owner ID
+        in: query
+        name: ownerId
+        type: string
+      - description: Filter by date from (YYYY-MM-DD)
+        in: query
+        name: dateFrom
+        type: string
+      - description: Filter by date to (YYYY-MM-DD)
+        in: query
+        name: dateTo
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PipelineAnalyticsDTO'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get pipeline analytics
       tags:
       - Deals
   /deals/forecast:

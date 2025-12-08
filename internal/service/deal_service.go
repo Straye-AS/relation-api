@@ -674,6 +674,108 @@ func (s *DealService) isValidTransition(from, to domain.DealStage) bool {
 	return false
 }
 
+// GetPipelineAnalytics returns comprehensive pipeline analytics with forecasts and conversion rates
+func (s *DealService) GetPipelineAnalytics(ctx context.Context, filters *domain.PipelineAnalyticsFilters) (*domain.PipelineAnalyticsDTO, error) {
+	analytics := &domain.PipelineAnalyticsDTO{
+		Summary:         make([]domain.StageSummaryDTO, 0),
+		ConversionRates: make([]domain.ConversionRateDTO, 0),
+		GeneratedAt:     time.Now().Format("2006-01-02T15:04:05Z"),
+	}
+
+	// Extract filter values
+	var companyID *domain.CompanyID
+	var ownerID *string
+	var dateFrom, dateTo *time.Time
+
+	if filters != nil {
+		companyID = filters.CompanyID
+		ownerID = filters.OwnerID
+		dateFrom = filters.DateFrom
+		dateTo = filters.DateTo
+	}
+
+	// Get pipeline summary from the database view
+	summaryRows, err := s.dealRepo.GetPipelineSummaryFromView(ctx, companyID)
+	if err != nil {
+		s.logger.Error("failed to get pipeline summary from view", zap.Error(err))
+		// Continue with empty summary rather than failing entirely
+	} else {
+		for _, row := range summaryRows {
+			analytics.Summary = append(analytics.Summary, domain.StageSummaryDTO{
+				Stage:          string(row.Stage),
+				DealCount:      row.DealCount,
+				TotalValue:     row.TotalValue,
+				WeightedValue:  row.TotalWeightedValue,
+				AvgProbability: row.AvgProbability,
+				AvgDealValue:   row.AvgDealValue,
+				OverdueCount:   row.OverdueCount,
+			})
+		}
+	}
+
+	// Get 30-day forecast
+	forecast30, err := s.dealRepo.GetRevenueForecastByDays(ctx, 30, companyID, ownerID)
+	if err != nil {
+		s.logger.Warn("failed to get 30-day forecast", zap.Error(err))
+	} else {
+		analytics.Forecast30Days = domain.RevenueForecastDTO{
+			Period:        "30d",
+			DealCount:     forecast30.DealCount,
+			TotalValue:    forecast30.TotalValue,
+			WeightedValue: forecast30.WeightedValue,
+		}
+	}
+
+	// Get 90-day forecast
+	forecast90, err := s.dealRepo.GetRevenueForecastByDays(ctx, 90, companyID, ownerID)
+	if err != nil {
+		s.logger.Warn("failed to get 90-day forecast", zap.Error(err))
+	} else {
+		analytics.Forecast90Days = domain.RevenueForecastDTO{
+			Period:        "90d",
+			DealCount:     forecast90.DealCount,
+			TotalValue:    forecast90.TotalValue,
+			WeightedValue: forecast90.WeightedValue,
+		}
+	}
+
+	// Get conversion rates
+	conversionRates, err := s.dealRepo.GetConversionRates(ctx, companyID)
+	if err != nil {
+		s.logger.Warn("failed to get conversion rates", zap.Error(err))
+	} else {
+		for _, rate := range conversionRates {
+			analytics.ConversionRates = append(analytics.ConversionRates, domain.ConversionRateDTO{
+				FromStage:      string(rate.FromStage),
+				ToStage:        string(rate.ToStage),
+				ConversionRate: rate.ConversionRate,
+				DealsConverted: rate.DealsConverted,
+				TotalDeals:     rate.TotalDeals,
+			})
+		}
+	}
+
+	// Get win rate analysis
+	winRate, err := s.dealRepo.GetWinRateAnalysis(ctx, companyID, ownerID, dateFrom, dateTo)
+	if err != nil {
+		s.logger.Warn("failed to get win rate analysis", zap.Error(err))
+	} else {
+		analytics.WinRateAnalysis = domain.WinRateAnalysisDTO{
+			TotalClosed:      winRate.TotalClosed,
+			TotalWon:         winRate.TotalWon,
+			TotalLost:        winRate.TotalLost,
+			WinRate:          winRate.WinRate,
+			WonValue:         winRate.WonValue,
+			LostValue:        winRate.LostValue,
+			AvgWonDealValue:  winRate.AvgWonDealValue,
+			AvgLostDealValue: winRate.AvgLostDealValue,
+			AvgDaysToClose:   winRate.AvgDaysToClose,
+		}
+	}
+
+	return analytics, nil
+}
+
 // CreateOfferFromDeal creates an offer linked to a deal, advancing the deal to proposal stage
 func (s *DealService) CreateOfferFromDeal(ctx context.Context, dealID uuid.UUID, req *domain.CreateOfferFromDealRequest) (*domain.CreateOfferFromDealResponse, error) {
 	// Get deal
