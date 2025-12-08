@@ -3015,6 +3015,21 @@ const docTemplate = `{
                         "description": "Filter to show only unread notifications",
                         "name": "unreadOnly",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "task_assigned",
+                            "budget_alert",
+                            "deal_stage_changed",
+                            "offer_accepted",
+                            "offer_rejected",
+                            "activity_reminder",
+                            "project_update"
+                        ],
+                        "type": "string",
+                        "description": "Filter by notification type",
+                        "name": "type",
+                        "in": "query"
                     }
                 ],
                 "responses": {

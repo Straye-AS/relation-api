@@ -100,14 +100,14 @@ func TestNotificationRepository_ListByUser(t *testing.T) {
 	createTestNotification(t, db, otherUserID, false)
 
 	t.Run("list all notifications for user", func(t *testing.T) {
-		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 10, false)
+		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 10, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(5), total)
 		assert.Len(t, notifications, 5)
 	})
 
 	t.Run("list only unread notifications", func(t *testing.T) {
-		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 10, true)
+		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 10, true, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(2), total) // Only 2 unread (indexes 1 and 3)
 		assert.Len(t, notifications, 2)
@@ -117,17 +117,17 @@ func TestNotificationRepository_ListByUser(t *testing.T) {
 	})
 
 	t.Run("pagination", func(t *testing.T) {
-		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 2, false)
+		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 2, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(5), total)
 		assert.Len(t, notifications, 2)
 
-		notifications, total, err = repo.ListByUser(context.Background(), userID, 2, 2, false)
+		notifications, total, err = repo.ListByUser(context.Background(), userID, 2, 2, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(5), total)
 		assert.Len(t, notifications, 2)
 
-		notifications, total, err = repo.ListByUser(context.Background(), userID, 3, 2, false)
+		notifications, total, err = repo.ListByUser(context.Background(), userID, 3, 2, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(5), total)
 		assert.Len(t, notifications, 1)
@@ -135,19 +135,36 @@ func TestNotificationRepository_ListByUser(t *testing.T) {
 
 	t.Run("returns empty for user with no notifications", func(t *testing.T) {
 		emptyUserID := uuid.New()
-		notifications, total, err := repo.ListByUser(context.Background(), emptyUserID, 1, 10, false)
+		notifications, total, err := repo.ListByUser(context.Background(), emptyUserID, 1, 10, false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, int64(0), total)
 		assert.Len(t, notifications, 0)
 	})
 
 	t.Run("ordered by created_at DESC", func(t *testing.T) {
-		notifications, _, err := repo.ListByUser(context.Background(), userID, 1, 10, false)
+		notifications, _, err := repo.ListByUser(context.Background(), userID, 1, 10, false, "")
 		assert.NoError(t, err)
 		for i := 0; i < len(notifications)-1; i++ {
 			assert.True(t, notifications[i].CreatedAt.After(notifications[i+1].CreatedAt) ||
 				notifications[i].CreatedAt.Equal(notifications[i+1].CreatedAt))
 		}
+	})
+
+	t.Run("filter by notification type", func(t *testing.T) {
+		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 10, false, string(domain.NotificationTypeTaskAssigned))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(5), total) // All notifications are task_assigned
+		assert.Len(t, notifications, 5)
+		for _, n := range notifications {
+			assert.Equal(t, string(domain.NotificationTypeTaskAssigned), n.Type)
+		}
+	})
+
+	t.Run("filter by type returns empty when no match", func(t *testing.T) {
+		notifications, total, err := repo.ListByUser(context.Background(), userID, 1, 10, false, string(domain.NotificationTypeBudgetAlert))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), total)
+		assert.Len(t, notifications, 0)
 	})
 }
 

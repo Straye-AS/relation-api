@@ -30,7 +30,7 @@ func (r *NotificationRepository) GetByID(ctx context.Context, id uuid.UUID) (*do
 	return &notification, nil
 }
 
-func (r *NotificationRepository) ListByUser(ctx context.Context, userID uuid.UUID, page, pageSize int, unreadOnly bool) ([]domain.Notification, int64, error) {
+func (r *NotificationRepository) ListByUser(ctx context.Context, userID uuid.UUID, page, pageSize int, unreadOnly bool, notificationType string) ([]domain.Notification, int64, error) {
 	var notifications []domain.Notification
 	var total int64
 
@@ -38,6 +38,10 @@ func (r *NotificationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 
 	if unreadOnly {
 		query = query.Where("read = ?", false)
+	}
+
+	if notificationType != "" {
+		query = query.Where("type = ?", notificationType)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

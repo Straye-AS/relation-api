@@ -35,6 +35,7 @@ func NewNotificationHandler(notificationService *service.NotificationService, lo
 // @Param page query int false "Page number" default(1)
 // @Param pageSize query int false "Items per page (max 200)" default(20)
 // @Param unreadOnly query bool false "Filter to show only unread notifications" default(false)
+// @Param type query string false "Filter by notification type" Enums(task_assigned, budget_alert, deal_stage_changed, offer_accepted, offer_rejected, activity_reminder, project_update)
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.NotificationDTO}
 // @Failure 401 {object} domain.ErrorResponse
 // @Failure 500 {object} domain.ErrorResponse
@@ -56,8 +57,9 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	unreadOnly := r.URL.Query().Get("unreadOnly") == "true"
+	notificationType := r.URL.Query().Get("type")
 
-	result, err := h.notificationService.GetForCurrentUser(r.Context(), page, pageSize, unreadOnly)
+	result, err := h.notificationService.GetForCurrentUser(r.Context(), page, pageSize, unreadOnly, notificationType)
 	if err != nil {
 		if errors.Is(err, service.ErrUserContextRequired) {
 			respondJSON(w, http.StatusUnauthorized, domain.ErrorResponse{

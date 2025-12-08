@@ -136,6 +136,7 @@ func (s *NotificationService) GetForCurrentUser(
 	page int,
 	pageSize int,
 	unreadOnly bool,
+	notificationType string,
 ) (*domain.PaginatedResponse, error) {
 	userCtx, ok := auth.FromContext(ctx)
 	if !ok {
@@ -153,7 +154,7 @@ func (s *NotificationService) GetForCurrentUser(
 		page = 1
 	}
 
-	notifications, total, err := s.notificationRepo.ListByUser(ctx, userCtx.UserID, page, pageSize, unreadOnly)
+	notifications, total, err := s.notificationRepo.ListByUser(ctx, userCtx.UserID, page, pageSize, unreadOnly, notificationType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list notifications: %w", err)
 	}
