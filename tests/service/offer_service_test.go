@@ -46,8 +46,10 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 	activityRepo := repository.NewActivityRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, log)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
 	svc := service.NewOfferService(
 		offerRepo,
@@ -58,14 +60,15 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 		fileRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		log,
 		db,
 	)
 
 	fixtures := &offerTestFixtures{
-		db:            db,
-		customerRepo:  customerRepo,
-		offerRepo:     offerRepo,
+		db:             db,
+		customerRepo:   customerRepo,
+		offerRepo:      offerRepo,
 		budgetItemRepo: budgetItemRepo,
 	}
 
@@ -73,9 +76,9 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 }
 
 type offerTestFixtures struct {
-	db            *gorm.DB
-	customerRepo  *repository.CustomerRepository
-	offerRepo     *repository.OfferRepository
+	db             *gorm.DB
+	customerRepo   *repository.CustomerRepository
+	offerRepo      *repository.OfferRepository
 	budgetItemRepo *repository.BudgetItemRepository
 }
 

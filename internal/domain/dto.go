@@ -763,9 +763,9 @@ type AdvanceOfferRequest struct {
 
 // CloneOfferRequest contains options for cloning an offer
 type CloneOfferRequest struct {
-	NewTitle         string `json:"newTitle,omitempty" validate:"max=200"`
-	IncludeBudget    *bool  `json:"includeBudget,omitempty"` // Default true - clone budget items (nil treated as true)
-	IncludeFiles     bool   `json:"includeFiles"`            // Default false - files are not cloned by default
+	NewTitle      string `json:"newTitle,omitempty" validate:"max=200"`
+	IncludeBudget *bool  `json:"includeBudget,omitempty"` // Default true - clone budget items (nil treated as true)
+	IncludeFiles  bool   `json:"includeFiles"`            // Default false - files are not cloned by default
 }
 
 // AcceptOfferRequest contains options when accepting an offer

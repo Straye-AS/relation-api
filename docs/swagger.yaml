@@ -163,35 +163,31 @@ definitions:
     - entityId
     - entityType
     type: object
-  domain.AddOfferBudgetDimensionRequest:
+  domain.AddOfferBudgetItemRequest:
     properties:
-      categoryId:
-        maxLength: 50
-        type: string
-      cost:
-        type: number
-      customName:
-        maxLength: 200
-        type: string
       description:
         type: string
       displayOrder:
         minimum: 0
         type: integer
-      marginOverride:
-        type: boolean
+      expectedCost:
+        minimum: 0
+        type: number
+      expectedMargin:
+        maximum: 100
+        minimum: 0
+        type: number
+      name:
+        maxLength: 200
+        type: string
+      pricePerItem:
+        minimum: 0
+        type: number
       quantity:
         minimum: 0
         type: number
-      revenue:
-        minimum: 0
-        type: number
-      targetMarginPercent:
-        minimum: 0
-        type: number
-      unit:
-        maxLength: 50
-        type: string
+    required:
+    - name
     type: object
   domain.AdvanceOfferRequest:
     properties:
@@ -288,56 +284,34 @@ definitions:
           type: string
         type: array
     type: object
-  domain.BudgetDimensionCategoryDTO:
+  domain.BudgetItemDTO:
     properties:
-      description:
-        type: string
-      displayOrder:
-        type: integer
-      id:
-        type: string
-      isActive:
-        type: boolean
-      name:
-        type: string
-    type: object
-  domain.BudgetDimensionDTO:
-    properties:
-      category:
-        $ref: '#/definitions/domain.BudgetDimensionCategoryDTO'
-      categoryId:
-        type: string
-      cost:
-        type: number
       createdAt:
         type: string
-      customName:
-        type: string
       description:
         type: string
       displayOrder:
         type: integer
+      expectedCost:
+        type: number
+      expectedMargin:
+        type: number
+      expectedProfit:
+        type: number
+      expectedRevenue:
+        type: number
       id:
         type: string
-      marginOverride:
-        type: boolean
-      marginPercent:
-        type: number
       name:
-        description: Resolved name (category or custom)
         type: string
       parentId:
         type: string
       parentType:
         $ref: '#/definitions/domain.BudgetParentType'
+      pricePerItem:
+        type: number
       quantity:
         type: number
-      revenue:
-        type: number
-      targetMarginPercent:
-        type: number
-      unit:
-        type: string
       updatedAt:
         type: string
     type: object
@@ -351,9 +325,9 @@ definitions:
     - BudgetParentProject
   domain.BudgetSummaryDTO:
     properties:
-      dimensionCount:
+      itemCount:
         type: integer
-      overallMarginPercent:
+      marginPercent:
         type: number
       parentId:
         type: string
@@ -368,8 +342,8 @@ definitions:
     type: object
   domain.CloneOfferRequest:
     properties:
-      includeDimensions:
-        description: Default true - clone budget dimensions (nil treated as true)
+      includeBudget:
+        description: Default true - clone budget items (nil treated as true)
         type: boolean
       includeFiles:
         description: Default false - files are not cloned by default
@@ -568,6 +542,21 @@ definitions:
       totalDeals:
         type: integer
     type: object
+  domain.ConvertInquiryRequest:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      responsibleUserId:
+        maxLength: 100
+        type: string
+    type: object
+  domain.ConvertInquiryResponse:
+    properties:
+      offer:
+        $ref: '#/definitions/domain.OfferDTO'
+      offerNumber:
+        type: string
+    type: object
   domain.CreateActivityRequest:
     properties:
       activityType:
@@ -762,6 +751,23 @@ definitions:
         maxLength: 200
         type: string
     required:
+    - title
+    type: object
+  domain.CreateInquiryRequest:
+    properties:
+      customerId:
+        type: string
+      description:
+        type: string
+      dueDate:
+        type: string
+      notes:
+        type: string
+      title:
+        maxLength: 200
+        type: string
+    required:
+    - customerId
     - title
     type: object
   domain.CreateOfferFromDealRequest:
@@ -1230,7 +1236,7 @@ definitions:
     type: object
   domain.InheritBudgetResponse:
     properties:
-      dimensionsCount:
+      itemsCount:
         type: integer
       project:
         $ref: '#/definitions/domain.ProjectDTO'
@@ -1314,10 +1320,16 @@ definitions:
         type: array
       notes:
         type: string
+      offerNumber:
+        description: Unique per company, e.g., "STB-2024-001"
+        type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
       probability:
         type: integer
+      projectId:
+        description: Link to project (nullable)
+        type: string
       responsibleUserId:
         type: string
       responsibleUserName:
@@ -1334,9 +1346,9 @@ definitions:
     type: object
   domain.OfferDetailDTO:
     properties:
-      budgetDimensions:
+      budgetItems:
         items:
-          $ref: '#/definitions/domain.BudgetDimensionDTO'
+          $ref: '#/definitions/domain.BudgetItemDTO'
         type: array
       budgetSummary:
         $ref: '#/definitions/domain.BudgetSummaryDTO'
@@ -1364,10 +1376,16 @@ definitions:
         type: array
       notes:
         type: string
+      offerNumber:
+        description: Unique per company, e.g., "STB-2024-001"
+        type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
       probability:
         type: integer
+      projectId:
+        description: Link to project (nullable)
+        type: string
       responsibleUserId:
         type: string
       responsibleUserName:
@@ -1699,7 +1717,7 @@ definitions:
         maxLength: 500
         type: string
     type: object
-  domain.ReorderDimensionsRequest:
+  domain.ReorderBudgetItemsRequest:
     properties:
       orderedIds:
         items:
@@ -1803,36 +1821,31 @@ definitions:
     required:
     - title
     type: object
-  domain.UpdateBudgetDimensionRequest:
+  domain.UpdateBudgetItemRequest:
     properties:
-      categoryId:
-        maxLength: 50
-        type: string
-      cost:
-        minimum: 0
-        type: number
-      customName:
-        maxLength: 200
-        type: string
       description:
         type: string
       displayOrder:
         minimum: 0
         type: integer
-      marginOverride:
-        type: boolean
+      expectedCost:
+        minimum: 0
+        type: number
+      expectedMargin:
+        maximum: 100
+        minimum: 0
+        type: number
+      name:
+        maxLength: 200
+        type: string
+      pricePerItem:
+        minimum: 0
+        type: number
       quantity:
         minimum: 0
         type: number
-      revenue:
-        minimum: 0
-        type: number
-      targetMarginPercent:
-        minimum: 0
-        type: number
-      unit:
-        maxLength: 50
-        type: string
+    required:
+    - name
     type: object
   domain.UpdateCompanyRequest:
     properties:
@@ -1986,6 +1999,41 @@ definitions:
     required:
     - stage
     type: object
+  domain.UpdateOfferCustomerRequest:
+    properties:
+      customerId:
+        type: string
+    required:
+    - customerId
+    type: object
+  domain.UpdateOfferDescriptionRequest:
+    properties:
+      description:
+        maxLength: 10000
+        type: string
+    type: object
+  domain.UpdateOfferDueDateRequest:
+    properties:
+      dueDate:
+        description: nullable to allow clearing
+        type: string
+    type: object
+  domain.UpdateOfferProbabilityRequest:
+    properties:
+      probability:
+        maximum: 100
+        minimum: 0
+        type: integer
+    required:
+    - probability
+    type: object
+  domain.UpdateOfferProjectRequest:
+    properties:
+      projectId:
+        type: string
+    required:
+    - projectId
+    type: object
   domain.UpdateOfferRequest:
     properties:
       description:
@@ -2012,6 +2060,30 @@ definitions:
     - responsibleUserId
     - status
     - title
+    type: object
+  domain.UpdateOfferResponsibleRequest:
+    properties:
+      responsibleUserId:
+        maxLength: 100
+        type: string
+    required:
+    - responsibleUserId
+    type: object
+  domain.UpdateOfferTitleRequest:
+    properties:
+      title:
+        maxLength: 200
+        type: string
+    required:
+    - title
+    type: object
+  domain.UpdateOfferValueRequest:
+    properties:
+      value:
+        minimum: 0
+        type: number
+    required:
+    - value
     type: object
   domain.UpdateProjectRequest:
     properties:
@@ -2208,15 +2280,6 @@ definitions:
         items:
           $ref: '#/definitions/domain.DealStageHistoryDTO'
         type: array
-    type: object
-  handler.OfferBudgetResponse:
-    properties:
-      dimensions:
-        items:
-          $ref: '#/definitions/domain.BudgetDimensionDTO'
-        type: array
-      summary:
-        $ref: '#/definitions/domain.BudgetSummaryDTO'
     type: object
   handler.WinDealResponse:
     properties:
@@ -4521,6 +4584,184 @@ paths:
       summary: Upload file
       tags:
       - Files
+  /inquiries:
+    get:
+      description: Returns a paginated list of inquiries (offers in draft phase)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by customer ID
+        in: query
+        name: customerId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PaginatedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List inquiries
+      tags:
+      - Inquiries
+    post:
+      consumes:
+      - application/json
+      description: Creates a new inquiry (offer in draft phase with minimal required
+        fields)
+      parameters:
+      - description: Inquiry data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateInquiryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create inquiry
+      tags:
+      - Inquiries
+  /inquiries/{id}:
+    delete:
+      description: Deletes an inquiry by ID
+      parameters:
+      - description: Inquiry ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Invalid ID or not an inquiry
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Inquiry not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete inquiry
+      tags:
+      - Inquiries
+    get:
+      description: Returns a specific inquiry by ID
+      parameters:
+      - description: Inquiry ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Inquiry not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get inquiry
+      tags:
+      - Inquiries
+  /inquiries/{id}/convert:
+    post:
+      consumes:
+      - application/json
+      description: Converts an inquiry to an offer (phase=in_progress), generating
+        an offer number
+      parameters:
+      - description: Inquiry ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Conversion options
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.ConvertInquiryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ConvertInquiryResponse'
+        "400":
+          description: Invalid ID, not an inquiry, or missing conversion data
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Inquiry not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Convert inquiry to offer
+      tags:
+      - Inquiries
   /notifications:
     get:
       consumes:
@@ -4962,8 +5203,9 @@ paths:
       - Offers
   /offers/{id}/budget:
     get:
-      description: Get the complete budget breakdown for an offer including all dimensions
-        and summary
+      consumes:
+      - application/json
+      description: Get budget summary and all budget items for an offer
       parameters:
       - description: Offer ID
         in: path
@@ -4974,235 +5216,233 @@ paths:
       - application/json
       responses:
         "200":
-          description: Budget breakdown with dimensions and summary
+          description: OK
           schema:
-            $ref: '#/definitions/handler.OfferBudgetResponse'
+            additionalProperties: true
+            type: object
         "400":
-          description: Invalid offer ID
+          description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "404":
-          description: Offer not found
+          description: Not Found
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "500":
-          description: Internal server error
+          description: Internal Server Error
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: Get offer budget breakdown
+      summary: Get offer budget with items
       tags:
-      - Offer Budget
+      - offers
+      - budget
   /offers/{id}/budget/dimensions:
     get:
-      description: Get all budget dimensions for a specific offer with pagination
+      consumes:
+      - application/json
+      description: Get all budget items belonging to a specific offer
       parameters:
       - description: Offer ID
         in: path
         name: id
         required: true
         type: string
-      - default: 1
-        description: Page number
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: Page size
-        in: query
-        name: pageSize
-        type: integer
       produces:
       - application/json
       responses:
         "200":
-          description: Paginated list of budget dimensions
+          description: OK
           schema:
-            $ref: '#/definitions/domain.PaginatedResponse'
+            items:
+              $ref: '#/definitions/domain.BudgetItemDTO'
+            type: array
         "400":
-          description: Invalid offer ID
+          description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
         "500":
-          description: Internal server error
+          description: Internal Server Error
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: List offer budget dimensions
+      summary: List budget items for an offer
       tags:
-      - Offer Budget
+      - offers
+      - budget
     post:
       consumes:
       - application/json
-      description: Add a new budget dimension to an offer. Either categoryId or customName
-        must be provided.
+      description: Add a new budget item to a specific offer
       parameters:
       - description: Offer ID
         in: path
         name: id
         required: true
         type: string
-      - description: Dimension data
+      - description: Budget item details
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/domain.AddOfferBudgetDimensionRequest'
+          $ref: '#/definitions/domain.AddOfferBudgetItemRequest'
       produces:
       - application/json
       responses:
         "201":
-          description: Created budget dimension
+          description: Created
           schema:
-            $ref: '#/definitions/domain.BudgetDimensionDTO'
+            $ref: '#/definitions/domain.BudgetItemDTO'
         "400":
-          description: Invalid request
+          description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "404":
-          description: Offer not found
+          description: Not Found
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "500":
-          description: Internal server error
+          description: Internal Server Error
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: Add budget dimension to offer
+      summary: Add budget item to offer
       tags:
-      - Offer Budget
+      - offers
+      - budget
   /offers/{id}/budget/dimensions/{dimensionId}:
     delete:
-      description: Delete a budget dimension from an offer
+      consumes:
+      - application/json
+      description: Delete a budget item from a specific offer
       parameters:
       - description: Offer ID
         in: path
         name: id
         required: true
         type: string
-      - description: Dimension ID
+      - description: Budget Item ID
         in: path
         name: dimensionId
         required: true
         type: string
+      produces:
+      - application/json
       responses:
         "204":
           description: No Content
         "400":
-          description: Invalid ID
+          description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "404":
-          description: Dimension not found
+          description: Not Found
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "500":
-          description: Internal server error
+          description: Internal Server Error
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: Delete offer budget dimension
+      summary: Delete offer budget item
       tags:
-      - Offer Budget
+      - offers
+      - budget
     put:
       consumes:
       - application/json
-      description: Update an existing budget dimension for an offer
+      description: Update a budget item belonging to a specific offer
       parameters:
       - description: Offer ID
         in: path
         name: id
         required: true
         type: string
-      - description: Dimension ID
+      - description: Budget Item ID
         in: path
         name: dimensionId
         required: true
         type: string
-      - description: Dimension data
+      - description: Updated budget item details
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/domain.UpdateBudgetDimensionRequest'
+          $ref: '#/definitions/domain.UpdateBudgetItemRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Updated budget dimension
+          description: OK
           schema:
-            $ref: '#/definitions/domain.BudgetDimensionDTO'
+            $ref: '#/definitions/domain.BudgetItemDTO'
         "400":
-          description: Invalid request
+          description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "404":
-          description: Dimension not found
+          description: Not Found
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "500":
-          description: Internal server error
+          description: Internal Server Error
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: Update offer budget dimension
+      summary: Update offer budget item
       tags:
-      - Offer Budget
+      - offers
+      - budget
   /offers/{id}/budget/reorder:
     put:
       consumes:
       - application/json
-      description: Reorder the budget dimensions for an offer. All dimension IDs must
-        be provided.
+      description: Reorder budget items for a specific offer by providing ordered
+        IDs
       parameters:
       - description: Offer ID
         in: path
         name: id
         required: true
         type: string
-      - description: Ordered dimension IDs
+      - description: Ordered list of budget item IDs
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/domain.ReorderDimensionsRequest'
+          $ref: '#/definitions/domain.ReorderBudgetItemsRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: Reordered budget dimensions
-          schema:
-            items:
-              $ref: '#/definitions/domain.BudgetDimensionDTO'
-            type: array
+        "204":
+          description: No Content
         "400":
-          description: Invalid request or count mismatch
+          description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "404":
-          description: Offer not found
+          description: Not Found
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
         "500":
-          description: Internal server error
+          description: Internal Server Error
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: Reorder offer budget dimensions
+      summary: Reorder offer budget items
       tags:
-      - Offer Budget
+      - offers
+      - budget
   /offers/{id}/clone:
     post:
       consumes:
@@ -5246,9 +5486,93 @@ paths:
       summary: Clone offer
       tags:
       - Offers
+  /offers/{id}/customer:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the customer field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Customer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferCustomerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID, offer closed, or customer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer customer
+      tags:
+      - Offers
+  /offers/{id}/description:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the description field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Description data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferDescriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer description
+      tags:
+      - Offers
   /offers/{id}/detail:
     get:
-      description: Get an offer including budget dimensions and summary calculations
+      description: Get an offer including budget items and summary calculations
       parameters:
       - description: Offer ID
         in: path
@@ -5278,6 +5602,48 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Get offer with budget details
+      tags:
+      - Offers
+  /offers/{id}/due-date:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the due date field of an offer (can be null to clear)
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Due date data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferDueDateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer due date
       tags:
       - Offers
   /offers/{id}/files:
@@ -5352,6 +5718,123 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Add offer item
+      tags:
+      - Offers
+  /offers/{id}/probability:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the probability field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Probability data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferProbabilityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer probability
+      tags:
+      - Offers
+  /offers/{id}/project:
+    delete:
+      description: Removes the project link from an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Unlink offer from project
+      tags:
+      - Offers
+    put:
+      consumes:
+      - application/json
+      description: Links an offer to an existing project
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Project data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID, offer closed, or project not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Link offer to project
       tags:
       - Offers
   /offers/{id}/recalculate:
@@ -5431,6 +5914,48 @@ paths:
       summary: Reject offer
       tags:
       - Offers
+  /offers/{id}/responsible:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the responsible user field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Responsible user data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferResponsibleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer responsible user
+      tags:
+      - Offers
   /offers/{id}/send:
     post:
       description: Transitions an offer from draft or in_progress phase to sent phase.
@@ -5463,6 +5988,90 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Send offer to customer
+      tags:
+      - Offers
+  /offers/{id}/title:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the title field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Title data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferTitleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer title
+      tags:
+      - Offers
+  /offers/{id}/value:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the value field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Value data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferValueRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer value
       tags:
       - Offers
   /projects:
