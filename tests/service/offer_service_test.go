@@ -44,6 +44,9 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 	dimensionRepo := repository.NewBudgetDimensionRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	companyRepo := repository.NewCompanyRepository(db)
+
+	companyService := service.NewCompanyService(companyRepo, log)
 
 	svc := service.NewOfferService(
 		offerRepo,
@@ -53,6 +56,7 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 		dimensionRepo,
 		fileRepo,
 		activityRepo,
+		companyService,
 		log,
 		db,
 	)
