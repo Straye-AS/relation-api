@@ -326,27 +326,27 @@ const (
 
 // ProjectActualCost represents an actual cost entry for a project (from ERP or manual)
 type ProjectActualCost struct {
-	ID                uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	ProjectID         uuid.UUID        `gorm:"type:uuid;not null;index;column:project_id"`
-	Project           *Project         `gorm:"foreignKey:ProjectID"`
-	CostType          CostType         `gorm:"type:cost_type;not null;column:cost_type"`
-	Description       string           `gorm:"type:varchar(500);not null"`
-	Amount            float64          `gorm:"type:decimal(15,2);not null"`
-	Currency          string           `gorm:"type:varchar(3);not null;default:'NOK'"`
-	CostDate          time.Time        `gorm:"type:date;not null;column:cost_date"`
-	PostingDate       *time.Time       `gorm:"type:date;column:posting_date"`
-	BudgetItemID *uuid.UUID  `gorm:"type:uuid;column:budget_item_id"`
-	BudgetItem   *BudgetItem `gorm:"foreignKey:BudgetItemID"`
-	ERPSource         ERPSource        `gorm:"type:erp_source;not null;default:'manual';column:erp_source"`
-	ERPReference      string           `gorm:"type:varchar(100);column:erp_reference"`
-	ERPTransactionID  string           `gorm:"type:varchar(100);column:erp_transaction_id"`
-	ERPSyncedAt       *time.Time       `gorm:"column:erp_synced_at"`
-	IsApproved        bool             `gorm:"not null;default:false;column:is_approved"`
-	ApprovedByID      string           `gorm:"type:varchar(100);column:approved_by_id"`
-	ApprovedAt        *time.Time       `gorm:"column:approved_at"`
-	Notes             string           `gorm:"type:text"`
-	CreatedAt         time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt         time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	ID               uuid.UUID   `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	ProjectID        uuid.UUID   `gorm:"type:uuid;not null;index;column:project_id"`
+	Project          *Project    `gorm:"foreignKey:ProjectID"`
+	CostType         CostType    `gorm:"type:cost_type;not null;column:cost_type"`
+	Description      string      `gorm:"type:varchar(500);not null"`
+	Amount           float64     `gorm:"type:decimal(15,2);not null"`
+	Currency         string      `gorm:"type:varchar(3);not null;default:'NOK'"`
+	CostDate         time.Time   `gorm:"type:date;not null;column:cost_date"`
+	PostingDate      *time.Time  `gorm:"type:date;column:posting_date"`
+	BudgetItemID     *uuid.UUID  `gorm:"type:uuid;column:budget_item_id"`
+	BudgetItem       *BudgetItem `gorm:"foreignKey:BudgetItemID"`
+	ERPSource        ERPSource   `gorm:"type:erp_source;not null;default:'manual';column:erp_source"`
+	ERPReference     string      `gorm:"type:varchar(100);column:erp_reference"`
+	ERPTransactionID string      `gorm:"type:varchar(100);column:erp_transaction_id"`
+	ERPSyncedAt      *time.Time  `gorm:"column:erp_synced_at"`
+	IsApproved       bool        `gorm:"not null;default:false;column:is_approved"`
+	ApprovedByID     string      `gorm:"type:varchar(100);column:approved_by_id"`
+	ApprovedAt       *time.Time  `gorm:"column:approved_at"`
+	Notes            string      `gorm:"type:text"`
+	CreatedAt        time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt        time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
 // OfferPhase represents the phase of an offer in the sales pipeline
@@ -394,8 +394,11 @@ type Offer struct {
 	Files               []File      `gorm:"foreignKey:OfferID"`
 }
 
-// OfferNumberSequence tracks the last used offer number sequence per company per year
-type OfferNumberSequence struct {
+// NumberSequence tracks the last used sequence number per company per year
+// This sequence is SHARED between offers and projects to ensure unique numbers
+// across both entity types within a company/year combination.
+// Format: {PREFIX}-{YEAR}-{SEQUENCE} e.g., "ST-2025-001"
+type NumberSequence struct {
 	ID           uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	CompanyID    CompanyID `gorm:"type:varchar(50);not null;column:company_id"`
 	Year         int       `gorm:"not null"`
@@ -404,10 +407,14 @@ type OfferNumberSequence struct {
 	UpdatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
-// TableName returns the table name for OfferNumberSequence
-func (OfferNumberSequence) TableName() string {
-	return "offer_number_sequences"
+// TableName returns the table name for NumberSequence
+func (NumberSequence) TableName() string {
+	return "number_sequences"
 }
+
+// OfferNumberSequence is an alias for backwards compatibility
+// Deprecated: Use NumberSequence instead
+type OfferNumberSequence = NumberSequence
 
 // GetCompanyPrefix returns the offer number prefix for a company
 // Format: 2-letter slug used in offer numbers e.g., ST-2025-001

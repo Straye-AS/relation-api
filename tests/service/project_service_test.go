@@ -41,8 +41,10 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	companyService := service.NewCompanyService(companyRepo, log)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
 	svc := service.NewProjectServiceWithDeps(
 		projectRepo,
@@ -51,15 +53,16 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 		budgetItemRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		log,
 		db,
 	)
 
 	fixtures := &projectTestFixtures{
-		db:            db,
-		customerRepo:  customerRepo,
-		offerRepo:     offerRepo,
-		projectRepo:   projectRepo,
+		db:             db,
+		customerRepo:   customerRepo,
+		offerRepo:      offerRepo,
+		projectRepo:    projectRepo,
 		budgetItemRepo: budgetItemRepo,
 	}
 
@@ -67,10 +70,10 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 }
 
 type projectTestFixtures struct {
-	db            *gorm.DB
-	customerRepo  *repository.CustomerRepository
-	offerRepo     *repository.OfferRepository
-	projectRepo   *repository.ProjectRepository
+	db             *gorm.DB
+	customerRepo   *repository.CustomerRepository
+	offerRepo      *repository.OfferRepository
+	projectRepo    *repository.ProjectRepository
 	budgetItemRepo *repository.BudgetItemRepository
 }
 
@@ -412,7 +415,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 
 		// Create budget items on the offer
 		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Steel Structure", 50000, 50, 0) // Revenue=75000
-		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 50, 1) // Revenue=45000
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 50, 1)        // Revenue=45000
 
 		// Create project without inherited budget
 		project, _ := fixtures.createTestProject(t, ctx, "Test Inherit Project", domain.ProjectStatusPlanning)

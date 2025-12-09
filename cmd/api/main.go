@@ -117,15 +117,19 @@ func run() error {
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	// Initialize services
 	// Company service first (other services may depend on it)
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, log)
 
+	// Number sequence service (shared between offers and projects)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
+
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
-	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetItemRepo, activityRepo, companyService, log, db)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, companyService, log, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetItemRepo, activityRepo, companyService, numberSequenceService, log, db)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, companyService, numberSequenceService, log, db)
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)

@@ -16,16 +16,17 @@ import (
 )
 
 type OfferService struct {
-	offerRepo      *repository.OfferRepository
-	offerItemRepo  *repository.OfferItemRepository
-	customerRepo   *repository.CustomerRepository
-	projectRepo    *repository.ProjectRepository
-	budgetItemRepo *repository.BudgetItemRepository
-	fileRepo       *repository.FileRepository
-	activityRepo   *repository.ActivityRepository
-	companyService *CompanyService
-	logger         *zap.Logger
-	db             *gorm.DB
+	offerRepo        *repository.OfferRepository
+	offerItemRepo    *repository.OfferItemRepository
+	customerRepo     *repository.CustomerRepository
+	projectRepo      *repository.ProjectRepository
+	budgetItemRepo   *repository.BudgetItemRepository
+	fileRepo         *repository.FileRepository
+	activityRepo     *repository.ActivityRepository
+	companyService   *CompanyService
+	numberSeqService *NumberSequenceService
+	logger           *zap.Logger
+	db               *gorm.DB
 }
 
 func NewOfferService(
@@ -37,20 +38,22 @@ func NewOfferService(
 	fileRepo *repository.FileRepository,
 	activityRepo *repository.ActivityRepository,
 	companyService *CompanyService,
+	numberSeqService *NumberSequenceService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *OfferService {
 	return &OfferService{
-		offerRepo:      offerRepo,
-		offerItemRepo:  offerItemRepo,
-		customerRepo:   customerRepo,
-		projectRepo:    projectRepo,
-		budgetItemRepo: budgetItemRepo,
-		fileRepo:       fileRepo,
-		activityRepo:   activityRepo,
-		companyService: companyService,
-		logger:         logger,
-		db:             db,
+		offerRepo:        offerRepo,
+		offerItemRepo:    offerItemRepo,
+		customerRepo:     customerRepo,
+		projectRepo:      projectRepo,
+		budgetItemRepo:   budgetItemRepo,
+		fileRepo:         fileRepo,
+		activityRepo:     activityRepo,
+		companyService:   companyService,
+		numberSeqService: numberSeqService,
+		logger:           logger,
+		db:               db,
 	}
 }
 
@@ -811,7 +814,12 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 
 		// Generate offer number only if not already set (immutability check)
 		if offer.OfferNumber == "" {
-			offerNumber, err := s.offerRepo.GenerateOfferNumber(ctx, offer.CompanyID)
+			if s.numberSeqService == nil {
+				s.logger.Error("number sequence service not available",
+					zap.String("offerID", id.String()))
+				return nil, fmt.Errorf("%w: number sequence service not configured", ErrOfferNumberGenerationFailed)
+			}
+			offerNumber, err := s.numberSeqService.GenerateOfferNumber(ctx, offer.CompanyID)
 			if err != nil {
 				s.logger.Error("failed to generate offer number",
 					zap.Error(err),

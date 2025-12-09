@@ -32,14 +32,15 @@ var (
 
 // ProjectService handles business logic for projects
 type ProjectService struct {
-	projectRepo     *repository.ProjectRepository
-	offerRepo       *repository.OfferRepository
-	customerRepo    *repository.CustomerRepository
-	budgetItemRepo  *repository.BudgetItemRepository
-	activityRepo    *repository.ActivityRepository
-	companyService  *CompanyService
-	logger          *zap.Logger
-	db              *gorm.DB
+	projectRepo      *repository.ProjectRepository
+	offerRepo        *repository.OfferRepository
+	customerRepo     *repository.CustomerRepository
+	budgetItemRepo   *repository.BudgetItemRepository
+	activityRepo     *repository.ActivityRepository
+	companyService   *CompanyService
+	numberSeqService *NumberSequenceService
+	logger           *zap.Logger
+	db               *gorm.DB
 }
 
 // NewProjectService creates a new ProjectService with basic dependencies
@@ -65,18 +66,20 @@ func NewProjectServiceWithDeps(
 	budgetItemRepo *repository.BudgetItemRepository,
 	activityRepo *repository.ActivityRepository,
 	companyService *CompanyService,
+	numberSeqService *NumberSequenceService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *ProjectService {
 	return &ProjectService{
-		projectRepo:    projectRepo,
-		offerRepo:      offerRepo,
-		customerRepo:   customerRepo,
-		budgetItemRepo: budgetItemRepo,
-		activityRepo:   activityRepo,
-		companyService: companyService,
-		logger:         logger,
-		db:             db,
+		projectRepo:      projectRepo,
+		offerRepo:        offerRepo,
+		customerRepo:     customerRepo,
+		budgetItemRepo:   budgetItemRepo,
+		activityRepo:     activityRepo,
+		companyService:   companyService,
+		numberSeqService: numberSeqService,
+		logger:           logger,
+		db:               db,
 	}
 }
 
@@ -110,11 +113,31 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		}
 	}
 
+	// Auto-generate project number if not provided and company ID is valid
+	projectNumber := req.ProjectNumber
+	if projectNumber == "" && req.CompanyID != "" && s.numberSeqService != nil {
+		if domain.IsValidCompanyID(string(req.CompanyID)) {
+			generatedNumber, err := s.numberSeqService.GenerateProjectNumber(ctx, req.CompanyID)
+			if err != nil {
+				s.logger.Error("failed to generate project number",
+					zap.Error(err),
+					zap.String("companyID", string(req.CompanyID)))
+				// Don't fail project creation, just log the error
+				// Project can still be created without a number
+			} else {
+				projectNumber = generatedNumber
+				s.logger.Info("auto-generated project number",
+					zap.String("projectNumber", projectNumber),
+					zap.String("companyID", string(req.CompanyID)))
+			}
+		}
+	}
+
 	project := &domain.Project{
 		CustomerID:              req.CustomerID,
 		CustomerName:            customer.Name,
 		Name:                    req.Name,
-		ProjectNumber:           req.ProjectNumber,
+		ProjectNumber:           projectNumber,
 		Summary:                 req.Summary,
 		Description:             req.Description,
 		Budget:                  req.Budget,
@@ -143,9 +166,12 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		s.logger.Warn("failed to reload project after create", zap.Error(err))
 	}
 
-	// Log activity
-	s.logActivity(ctx, project.ID, "Project created",
-		fmt.Sprintf("Project '%s' was created for customer %s", project.Name, project.CustomerName))
+	// Log activity with project number if available
+	activityBody := fmt.Sprintf("Project '%s' was created for customer %s", project.Name, project.CustomerName)
+	if project.ProjectNumber != "" {
+		activityBody = fmt.Sprintf("Project '%s' (%s) was created for customer %s", project.Name, project.ProjectNumber, project.CustomerName)
+	}
+	s.logActivity(ctx, project.ID, "Project created", activityBody)
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
