@@ -491,3 +491,28 @@ func (s *CustomerService) ListWithFilters(ctx context.Context, page, pageSize in
 		TotalPages: totalPages,
 	}, nil
 }
+
+// FuzzySearchBestMatch finds the single best matching customer for a query
+// Uses multiple matching strategies including exact, prefix, contains, and trigram similarity
+// Returns the best match with a confidence score
+func (s *CustomerService) FuzzySearchBestMatch(ctx context.Context, query string) (*domain.FuzzyCustomerSearchResponse, error) {
+	result, err := s.customerRepo.FuzzySearchBestMatch(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search customer: %w", err)
+	}
+
+	if result == nil {
+		return &domain.FuzzyCustomerSearchResponse{
+			Customer:   nil,
+			Confidence: 0,
+			Found:      false,
+		}, nil
+	}
+
+	dto := mapper.ToCustomerDTO(&result.Customer, 0, 0)
+	return &domain.FuzzyCustomerSearchResponse{
+		Customer:   &dto,
+		Confidence: result.Similarity,
+		Found:      true,
+	}, nil
+}

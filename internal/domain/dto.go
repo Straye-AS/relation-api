@@ -55,6 +55,13 @@ type ErrorResponse struct {
 	Code    int    `json:"code,omitempty"`
 }
 
+// FuzzyCustomerSearchResponse represents the result of a fuzzy customer search
+type FuzzyCustomerSearchResponse struct {
+	Customer   *CustomerDTO `json:"customer,omitempty"`
+	Confidence float64      `json:"confidence"` // 0-1 score indicating match quality
+	Found      bool         `json:"found"`
+}
+
 type ContactDTO struct {
 	ID                     uuid.UUID                `json:"id"`
 	FirstName              string                   `json:"firstName"`

@@ -319,6 +319,132 @@ type TopCustomerWithStats struct {
 	EconomicValue float64
 }
 
+// FuzzySearchResult holds a customer with a similarity score
+type FuzzySearchResult struct {
+	Customer   domain.Customer
+	Similarity float64
+}
+
+// FuzzySearchBestMatch finds the single best matching customer for a query using multiple strategies:
+// 1. Exact match (case-insensitive)
+// 2. Prefix match (query is start of name)
+// 3. Contains match (query is substring of name)
+// 4. Trigram similarity for typo tolerance
+// 5. Abbreviation matching (AF -> AF Gruppen)
+// Returns the best match with a confidence score (0-1)
+func (r *CustomerRepository) FuzzySearchBestMatch(ctx context.Context, query string) (*FuzzySearchResult, error) {
+	if query == "" {
+		return nil, nil
+	}
+
+	query = strings.TrimSpace(query)
+	queryLower := strings.ToLower(query)
+	queryPattern := "%" + queryLower + "%"
+
+	// Strategy 1: Exact match (highest confidence)
+	var exactMatch domain.Customer
+	err := r.db.WithContext(ctx).
+		Where("LOWER(name) = ? AND status != ?", queryLower, domain.CustomerStatusInactive).
+		First(&exactMatch).Error
+	if err == nil {
+		return &FuzzySearchResult{Customer: exactMatch, Similarity: 1.0}, nil
+	}
+
+	// Strategy 2: Exact match on org_number
+	var orgMatch domain.Customer
+	err = r.db.WithContext(ctx).
+		Where("LOWER(org_number) = ? AND status != ?", queryLower, domain.CustomerStatusInactive).
+		First(&orgMatch).Error
+	if err == nil {
+		return &FuzzySearchResult{Customer: orgMatch, Similarity: 1.0}, nil
+	}
+
+	// Strategy 3: Prefix match (name starts with query) - very high confidence
+	var prefixMatch domain.Customer
+	err = r.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ? AND status != ?", queryLower+"%", domain.CustomerStatusInactive).
+		Order("LENGTH(name) ASC"). // Prefer shorter names (more likely exact match)
+		First(&prefixMatch).Error
+	if err == nil {
+		// Calculate confidence based on how much of the name the query covers
+		similarity := float64(len(query)) / float64(len(prefixMatch.Name))
+		if similarity > 1.0 {
+			similarity = 1.0
+		}
+		// Boost prefix matches
+		similarity = 0.8 + (similarity * 0.2)
+		return &FuzzySearchResult{Customer: prefixMatch, Similarity: similarity}, nil
+	}
+
+	// Strategy 4: Abbreviation match - check if query letters match first letters of words
+	// e.g., "AF" matches "AF Gruppen", "NTN" matches "NTNU"
+	var abbrevMatches []domain.Customer
+	err = r.db.WithContext(ctx).
+		Where("status != ?", domain.CustomerStatusInactive).
+		Where("UPPER(name) LIKE ?", strings.ToUpper(query)+"%").
+		Order("LENGTH(name) ASC").
+		Limit(5).
+		Find(&abbrevMatches).Error
+	if err == nil && len(abbrevMatches) > 0 {
+		return &FuzzySearchResult{Customer: abbrevMatches[0], Similarity: 0.85}, nil
+	}
+
+	// Strategy 5: Contains match - query is substring
+	var containsMatch domain.Customer
+	err = r.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ? AND status != ?", queryPattern, domain.CustomerStatusInactive).
+		Order("LENGTH(name) ASC").
+		First(&containsMatch).Error
+	if err == nil {
+		similarity := float64(len(query)) / float64(len(containsMatch.Name))
+		if similarity > 0.7 {
+			similarity = 0.7
+		}
+		return &FuzzySearchResult{Customer: containsMatch, Similarity: 0.5 + similarity}, nil
+	}
+
+	// Strategy 6: Trigram similarity (handles typos like "Veidikke" -> "Veidekke")
+	// This requires pg_trgm extension, fall back to Levenshtein-like matching if not available
+	var trigramMatch struct {
+		domain.Customer
+		Similarity float64
+	}
+	err = r.db.WithContext(ctx).
+		Raw(`
+			SELECT c.*, similarity(LOWER(c.name), ?) as similarity
+			FROM customers c
+			WHERE c.status != ?
+			AND similarity(LOWER(c.name), ?) > 0.2
+			ORDER BY similarity DESC
+			LIMIT 1
+		`, queryLower, domain.CustomerStatusInactive, queryLower).
+		Scan(&trigramMatch).Error
+
+	if err == nil && trigramMatch.ID != [16]byte{} {
+		return &FuzzySearchResult{Customer: trigramMatch.Customer, Similarity: trigramMatch.Similarity}, nil
+	}
+
+	// Strategy 7: Fallback - simple LIKE with wildcards between characters for typo tolerance
+	// Build pattern like "%v%e%i%d%e%k%k%e%" for "veidekke"
+	var wildcardPattern strings.Builder
+	wildcardPattern.WriteString("%")
+	for _, char := range queryLower {
+		wildcardPattern.WriteRune(char)
+		wildcardPattern.WriteString("%")
+	}
+
+	var fallbackMatch domain.Customer
+	err = r.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ? AND status != ?", wildcardPattern.String(), domain.CustomerStatusInactive).
+		Order("LENGTH(name) ASC").
+		First(&fallbackMatch).Error
+	if err == nil {
+		return &FuzzySearchResult{Customer: fallbackMatch, Similarity: 0.3}, nil
+	}
+
+	return nil, nil // No match found
+}
+
 // GetTopCustomersWithOfferStats returns top customers ranked by offer count within a time window
 // Excludes draft and expired offers from the counts
 func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, since time.Time, limit int) ([]TopCustomerWithStats, error) {

@@ -104,6 +104,40 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, result)
 }
 
+// FuzzySearch godoc
+// @Summary Fuzzy search for best matching customer
+// @Description Find the single best matching customer for a query using fuzzy matching (handles typos, abbreviations, partial matches)
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param q query string true "Search query (e.g., 'AF', 'NTN', 'Veidikke')"
+// @Success 200 {object} domain.FuzzyCustomerSearchResponse
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Router /customers/search [get]
+func (h *CustomerHandler) FuzzySearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Query parameter 'q' is required",
+		})
+		return
+	}
+
+	result, err := h.customerService.FuzzySearchBestMatch(r.Context(), query)
+	if err != nil {
+		h.logger.Error("failed to fuzzy search customer", zap.Error(err), zap.String("query", query))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to search for customer",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
 // GetByID godoc
 // @Summary Get customer by ID
 // @Description Get a customer with full details including stats, contacts, active deals, and projects
