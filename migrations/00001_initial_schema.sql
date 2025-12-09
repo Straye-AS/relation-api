@@ -72,6 +72,8 @@ CREATE INDEX idx_projects_company_id ON projects(company_id);
 CREATE INDEX idx_projects_status ON projects(status);
 CREATE INDEX idx_projects_offer_id ON projects(offer_id);
 CREATE INDEX idx_projects_name ON projects(name);
+CREATE TYPE budget_parent_type AS ENUM ('project', 'offer');
+
 -- Create contacts table
 CREATE TABLE contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
