@@ -43,7 +43,7 @@ func NewDashboardService(
 func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMetrics, error) {
 	// Calculate 12-month window cutoff
 	since := time.Now().AddDate(-1, 0, 0)
-	const recentLimit = 10
+	const recentLimit = 5
 
 	metrics := &domain.DashboardMetrics{
 		Pipeline:         []domain.PipelinePhaseData{},

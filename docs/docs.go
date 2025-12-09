@@ -2555,6 +2555,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Returns dashboard metrics using a rolling 12-month window. All metrics exclude draft and expired offers.\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers (in_progress, sent)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in 12-month window\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** 12-month window, limit 10 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
                 "produces": [
                     "application/json"
                 ],
@@ -7301,92 +7302,76 @@ const docTemplate = `{
         "domain.DashboardMetrics": {
             "type": "object",
             "properties": {
-                "activeOffers": {
-                    "type": "integer"
-                },
-                "activeProjects": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.ProjectDTO"
-                    }
-                },
                 "averageProbability": {
+                    "description": "Average probability of active offers",
                     "type": "number"
-                },
-                "lostOffers": {
-                    "type": "integer"
                 },
                 "offerReserve": {
+                    "description": "Total value of active offers (in_progress, sent)",
                     "type": "number"
                 },
-                "offersByPhase": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
+                "orderReserve": {
+                    "description": "Order Reserve (from active projects)",
+                    "type": "number"
                 },
                 "pipeline": {
+                    "description": "Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.PipelinePhaseData"
                     }
                 },
                 "recentActivities": {
+                    "description": "Last activities",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.ActivityDTO"
                     }
                 },
                 "recentOffers": {
+                    "description": "Recent Lists (12-month window, limit 10 each)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.OfferDTO"
                     }
                 },
                 "recentProjects": {
+                    "description": "Last created projects",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.ProjectDTO"
                     }
                 },
-                "revenueForecast30Days": {
-                    "type": "number"
-                },
-                "revenueForecast90Days": {
-                    "type": "number"
-                },
-                "teamPerformance": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.TeamMemberStats"
-                    }
-                },
                 "topCustomers": {
+                    "description": "Top Customers (12-month window, limit 10)",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.CustomerDTO"
+                        "$ref": "#/definitions/domain.TopCustomerDTO"
                     }
                 },
-                "topDisciplines": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.DisciplineStats"
-                    }
+                "totalInvoiced": {
+                    "description": "Financial Summary",
+                    "type": "number"
                 },
-                "totalOffers": {
+                "totalOfferCount": {
+                    "description": "Offer Metrics (12-month window, excluding drafts and expired)",
                     "type": "integer"
                 },
                 "totalValue": {
+                    "description": "orderReserve + totalInvoiced",
                     "type": "number"
                 },
-                "weightedValue": {
+                "weightedOfferReserve": {
+                    "description": "Sum of (value * probability/100) for active offers",
                     "type": "number"
                 },
-                "winRate": {
-                    "type": "number"
-                },
-                "wonOffers": {
-                    "type": "integer"
+                "winRateMetrics": {
+                    "description": "Win Rate Metrics (12-month window)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.WinRateMetrics"
+                        }
+                    ]
                 }
             }
         },
@@ -7506,26 +7491,6 @@ const docTemplate = `{
                 },
                 "toStage": {
                     "$ref": "#/definitions/domain.DealStage"
-                }
-            }
-        },
-        "domain.DisciplineStats": {
-            "type": "object",
-            "properties": {
-                "avgMargin": {
-                    "type": "number"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "offerCount": {
-                    "type": "integer"
-                },
-                "projectCount": {
-                    "type": "integer"
-                },
-                "totalValue": {
-                    "type": "number"
                 }
             }
         },
@@ -8344,10 +8309,14 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.TeamMemberStats": {
+        "domain.TopCustomerDTO": {
             "type": "object",
             "properties": {
-                "avatar": {
+                "economicValue": {
+                    "description": "Total value of their offers",
+                    "type": "number"
+                },
+                "id": {
                     "type": "string"
                 },
                 "name": {
@@ -8356,20 +8325,8 @@ const docTemplate = `{
                 "offerCount": {
                     "type": "integer"
                 },
-                "totalValue": {
-                    "type": "number"
-                },
-                "userId": {
+                "orgNumber": {
                     "type": "string"
-                },
-                "winRate": {
-                    "type": "number"
-                },
-                "wonCount": {
-                    "type": "integer"
-                },
-                "wonValue": {
-                    "type": "number"
                 }
             }
         },
@@ -8865,6 +8822,31 @@ const docTemplate = `{
                 },
                 "winRate": {
                     "type": "number"
+                },
+                "wonValue": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.WinRateMetrics": {
+            "type": "object",
+            "properties": {
+                "economicWinRate": {
+                    "description": "won_value / (won_value + lost_value), 0-1 scale",
+                    "type": "number"
+                },
+                "lostCount": {
+                    "type": "integer"
+                },
+                "lostValue": {
+                    "type": "number"
+                },
+                "winRate": {
+                    "description": "won_count / (won_count + lost_count), 0-1 scale",
+                    "type": "number"
+                },
+                "wonCount": {
+                    "type": "integer"
                 },
                 "wonValue": {
                     "type": "number"

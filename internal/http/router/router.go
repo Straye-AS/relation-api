@@ -28,6 +28,7 @@ type Router struct {
 	customerHandler         *handler.CustomerHandler
 	projectHandler          *handler.ProjectHandler
 	offerHandler            *handler.OfferHandler
+	inquiryHandler          *handler.InquiryHandler
 	dealHandler             *handler.DealHandler
 	fileHandler             *handler.FileHandler
 	dashboardHandler        *handler.DashboardHandler
@@ -51,6 +52,7 @@ func NewRouter(
 	customerHandler *handler.CustomerHandler,
 	projectHandler *handler.ProjectHandler,
 	offerHandler *handler.OfferHandler,
+	inquiryHandler *handler.InquiryHandler,
 	dealHandler *handler.DealHandler,
 	fileHandler *handler.FileHandler,
 	dashboardHandler *handler.DashboardHandler,
@@ -73,6 +75,7 @@ func NewRouter(
 		customerHandler:         customerHandler,
 		projectHandler:          projectHandler,
 		offerHandler:            offerHandler,
+		inquiryHandler:          inquiryHandler,
 		dealHandler:             dealHandler,
 		fileHandler:             fileHandler,
 		dashboardHandler:        dashboardHandler,
@@ -244,6 +247,15 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 			})
 
+			// Inquiries (draft offers)
+			r.Route("/inquiries", func(r chi.Router) {
+				r.Get("/", rt.inquiryHandler.List)
+				r.Post("/", rt.inquiryHandler.Create)
+				r.Get("/{id}", rt.inquiryHandler.GetByID)
+				r.Delete("/{id}", rt.inquiryHandler.Delete)
+				r.Post("/{id}/convert", rt.inquiryHandler.Convert)
+			})
+
 			// Offers
 			r.Route("/offers", func(r chi.Router) {
 				r.Get("/", rt.offerHandler.List)
@@ -258,6 +270,17 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/accept", rt.offerHandler.Accept)
 				r.Post("/{id}/reject", rt.offerHandler.Reject)
 				r.Post("/{id}/clone", rt.offerHandler.Clone)
+
+				// Individual property update endpoints
+				r.Put("/{id}/probability", rt.offerHandler.UpdateProbability)
+				r.Put("/{id}/title", rt.offerHandler.UpdateTitle)
+				r.Put("/{id}/responsible", rt.offerHandler.UpdateResponsible)
+				r.Put("/{id}/customer", rt.offerHandler.UpdateCustomer)
+				r.Put("/{id}/value", rt.offerHandler.UpdateValue)
+				r.Put("/{id}/due-date", rt.offerHandler.UpdateDueDate)
+				r.Put("/{id}/description", rt.offerHandler.UpdateDescription)
+				r.Put("/{id}/project", rt.offerHandler.LinkToProject)
+				r.Delete("/{id}/project", rt.offerHandler.UnlinkFromProject)
 
 				// Sub-resources
 				r.Get("/{id}/items", rt.offerHandler.GetItems)

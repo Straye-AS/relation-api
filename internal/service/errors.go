@@ -79,4 +79,18 @@ var (
 
 	// ErrDealInvalidStageForOffer is returned when deal is in invalid stage for creating an offer
 	ErrDealInvalidStageForOffer = errors.New("deal must be in lead or qualified stage to create an offer")
+
+	// Inquiry errors
+
+	// ErrInquiryNotFound is returned when an inquiry is not found
+	ErrInquiryNotFound = errors.New("inquiry not found")
+
+	// ErrNotAnInquiry is returned when trying to perform inquiry operations on non-draft offers
+	ErrNotAnInquiry = errors.New("offer is not an inquiry (must be in draft phase)")
+
+	// ErrInquiryMissingConversionData is returned when conversion requires data that wasn't provided
+	ErrInquiryMissingConversionData = errors.New("conversion requires responsibleUserId or companyId with default responsible user")
+
+	// ErrProjectNotFound is returned when a project is not found
+	ErrProjectNotFound = errors.New("project not found")
 )

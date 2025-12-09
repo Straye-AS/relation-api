@@ -17,9 +17,6 @@ import (
 
 // Project-specific service errors
 var (
-	// ErrProjectNotFound is returned when a project is not found
-	ErrProjectNotFound = errors.New("project not found")
-
 	// ErrInvalidStatusTransition is returned when trying to make an invalid status transition
 	ErrInvalidStatusTransition = errors.New("invalid project status transition")
 

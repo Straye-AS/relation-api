@@ -127,6 +127,7 @@ func run() error {
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetDimensionRepo, activityRepo, companyService, log, db)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetDimensionRepo, fileRepo, activityRepo, companyService, log, db)
+	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, log)
@@ -147,6 +148,7 @@ func run() error {
 	contactHandler := handler.NewContactHandler(contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, log)
 	offerHandler := handler.NewOfferHandler(offerService, log)
+	inquiryHandler := handler.NewInquiryHandler(inquiryService, log)
 	dealHandler := handler.NewDealHandler(dealService, log)
 	fileHandler := handler.NewFileHandler(fileService, cfg.Storage.MaxUploadSizeMB, log)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService, log)
@@ -170,6 +172,7 @@ func run() error {
 		customerHandler,
 		projectHandler,
 		offerHandler,
+		inquiryHandler,
 		dealHandler,
 		fileHandler,
 		dashboardHandler,

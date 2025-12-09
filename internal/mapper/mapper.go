@@ -193,8 +193,10 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 	return domain.OfferDTO{
 		ID:                  offer.ID,
 		Title:               offer.Title,
+		OfferNumber:         offer.OfferNumber,
 		CustomerID:          offer.CustomerID,
 		CustomerName:        offer.CustomerName,
+		ProjectID:           offer.ProjectID,
 		CompanyID:           offer.CompanyID,
 		Phase:               offer.Phase,
 		Probability:         offer.Probability,

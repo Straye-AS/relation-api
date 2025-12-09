@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // OfferFilters defines filter options for offer listing
@@ -709,4 +710,147 @@ func (r *OfferRepository) GetRecentOffersInWindow(ctx context.Context, since tim
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&offers).Error
 	return offers, err
+}
+
+// ============================================================================
+// Inquiry (Draft Offer) Methods
+// ============================================================================
+
+// ListInquiries returns a paginated list of offers in draft phase (inquiries)
+func (r *OfferRepository) ListInquiries(ctx context.Context, page, pageSize int, customerID *uuid.UUID) ([]domain.Offer, int64, error) {
+	var offers []domain.Offer
+	var total int64
+
+	// Validate and normalize pagination
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
+
+	query := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Preload("Customer").
+		Where("phase = ?", domain.OfferPhaseDraft)
+
+	query = ApplyCompanyFilter(ctx, query)
+
+	if customerID != nil {
+		query = query.Where("customer_id = ?", *customerID)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&offers).Error
+
+	return offers, total, err
+}
+
+// UpdateField updates a single field on an offer
+// Returns error if offer not found or user lacks access
+func (r *OfferRepository) UpdateField(ctx context.Context, id uuid.UUID, field string, value interface{}) error {
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Update(field, value)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer %s: %w", field, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateFields updates multiple fields on an offer
+func (r *OfferRepository) UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// ============================================================================
+// Offer Number Generation Methods
+// ============================================================================
+
+// GenerateOfferNumber generates the next unique offer number for a company
+// Format: {PREFIX}-{YEAR}-{SEQUENCE} e.g., "STB-2024-001"
+// Uses SELECT FOR UPDATE to ensure thread-safe sequence generation
+func (r *OfferRepository) GenerateOfferNumber(ctx context.Context, companyID domain.CompanyID) (string, error) {
+	year := time.Now().Year()
+	prefix := domain.GetCompanyPrefix(companyID)
+
+	var seq domain.OfferNumberSequence
+	var nextSeq int
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Try to get existing sequence with row lock
+		result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("company_id = ? AND year = ?", companyID, year).
+			First(&seq)
+
+		if result.Error == gorm.ErrRecordNotFound {
+			// Create new sequence for this company/year
+			seq = domain.OfferNumberSequence{
+				CompanyID:    companyID,
+				Year:         year,
+				LastSequence: 1,
+			}
+			if err := tx.Create(&seq).Error; err != nil {
+				return fmt.Errorf("failed to create offer number sequence: %w", err)
+			}
+			nextSeq = 1
+		} else if result.Error != nil {
+			return fmt.Errorf("failed to get offer number sequence: %w", result.Error)
+		} else {
+			// Increment existing sequence
+			nextSeq = seq.LastSequence + 1
+			if err := tx.Model(&seq).Update("last_sequence", nextSeq).Error; err != nil {
+				return fmt.Errorf("failed to update offer number sequence: %w", err)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	// Format: PREFIX-YYYY-NNN (zero-padded to 3 digits)
+	offerNumber := fmt.Sprintf("%s-%d-%03d", prefix, year, nextSeq)
+	return offerNumber, nil
+}
+
+// SetOfferNumber sets the offer number for an offer
+func (r *OfferRepository) SetOfferNumber(ctx context.Context, id uuid.UUID, offerNumber string) error {
+	return r.UpdateField(ctx, id, "offer_number", offerNumber)
+}
+
+// LinkToProject sets the project_id for an offer
+func (r *OfferRepository) LinkToProject(ctx context.Context, offerID uuid.UUID, projectID uuid.UUID) error {
+	return r.UpdateField(ctx, offerID, "project_id", projectID)
+}
+
+// UnlinkFromProject removes the project link from an offer
+func (r *OfferRepository) UnlinkFromProject(ctx context.Context, offerID uuid.UUID) error {
+	return r.UpdateField(ctx, offerID, "project_id", nil)
 }
