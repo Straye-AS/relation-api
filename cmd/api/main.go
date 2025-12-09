@@ -117,16 +117,19 @@ func run() error {
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
 	budgetDimensionCategoryRepo := repository.NewBudgetDimensionCategoryRepository(db)
+	companyRepo := repository.NewCompanyRepository(db)
 
 	// Initialize services
+	// Company service first (other services may depend on it)
+	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, log)
+
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
-	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, log)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetDimensionRepo, fileRepo, activityRepo, log, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetDimensionRepo, activityRepo, companyService, log, db)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetDimensionRepo, fileRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, log)
-	companyService := service.NewCompanyService(log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 	auditLogService := service.NewAuditLogService(auditLogRepo, log)
 	budgetDimensionService := service.NewBudgetDimensionService(budgetDimensionRepo, budgetDimensionCategoryRepo, offerRepo, projectRepo, activityRepo, log)

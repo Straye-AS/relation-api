@@ -188,6 +188,12 @@ func (rt *Router) Setup() http.Handler {
 			r.Use(rt.companyFilterMiddleware.Filter)
 			r.Use(rt.auditMiddleware.Audit) // Audit all modifications
 
+			// Companies (protected routes for details and updates)
+			r.Route("/companies", func(r chi.Router) {
+				r.Get("/{id}", rt.companyHandler.GetByID)
+				r.Put("/{id}", rt.companyHandler.Update)
+			})
+
 			// Auth
 			r.Get("/auth/me", rt.authHandler.Me)
 			r.Get("/auth/permissions", rt.authHandler.Permissions)

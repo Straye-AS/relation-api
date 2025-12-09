@@ -384,6 +384,10 @@ definitions:
         type: string
       createdAt:
         type: string
+      defaultOfferResponsibleId:
+        type: string
+      defaultProjectResponsibleId:
+        type: string
       id:
         $ref: '#/definitions/domain.CompanyID'
       isActive:
@@ -404,6 +408,31 @@ definitions:
       id:
         type: string
       name:
+        type: string
+    type: object
+  domain.CompanyDetailDTO:
+    properties:
+      color:
+        type: string
+      createdAt:
+        type: string
+      defaultOfferResponsibleId:
+        type: string
+      defaultProjectResponsibleId:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      logo:
+        type: string
+      name:
+        type: string
+      orgNumber:
+        type: string
+      shortName:
+        type: string
+      updatedAt:
         type: string
     type: object
   domain.CompanyID:
@@ -1830,6 +1859,15 @@ definitions:
         maxLength: 50
         type: string
     type: object
+  domain.UpdateCompanyRequest:
+    properties:
+      defaultOfferResponsibleId:
+        maxLength: 100
+        type: string
+      defaultProjectResponsibleId:
+        maxLength: 100
+        type: string
+    type: object
   domain.UpdateContactRequest:
     properties:
       address:
@@ -3145,6 +3183,7 @@ paths:
       - Auth
   /companies:
     get:
+      description: Returns a list of all active Straye group companies
       produces:
       - application/json
       responses:
@@ -3158,6 +3197,85 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Get all companies
+      tags:
+      - Companies
+  /companies/{id}:
+    get:
+      description: Returns detailed information about a specific company including
+        default responsible user settings
+      parameters:
+      - description: Company ID (e.g., gruppen, stalbygg, hybridbygg, industri, tak,
+          montasje)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CompanyDetailDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get company by ID
+      tags:
+      - Companies
+    put:
+      consumes:
+      - application/json
+      description: Updates company settings including default responsible users for
+        offers and projects
+      parameters:
+      - description: Company ID (e.g., gruppen, stalbygg, hybridbygg, industri, tak,
+          montasje)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Company update request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CompanyDetailDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update company settings
       tags:
       - Companies
   /contacts:

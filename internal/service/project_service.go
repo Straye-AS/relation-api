@@ -35,13 +35,14 @@ var (
 
 // ProjectService handles business logic for projects
 type ProjectService struct {
-	projectRepo   *repository.ProjectRepository
-	offerRepo     *repository.OfferRepository
-	customerRepo  *repository.CustomerRepository
-	dimensionRepo *repository.BudgetDimensionRepository
-	activityRepo  *repository.ActivityRepository
-	logger        *zap.Logger
-	db            *gorm.DB
+	projectRepo    *repository.ProjectRepository
+	offerRepo      *repository.OfferRepository
+	customerRepo   *repository.CustomerRepository
+	dimensionRepo  *repository.BudgetDimensionRepository
+	activityRepo   *repository.ActivityRepository
+	companyService *CompanyService
+	logger         *zap.Logger
+	db             *gorm.DB
 }
 
 // NewProjectService creates a new ProjectService with basic dependencies
@@ -66,17 +67,19 @@ func NewProjectServiceWithDeps(
 	customerRepo *repository.CustomerRepository,
 	dimensionRepo *repository.BudgetDimensionRepository,
 	activityRepo *repository.ActivityRepository,
+	companyService *CompanyService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *ProjectService {
 	return &ProjectService{
-		projectRepo:   projectRepo,
-		offerRepo:     offerRepo,
-		customerRepo:  customerRepo,
-		dimensionRepo: dimensionRepo,
-		activityRepo:  activityRepo,
-		logger:        logger,
-		db:            db,
+		projectRepo:    projectRepo,
+		offerRepo:      offerRepo,
+		customerRepo:   customerRepo,
+		dimensionRepo:  dimensionRepo,
+		activityRepo:   activityRepo,
+		companyService: companyService,
+		logger:         logger,
+		db:             db,
 	}
 }
 
@@ -98,6 +101,18 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		health = &defaultHealth
 	}
 
+	// Auto-assign manager from company default if not provided
+	managerID := req.ManagerID
+	if managerID == "" && req.CompanyID != "" && s.companyService != nil {
+		defaultManager := s.companyService.GetDefaultProjectResponsible(ctx, req.CompanyID)
+		if defaultManager != nil && *defaultManager != "" {
+			managerID = *defaultManager
+			s.logger.Debug("auto-assigned manager from company default",
+				zap.String("companyID", string(req.CompanyID)),
+				zap.String("managerID", managerID))
+		}
+	}
+
 	project := &domain.Project{
 		CustomerID:              req.CustomerID,
 		CustomerName:            customer.Name,
@@ -111,7 +126,7 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		StartDate:               req.StartDate,
 		EndDate:                 req.EndDate,
 		CompanyID:               req.CompanyID,
-		ManagerID:               req.ManagerID,
+		ManagerID:               managerID,
 		TeamMembers:             req.TeamMembers,
 		OfferID:                 req.OfferID,
 		DealID:                  req.DealID,

@@ -28,6 +28,16 @@ func ApplyCompanyFilterWithColumn(ctx context.Context, query *gorm.DB, columnNam
 	return query
 }
 
+// ApplyCompanyFilterWithAlias applies the company filter using a table alias
+// Use this when joining multiple tables and you need to specify which table's company_id to filter on
+func ApplyCompanyFilterWithAlias(ctx context.Context, query *gorm.DB, tableAlias string) *gorm.DB {
+	companyID := auth.GetEffectiveCompanyFilter(ctx)
+	if companyID != nil {
+		return query.Where(tableAlias+".company_id = ?", *companyID)
+	}
+	return query
+}
+
 // MustHaveCompanyAccess checks if the user has access to a specific company's data
 // Returns true if access is allowed, false otherwise
 // This is useful for single-record operations where you need to verify access

@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
@@ -306,4 +308,49 @@ func (r *CustomerRepository) GetTopCustomers(ctx context.Context, limit int) ([]
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&customers).Error
 	return customers, err
+}
+
+// TopCustomerWithStats holds customer data with offer statistics
+type TopCustomerWithStats struct {
+	CustomerID    uuid.UUID
+	CustomerName  string
+	OrgNumber     string
+	OfferCount    int
+	EconomicValue float64
+}
+
+// GetTopCustomersWithOfferStats returns top customers ranked by offer count within a time window
+// Excludes draft and expired offers from the counts
+func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, since time.Time, limit int) ([]TopCustomerWithStats, error) {
+	// Valid phases for counting (excludes draft and expired)
+	validPhases := []domain.OfferPhase{
+		domain.OfferPhaseInProgress,
+		domain.OfferPhaseSent,
+		domain.OfferPhaseWon,
+		domain.OfferPhaseLost,
+	}
+
+	var results []TopCustomerWithStats
+
+	// Build subquery to get offer stats per customer
+	// Then join with customers to get customer info
+	query := r.db.WithContext(ctx).
+		Table("offers").
+		Select("customers.id as customer_id, customers.name as customer_name, customers.org_number, COUNT(offers.id) as offer_count, COALESCE(SUM(offers.value), 0) as economic_value").
+		Joins("JOIN customers ON customers.id = offers.customer_id").
+		Where("offers.created_at >= ?", since).
+		Where("offers.phase IN ?", validPhases).
+		Where("customers.status != ?", domain.CustomerStatusInactive).
+		Group("customers.id, customers.name, customers.org_number").
+		Order("offer_count DESC, economic_value DESC").
+		Limit(limit)
+
+	// Apply company filter on offers table
+	query = ApplyCompanyFilterWithAlias(ctx, query, "offers")
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get top customers with offer stats: %w", err)
+	}
+
+	return results, nil
 }

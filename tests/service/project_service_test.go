@@ -40,6 +40,9 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 	customerRepo := repository.NewCustomerRepository(db)
 	dimensionRepo := repository.NewBudgetDimensionRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	companyRepo := repository.NewCompanyRepository(db)
+
+	companyService := service.NewCompanyService(companyRepo, log)
 
 	svc := service.NewProjectServiceWithDeps(
 		projectRepo,
@@ -47,6 +50,7 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 		customerRepo,
 		dimensionRepo,
 		activityRepo,
+		companyService,
 		log,
 		db,
 	)

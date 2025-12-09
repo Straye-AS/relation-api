@@ -304,3 +304,15 @@ func (r *ActivityRepository) GetRecentActivities(ctx context.Context, limit int)
 	err := query.Find(&activities).Error
 	return activities, err
 }
+
+// GetRecentActivitiesInWindow returns the most recent activities within a time window
+func (r *ActivityRepository) GetRecentActivitiesInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Activity, error) {
+	var activities []domain.Activity
+	query := r.db.WithContext(ctx).
+		Where("created_at >= ?", since).
+		Order("created_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&activities).Error
+	return activities, err
+}

@@ -584,6 +584,23 @@ func ToProjectWithDetailsDTO(
 	return dto
 }
 
+// ToCompanyDetailDTO converts Company to CompanyDetailDTO
+func ToCompanyDetailDTO(company *domain.Company) domain.CompanyDetailDTO {
+	return domain.CompanyDetailDTO{
+		ID:                          string(company.ID),
+		Name:                        company.Name,
+		ShortName:                   company.ShortName,
+		OrgNumber:                   company.OrgNumber,
+		Color:                       company.Color,
+		Logo:                        company.Logo,
+		IsActive:                    company.IsActive,
+		DefaultOfferResponsibleID:   company.DefaultOfferResponsibleID,
+		DefaultProjectResponsibleID: company.DefaultProjectResponsibleID,
+		CreatedAt:                   company.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:                   company.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+}
+
 // FormatError creates a formatted error message
 func FormatError(entity, operation string, err error) error {
 	return fmt.Errorf("failed to %s %s: %w", operation, entity, err)
