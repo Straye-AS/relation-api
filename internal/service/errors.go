@@ -63,6 +63,9 @@ var (
 	// ErrOfferCannotClone is returned when an offer cannot be cloned
 	ErrOfferCannotClone = errors.New("cannot clone this offer")
 
+	// ErrOfferMissingResponsible is returned when advancing to in_progress without a responsible user or company with default
+	ErrOfferMissingResponsible = errors.New("offer must have a responsible user or company with default responsible user to advance to in_progress")
+
 	// ErrProjectCreationFailed is returned when project creation fails during offer acceptance
 	ErrProjectCreationFailed = errors.New("failed to create project from offer")
 

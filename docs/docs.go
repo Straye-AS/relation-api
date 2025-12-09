@@ -1375,6 +1375,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Returns a list of all active Straye group companies",
                 "produces": [
                     "application/json"
                 ],
@@ -1390,6 +1391,126 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/domain.Company"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/companies/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns detailed information about a specific company including default responsible user settings",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Companies"
+                ],
+                "summary": "Get company by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Company ID (e.g., gruppen, stalbygg, hybridbygg, industri, tak, montasje)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CompanyDetailDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates company settings including default responsible users for offers and projects",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Companies"
+                ],
+                "summary": "Update company settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Company ID (e.g., gruppen, stalbygg, hybridbygg, industri, tak, montasje)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Company update request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCompanyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CompanyDetailDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -6220,6 +6341,12 @@ const docTemplate = `{
                 "createdAt": {
                     "type": "string"
                 },
+                "defaultOfferResponsibleId": {
+                    "type": "string"
+                },
+                "defaultProjectResponsibleId": {
+                    "type": "string"
+                },
                 "id": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
@@ -6250,6 +6377,44 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.CompanyDetailDTO": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "defaultOfferResponsibleId": {
+                    "type": "string"
+                },
+                "defaultProjectResponsibleId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "logo": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgNumber": {
+                    "type": "string"
+                },
+                "shortName": {
+                    "type": "string"
+                },
+                "updatedAt": {
                     "type": "string"
                 }
             }
@@ -8303,6 +8468,19 @@ const docTemplate = `{
                 "unit": {
                     "type": "string",
                     "maxLength": 50
+                }
+            }
+        },
+        "domain.UpdateCompanyRequest": {
+            "type": "object",
+            "properties": {
+                "defaultOfferResponsibleId": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "defaultProjectResponsibleId": {
+                    "type": "string",
+                    "maxLength": 100
                 }
             }
         },

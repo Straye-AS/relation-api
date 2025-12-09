@@ -284,10 +284,31 @@ type AuthUserDTO struct {
 	IsCompanyAdmin bool        `json:"isCompanyAdmin"`
 }
 
-// CompanyDTO represents a company in auth context
+// CompanyDTO represents a company in auth context (minimal version)
 type CompanyDTO struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// CompanyDetailDTO represents a company with full details
+type CompanyDetailDTO struct {
+	ID                          string  `json:"id"`
+	Name                        string  `json:"name"`
+	ShortName                   string  `json:"shortName"`
+	OrgNumber                   string  `json:"orgNumber,omitempty"`
+	Color                       string  `json:"color"`
+	Logo                        string  `json:"logo,omitempty"`
+	IsActive                    bool    `json:"isActive"`
+	DefaultOfferResponsibleID   *string `json:"defaultOfferResponsibleId,omitempty"`
+	DefaultProjectResponsibleID *string `json:"defaultProjectResponsibleId,omitempty"`
+	CreatedAt                   string  `json:"createdAt"`
+	UpdatedAt                   string  `json:"updatedAt"`
+}
+
+// UpdateCompanyRequest contains the data for updating company settings
+type UpdateCompanyRequest struct {
+	DefaultOfferResponsibleID   *string `json:"defaultOfferResponsibleId,omitempty" validate:"omitempty,max=100"`
+	DefaultProjectResponsibleID *string `json:"defaultProjectResponsibleId,omitempty" validate:"omitempty,max=100"`
 }
 
 // PermissionDTO represents a single permission

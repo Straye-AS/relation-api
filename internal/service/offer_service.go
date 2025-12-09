@@ -16,15 +16,16 @@ import (
 )
 
 type OfferService struct {
-	offerRepo     *repository.OfferRepository
-	offerItemRepo *repository.OfferItemRepository
-	customerRepo  *repository.CustomerRepository
-	projectRepo   *repository.ProjectRepository
-	dimensionRepo *repository.BudgetDimensionRepository
-	fileRepo      *repository.FileRepository
-	activityRepo  *repository.ActivityRepository
-	logger        *zap.Logger
-	db            *gorm.DB
+	offerRepo      *repository.OfferRepository
+	offerItemRepo  *repository.OfferItemRepository
+	customerRepo   *repository.CustomerRepository
+	projectRepo    *repository.ProjectRepository
+	dimensionRepo  *repository.BudgetDimensionRepository
+	fileRepo       *repository.FileRepository
+	activityRepo   *repository.ActivityRepository
+	companyService *CompanyService
+	logger         *zap.Logger
+	db             *gorm.DB
 }
 
 func NewOfferService(
@@ -35,19 +36,21 @@ func NewOfferService(
 	dimensionRepo *repository.BudgetDimensionRepository,
 	fileRepo *repository.FileRepository,
 	activityRepo *repository.ActivityRepository,
+	companyService *CompanyService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *OfferService {
 	return &OfferService{
-		offerRepo:     offerRepo,
-		offerItemRepo: offerItemRepo,
-		customerRepo:  customerRepo,
-		projectRepo:   projectRepo,
-		dimensionRepo: dimensionRepo,
-		fileRepo:      fileRepo,
-		activityRepo:  activityRepo,
-		logger:        logger,
-		db:            db,
+		offerRepo:      offerRepo,
+		offerItemRepo:  offerItemRepo,
+		customerRepo:   customerRepo,
+		projectRepo:    projectRepo,
+		dimensionRepo:  dimensionRepo,
+		fileRepo:       fileRepo,
+		activityRepo:   activityRepo,
+		companyService: companyService,
+		logger:         logger,
+		db:             db,
 	}
 }
 
@@ -103,6 +106,18 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		probability = *req.Probability
 	}
 
+	// Auto-assign responsible user from company default if not provided
+	responsibleUserID := req.ResponsibleUserID
+	if responsibleUserID == "" && s.companyService != nil {
+		defaultResponsible := s.companyService.GetDefaultOfferResponsible(ctx, companyID)
+		if defaultResponsible != nil && *defaultResponsible != "" {
+			responsibleUserID = *defaultResponsible
+			s.logger.Debug("auto-assigned responsible user from company default",
+				zap.String("companyID", string(companyID)),
+				zap.String("responsibleUserID", responsibleUserID))
+		}
+	}
+
 	offer := &domain.Offer{
 		Title:               req.Title,
 		CustomerID:          req.CustomerID,
@@ -112,7 +127,7 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		Probability:         probability,
 		Value:               totalValue,
 		Status:              status,
-		ResponsibleUserID:   req.ResponsibleUserID,
+		ResponsibleUserID:   responsibleUserID,
 		ResponsibleUserName: "", // Populated by handler/external user lookup if needed
 		Description:         req.Description,
 		Notes:               req.Notes,
@@ -768,6 +783,36 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 	}
 
 	oldPhase := offer.Phase
+
+	// Validate phase transition from draft to in_progress
+	if oldPhase == domain.OfferPhaseDraft && req.Phase == domain.OfferPhaseInProgress {
+		// Must have responsible user OR company with default responsible user
+		hasResponsible := offer.ResponsibleUserID != ""
+		hasCompany := offer.CompanyID != ""
+
+		if !hasResponsible && !hasCompany {
+			return nil, ErrOfferMissingResponsible
+		}
+
+		// If only company is set, try to infer responsible user from company default
+		if !hasResponsible && hasCompany && s.companyService != nil {
+			defaultResponsible := s.companyService.GetDefaultOfferResponsible(ctx, offer.CompanyID)
+			if defaultResponsible != nil && *defaultResponsible != "" {
+				offer.ResponsibleUserID = *defaultResponsible
+				s.logger.Info("inferred responsible user from company default during phase transition",
+					zap.String("offerID", id.String()),
+					zap.String("companyID", string(offer.CompanyID)),
+					zap.String("responsibleUserID", offer.ResponsibleUserID))
+			} else {
+				// Company doesn't have a default responsible user configured
+				return nil, ErrOfferMissingResponsible
+			}
+		}
+
+		// If only responsible user is set but no company, we can proceed (company is optional for in_progress)
+		// The company validation is primarily to infer the responsible user if missing
+	}
+
 	offer.Phase = req.Phase
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
@@ -775,8 +820,11 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 	}
 
 	// Log activity
-	s.logActivity(ctx, offer.ID, "Offer phase advanced",
-		fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase))
+	activityBody := fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase)
+	if oldPhase == domain.OfferPhaseDraft && req.Phase == domain.OfferPhaseInProgress {
+		activityBody = fmt.Sprintf("Offer '%s' advanced to in progress (responsible: %s)", offer.Title, offer.ResponsibleUserID)
+	}
+	s.logActivity(ctx, offer.ID, "Offer phase advanced", activityBody)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil

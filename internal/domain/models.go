@@ -74,15 +74,17 @@ func IsValidCompanyID(id string) bool {
 
 // Company represents a Straye group company (stored in database)
 type Company struct {
-	ID        CompanyID `gorm:"type:varchar(50);primaryKey" json:"id"`
-	Name      string    `gorm:"type:varchar(200);not null" json:"name"`
-	ShortName string    `gorm:"type:varchar(50);not null;column:short_name" json:"shortName"`
-	OrgNumber string    `gorm:"type:varchar(20);column:org_number" json:"orgNumber,omitempty"`
-	Color     string    `gorm:"type:varchar(20);not null;default:'#000000'" json:"color"`
-	Logo      string    `gorm:"type:varchar(500)" json:"logo,omitempty"`
-	IsActive  bool      `gorm:"not null;default:true;column:is_active" json:"isActive"`
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	ID                          CompanyID `gorm:"type:varchar(50);primaryKey" json:"id"`
+	Name                        string    `gorm:"type:varchar(200);not null" json:"name"`
+	ShortName                   string    `gorm:"type:varchar(50);not null;column:short_name" json:"shortName"`
+	OrgNumber                   string    `gorm:"type:varchar(20);column:org_number" json:"orgNumber,omitempty"`
+	Color                       string    `gorm:"type:varchar(20);not null;default:'#000000'" json:"color"`
+	Logo                        string    `gorm:"type:varchar(500)" json:"logo,omitempty"`
+	IsActive                    bool      `gorm:"not null;default:true;column:is_active" json:"isActive"`
+	DefaultOfferResponsibleID   *string   `gorm:"type:varchar(100);column:default_offer_responsible_id" json:"defaultOfferResponsibleId,omitempty"`
+	DefaultProjectResponsibleID *string   `gorm:"type:varchar(100);column:default_project_responsible_id" json:"defaultProjectResponsibleId,omitempty"`
+	CreatedAt                   time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt                   time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 // Customer represents an organization in the CRM
