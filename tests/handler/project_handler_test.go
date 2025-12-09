@@ -24,6 +24,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// Counter for generating unique offer numbers in tests
+var testProjectOfferCounter int64
+
 func setupProjectHandlerTestDB(t *testing.T) *gorm.DB {
 	db := testutil.SetupTestDB(t)
 	t.Cleanup(func() {
@@ -789,6 +792,8 @@ func TestProjectHandler_GetActivities(t *testing.T) {
 
 // Helper to create a test offer for project tests with optional budget dimensions
 func createTestOfferForProject(t *testing.T, db *gorm.DB, customer *domain.Customer, title string, phase domain.OfferPhase, value float64, userID string) *domain.Offer {
+	testProjectOfferCounter++
+
 	offer := &domain.Offer{
 		Title:               title,
 		CustomerID:          customer.ID,
@@ -801,6 +806,12 @@ func createTestOfferForProject(t *testing.T, db *gorm.DB, customer *domain.Custo
 		ResponsibleUserID:   userID,
 		ResponsibleUserName: "Test User",
 	}
+
+	// For non-draft offers, generate unique offer number
+	if phase != domain.OfferPhaseDraft {
+		offer.OfferNumber = fmt.Sprintf("PROJ-TEST-%d-%d", time.Now().UnixNano(), testProjectOfferCounter)
+	}
+
 	err := db.Create(offer).Error
 	require.NoError(t, err)
 	return offer
