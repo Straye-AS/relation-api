@@ -130,8 +130,10 @@ type DealStageHistoryDTO struct {
 type OfferDTO struct {
 	ID                  uuid.UUID      `json:"id"`
 	Title               string         `json:"title"`
+	OfferNumber         string         `json:"offerNumber,omitempty"` // Unique per company, e.g., "STB-2024-001"
 	CustomerID          uuid.UUID      `json:"customerId"`
 	CustomerName        string         `json:"customerName,omitempty"`
+	ProjectID           *uuid.UUID     `json:"projectId,omitempty"` // Link to project (nullable)
 	CompanyID           CompanyID      `json:"companyId"`
 	Phase               OfferPhase     `json:"phase"`
 	Probability         int            `json:"probability"`
@@ -139,7 +141,7 @@ type OfferDTO struct {
 	Status              OfferStatus    `json:"status"`
 	CreatedAt           string         `json:"createdAt"` // ISO 8601
 	UpdatedAt           string         `json:"updatedAt"` // ISO 8601
-	ResponsibleUserID   string         `json:"responsibleUserId"`
+	ResponsibleUserID   string         `json:"responsibleUserId,omitempty"`
 	ResponsibleUserName string         `json:"responsibleUserName,omitempty"`
 	Items               []OfferItemDTO `json:"items"`
 	Description         string         `json:"description,omitempty"`
@@ -1101,4 +1103,77 @@ type PipelineAnalyticsFilters struct {
 type CreateOfferFromDealResponse struct {
 	Offer *OfferDTO `json:"offer"`
 	Deal  *DealDTO  `json:"deal"`
+}
+
+// ============================================================================
+// Inquiry (Draft Offer) DTOs
+// ============================================================================
+
+// InquiryDTO represents an inquiry (offer in draft phase) - alias for clarity
+type InquiryDTO = OfferDTO
+
+// CreateInquiryRequest contains the data needed to create a new inquiry (draft offer)
+// Minimal fields required - responsibleUserId and companyId are optional
+type CreateInquiryRequest struct {
+	Title       string     `json:"title" validate:"required,max=200"`
+	CustomerID  uuid.UUID  `json:"customerId" validate:"required"`
+	Description string     `json:"description,omitempty"`
+	Notes       string     `json:"notes,omitempty"`
+	DueDate     *time.Time `json:"dueDate,omitempty"`
+}
+
+// ConvertInquiryRequest contains options for converting an inquiry to an offer
+type ConvertInquiryRequest struct {
+	ResponsibleUserID *string    `json:"responsibleUserId,omitempty" validate:"omitempty,max=100"`
+	CompanyID         *CompanyID `json:"companyId,omitempty"`
+}
+
+// ConvertInquiryResponse contains the result of converting an inquiry to an offer
+type ConvertInquiryResponse struct {
+	Offer       *OfferDTO `json:"offer"`
+	OfferNumber string    `json:"offerNumber"`
+}
+
+// ============================================================================
+// Offer Property Update Request DTOs
+// ============================================================================
+
+// UpdateOfferProbabilityRequest for updating offer probability
+type UpdateOfferProbabilityRequest struct {
+	Probability int `json:"probability" validate:"required,min=0,max=100"`
+}
+
+// UpdateOfferTitleRequest for updating offer title
+type UpdateOfferTitleRequest struct {
+	Title string `json:"title" validate:"required,max=200"`
+}
+
+// UpdateOfferResponsibleRequest for updating offer responsible user
+type UpdateOfferResponsibleRequest struct {
+	ResponsibleUserID string `json:"responsibleUserId" validate:"required,max=100"`
+}
+
+// UpdateOfferCustomerRequest for updating offer customer
+type UpdateOfferCustomerRequest struct {
+	CustomerID uuid.UUID `json:"customerId" validate:"required"`
+}
+
+// UpdateOfferValueRequest for updating offer value
+type UpdateOfferValueRequest struct {
+	Value float64 `json:"value" validate:"required,gte=0"`
+}
+
+// UpdateOfferDueDateRequest for updating offer due date
+type UpdateOfferDueDateRequest struct {
+	DueDate *time.Time `json:"dueDate"` // nullable to allow clearing
+}
+
+// UpdateOfferDescriptionRequest for updating offer description
+type UpdateOfferDescriptionRequest struct {
+	Description string `json:"description" validate:"max=10000"`
+}
+
+// UpdateOfferProjectRequest for linking offer to a project
+type UpdateOfferProjectRequest struct {
+	ProjectID uuid.UUID `json:"projectId" validate:"required"`
 }

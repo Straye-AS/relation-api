@@ -961,3 +961,321 @@ func (s *OfferService) logActivityOnTarget(ctx context.Context, targetType domai
 		s.logger.Warn("failed to log activity", zap.Error(err))
 	}
 }
+
+// ============================================================================
+// Individual Property Update Methods
+// ============================================================================
+
+// UpdateProbability updates only the probability field of an offer
+func (s *OfferService) UpdateProbability(ctx context.Context, id uuid.UUID, probability int) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	oldValue := offer.Probability
+	if err := s.offerRepo.UpdateField(ctx, id, "probability", probability); err != nil {
+		return nil, fmt.Errorf("failed to update probability: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer probability updated",
+		fmt.Sprintf("Probability changed from %d%% to %d%%", oldValue, probability))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateTitle updates only the title field of an offer
+func (s *OfferService) UpdateTitle(ctx context.Context, id uuid.UUID, title string) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	oldTitle := offer.Title
+	if err := s.offerRepo.UpdateField(ctx, id, "title", title); err != nil {
+		return nil, fmt.Errorf("failed to update title: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer title updated",
+		fmt.Sprintf("Title changed from '%s' to '%s'", oldTitle, title))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateResponsible updates only the responsible user field of an offer
+func (s *OfferService) UpdateResponsible(ctx context.Context, id uuid.UUID, responsibleUserID string) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	oldResponsible := offer.ResponsibleUserID
+	if err := s.offerRepo.UpdateField(ctx, id, "responsible_user_id", responsibleUserID); err != nil {
+		return nil, fmt.Errorf("failed to update responsible: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer responsible updated",
+		fmt.Sprintf("Responsible changed from '%s' to '%s'", oldResponsible, responsibleUserID))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateCustomer updates only the customer field of an offer
+func (s *OfferService) UpdateCustomer(ctx context.Context, id uuid.UUID, customerID uuid.UUID) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	// Verify customer exists
+	customer, err := s.customerRepo.GetByID(ctx, customerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to verify customer: %w", err)
+	}
+
+	oldCustomerName := offer.CustomerName
+	updates := map[string]interface{}{
+		"customer_id":   customerID,
+		"customer_name": customer.Name,
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update customer: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer customer updated",
+		fmt.Sprintf("Customer changed from '%s' to '%s'", oldCustomerName, customer.Name))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateValue updates only the value field of an offer
+func (s *OfferService) UpdateValue(ctx context.Context, id uuid.UUID, value float64) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	oldValue := offer.Value
+	if err := s.offerRepo.UpdateField(ctx, id, "value", value); err != nil {
+		return nil, fmt.Errorf("failed to update value: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer value updated",
+		fmt.Sprintf("Value changed from %.2f to %.2f", oldValue, value))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateDueDate updates only the due date field of an offer
+func (s *OfferService) UpdateDueDate(ctx context.Context, id uuid.UUID, dueDate *time.Time) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	if err := s.offerRepo.UpdateField(ctx, id, "due_date", dueDate); err != nil {
+		return nil, fmt.Errorf("failed to update due date: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	dueDateStr := "cleared"
+	if dueDate != nil {
+		dueDateStr = dueDate.Format("2006-01-02")
+	}
+	s.logActivity(ctx, id, "Offer due date updated",
+		fmt.Sprintf("Due date set to %s", dueDateStr))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateDescription updates only the description field of an offer
+func (s *OfferService) UpdateDescription(ctx context.Context, id uuid.UUID, description string) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	if err := s.offerRepo.UpdateField(ctx, id, "description", description); err != nil {
+		return nil, fmt.Errorf("failed to update description: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer description updated", "Description was updated")
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// LinkToProject links an offer to a project
+func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, projectID uuid.UUID) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to verify project: %w", err)
+	}
+
+	if err := s.offerRepo.LinkToProject(ctx, offerID, projectID); err != nil {
+		return nil, fmt.Errorf("failed to link offer to project: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, offerID, "Offer linked to project",
+		fmt.Sprintf("Offer linked to project '%s'", project.Name))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UnlinkFromProject removes the project link from an offer
+func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	if offer.ProjectID == nil {
+		// Already unlinked, just return the offer
+		dto := mapper.ToOfferDTO(offer)
+		return &dto, nil
+	}
+
+	if err := s.offerRepo.UnlinkFromProject(ctx, offerID); err != nil {
+		return nil, fmt.Errorf("failed to unlink offer from project: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, offerID, "Offer unlinked from project", "Project link was removed")
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}

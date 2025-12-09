@@ -23,6 +23,10 @@ func (m *MockUserRepository) Upsert(ctx context.Context, user *domain.User) erro
 	return nil
 }
 
+func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+	return nil, nil
+}
+
 // MockPermissionService implements a mock permission service for testing
 type MockPermissionService struct {
 	permissions []domain.PermissionType

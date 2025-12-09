@@ -1061,64 +1061,57 @@ definitions:
     type: object
   domain.DashboardMetrics:
     properties:
-      activeOffers:
-        type: integer
-      activeProjects:
-        items:
-          $ref: '#/definitions/domain.ProjectDTO'
-        type: array
       averageProbability:
+        description: Average probability of active offers
         type: number
-      lostOffers:
-        type: integer
       offerReserve:
+        description: Total value of active offers (in_progress, sent)
         type: number
-      offersByPhase:
-        additionalProperties:
-          type: integer
-        type: object
+      orderReserve:
+        description: Order Reserve (from active projects)
+        type: number
       pipeline:
+        description: 'Pipeline Data (phases: in_progress, sent, won, lost - excludes
+          draft and expired)'
         items:
           $ref: '#/definitions/domain.PipelinePhaseData'
         type: array
       recentActivities:
+        description: Last activities
         items:
           $ref: '#/definitions/domain.ActivityDTO'
         type: array
       recentOffers:
+        description: Recent Lists (12-month window, limit 10 each)
         items:
           $ref: '#/definitions/domain.OfferDTO'
         type: array
       recentProjects:
+        description: Last created projects
         items:
           $ref: '#/definitions/domain.ProjectDTO'
         type: array
-      revenueForecast30Days:
-        type: number
-      revenueForecast90Days:
-        type: number
-      teamPerformance:
-        items:
-          $ref: '#/definitions/domain.TeamMemberStats'
-        type: array
       topCustomers:
+        description: Top Customers (12-month window, limit 10)
         items:
-          $ref: '#/definitions/domain.CustomerDTO'
+          $ref: '#/definitions/domain.TopCustomerDTO'
         type: array
-      topDisciplines:
-        items:
-          $ref: '#/definitions/domain.DisciplineStats'
-        type: array
-      totalOffers:
+      totalInvoiced:
+        description: Financial Summary
+        type: number
+      totalOfferCount:
+        description: Offer Metrics (12-month window, excluding drafts and expired)
         type: integer
       totalValue:
+        description: orderReserve + totalInvoiced
         type: number
-      weightedValue:
+      weightedOfferReserve:
+        description: Sum of (value * probability/100) for active offers
         type: number
-      winRate:
-        type: number
-      wonOffers:
-        type: integer
+      winRateMetrics:
+        allOf:
+        - $ref: '#/definitions/domain.WinRateMetrics'
+        description: Win Rate Metrics (12-month window)
     type: object
   domain.DealDTO:
     properties:
@@ -1201,19 +1194,6 @@ definitions:
         type: string
       toStage:
         $ref: '#/definitions/domain.DealStage'
-    type: object
-  domain.DisciplineStats:
-    properties:
-      avgMargin:
-        type: number
-      name:
-        type: string
-      offerCount:
-        type: integer
-      projectCount:
-        type: integer
-      totalValue:
-        type: number
     type: object
   domain.ErrorResponse:
     properties:
@@ -1771,24 +1751,19 @@ definitions:
       weightedValue:
         type: number
     type: object
-  domain.TeamMemberStats:
+  domain.TopCustomerDTO:
     properties:
-      avatar:
+      economicValue:
+        description: Total value of their offers
+        type: number
+      id:
         type: string
       name:
         type: string
       offerCount:
         type: integer
-      totalValue:
-        type: number
-      userId:
+      orgNumber:
         type: string
-      winRate:
-        type: number
-      wonCount:
-        type: integer
-      wonValue:
-        type: number
     type: object
   domain.UnreadCountDTO:
     properties:
@@ -2137,6 +2112,23 @@ definitions:
         type: integer
       winRate:
         type: number
+      wonValue:
+        type: number
+    type: object
+  domain.WinRateMetrics:
+    properties:
+      economicWinRate:
+        description: won_value / (won_value + lost_value), 0-1 scale
+        type: number
+      lostCount:
+        type: integer
+      lostValue:
+        type: number
+      winRate:
+        description: won_count / (won_count + lost_count), 0-1 scale
+        type: number
+      wonCount:
+        type: integer
       wonValue:
         type: number
     type: object
@@ -3949,6 +3941,32 @@ paths:
       - Customers
   /dashboard/metrics:
     get:
+      description: |-
+        Returns dashboard metrics using a rolling 12-month window. All metrics exclude draft and expired offers.
+
+        **Offer Metrics:**
+        - `totalOfferCount`: Count of offers excluding drafts and expired
+        - `offerReserve`: Total value of active offers (in_progress, sent)
+        - `weightedOfferReserve`: Sum of (value * probability/100) for active offers
+        - `averageProbability`: Average probability of active offers
+
+        **Pipeline Data:**
+        - Returns phases: in_progress, sent, won, lost with counts and values
+        - Excludes draft and expired offers
+
+        **Win Rate Metrics:**
+        - `winRate`: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)
+        - `economicWinRate`: won_value / (won_value + lost_value) - value-based win rate
+        - Also includes `wonCount`, `lostCount`, `wonValue`, `lostValue` for transparency
+
+        **Order Reserve:** Sum of (budget - spent) on active projects
+
+        **Financial Summary:**
+        - `totalInvoiced`: Sum of spent on all projects in 12-month window
+        - `totalValue`: orderReserve + totalInvoiced
+
+        **Recent Lists:** 12-month window, limit 10 each
+        **Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue
       produces:
       - application/json
       responses:

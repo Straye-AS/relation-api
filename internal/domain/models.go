@@ -374,21 +374,59 @@ const (
 type Offer struct {
 	BaseModel
 	Title               string      `gorm:"type:varchar(200);not null;index"`
+	OfferNumber         string      `gorm:"type:varchar(50);column:offer_number;index"` // Unique per company, e.g., "STB-2024-001"
 	CustomerID          uuid.UUID   `gorm:"type:uuid;not null;index"`
 	Customer            *Customer   `gorm:"foreignKey:CustomerID"`
 	CustomerName        string      `gorm:"type:varchar(200)"`
+	ProjectID           *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project
+	Project             *Project    `gorm:"foreignKey:ProjectID"`
 	CompanyID           CompanyID   `gorm:"type:varchar(50);not null;index"`
 	Phase               OfferPhase  `gorm:"type:varchar(50);not null;index"`
 	Probability         int         `gorm:"type:int;not null;default:0"`
 	Value               float64     `gorm:"type:decimal(15,2);not null;default:0"`
 	Status              OfferStatus `gorm:"type:varchar(50);not null;index"`
-	ResponsibleUserID   string      `gorm:"type:varchar(100);not null;index"`
+	ResponsibleUserID   string      `gorm:"type:varchar(100);index"` // Optional for inquiries (draft phase)
 	ResponsibleUserName string      `gorm:"type:varchar(200)"`
 	Description         string      `gorm:"type:text"`
 	Notes               string      `gorm:"type:text"`
 	DueDate             *time.Time  `gorm:"type:timestamp;index"`
 	Items               []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
 	Files               []File      `gorm:"foreignKey:OfferID"`
+}
+
+// OfferNumberSequence tracks the last used offer number sequence per company per year
+type OfferNumberSequence struct {
+	ID           uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	CompanyID    CompanyID `gorm:"type:varchar(50);not null;column:company_id"`
+	Year         int       `gorm:"not null"`
+	LastSequence int       `gorm:"not null;default:0;column:last_sequence"`
+	CreatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+// TableName returns the table name for OfferNumberSequence
+func (OfferNumberSequence) TableName() string {
+	return "offer_number_sequences"
+}
+
+// GetCompanyPrefix returns the offer number prefix for a company
+func GetCompanyPrefix(companyID CompanyID) string {
+	switch companyID {
+	case CompanyStalbygg:
+		return "STB"
+	case CompanyHybridbygg:
+		return "HYB"
+	case CompanyIndustri:
+		return "IND"
+	case CompanyTak:
+		return "TAK"
+	case CompanyMontasje:
+		return "MON"
+	case CompanyGruppen:
+		return "GRP"
+	default:
+		return "GRP"
+	}
 }
 
 // OfferItem represents a line item in an offer (legacy - being replaced by BudgetDimension)
