@@ -38,7 +38,7 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 	projectRepo := repository.NewProjectRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
-	dimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
 
@@ -48,7 +48,7 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 		projectRepo,
 		offerRepo,
 		customerRepo,
-		dimensionRepo,
+		budgetItemRepo,
 		activityRepo,
 		companyService,
 		log,
@@ -60,7 +60,7 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 		customerRepo:  customerRepo,
 		offerRepo:     offerRepo,
 		projectRepo:   projectRepo,
-		dimensionRepo: dimensionRepo,
+		budgetItemRepo: budgetItemRepo,
 	}
 
 	return svc, fixtures
@@ -71,7 +71,7 @@ type projectTestFixtures struct {
 	customerRepo  *repository.CustomerRepository
 	offerRepo     *repository.OfferRepository
 	projectRepo   *repository.ProjectRepository
-	dimensionRepo *repository.BudgetDimensionRepository
+	budgetItemRepo *repository.BudgetItemRepository
 }
 
 func (f *projectTestFixtures) createTestCustomer(t *testing.T, ctx context.Context, name string) *domain.Customer {
@@ -105,18 +105,18 @@ func (f *projectTestFixtures) createTestOffer(t *testing.T, ctx context.Context,
 	return offer
 }
 
-func (f *projectTestFixtures) createTestBudgetDimension(t *testing.T, ctx context.Context, parentType domain.BudgetParentType, parentID uuid.UUID, name string, cost, revenue float64, order int) *domain.BudgetDimension {
-	dimension := &domain.BudgetDimension{
-		ParentType:   parentType,
-		ParentID:     parentID,
-		CustomName:   name,
-		Cost:         cost,
-		Revenue:      revenue,
-		DisplayOrder: order,
+func (f *projectTestFixtures) createTestBudgetItem(t *testing.T, ctx context.Context, parentType domain.BudgetParentType, parentID uuid.UUID, name string, expectedCost float64, marginPercent float64, order int) *domain.BudgetItem {
+	item := &domain.BudgetItem{
+		ParentType:     parentType,
+		ParentID:       parentID,
+		Name:           name,
+		ExpectedCost:   expectedCost,
+		ExpectedMargin: marginPercent,
+		DisplayOrder:   order,
 	}
-	err := f.dimensionRepo.Create(ctx, dimension)
+	err := f.budgetItemRepo.Create(ctx, item)
 	require.NoError(t, err)
-	return dimension
+	return item
 }
 
 func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Context, name string, status domain.ProjectStatus) (*domain.Project, *domain.Customer) {
@@ -144,7 +144,7 @@ func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Contex
 
 func (f *projectTestFixtures) cleanup(t *testing.T) {
 	f.db.Exec("DELETE FROM activities WHERE target_type = 'Project' OR target_type = 'Customer'")
-	f.db.Exec("DELETE FROM budget_dimensions WHERE parent_type = 'project' OR parent_type = 'offer'")
+	f.db.Exec("DELETE FROM budget_items WHERE parent_type = 'project' OR parent_type = 'offer'")
 	f.db.Exec("DELETE FROM projects WHERE name LIKE 'Test%'")
 	f.db.Exec("DELETE FROM offers WHERE title LIKE 'Test%'")
 	f.db.Exec("DELETE FROM customers WHERE name LIKE 'Customer for%' OR name LIKE 'Test%'")
@@ -406,13 +406,13 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 
 	ctx := createProjectTestContext()
 
-	t.Run("inherit budget dimensions from won offer", func(t *testing.T) {
+	t.Run("inherit budget items from won offer", func(t *testing.T) {
 		customer := fixtures.createTestCustomer(t, ctx, "Test Inherit Customer")
 		offer := fixtures.createTestOffer(t, ctx, "Test Inherit Offer", domain.OfferPhaseWon, customer.ID)
 
-		// Create budget dimensions on the offer
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentOffer, offer.ID, "Steel Structure", 50000, 75000, 0)
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 45000, 1)
+		// Create budget items on the offer
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Steel Structure", 50000, 50, 0) // Revenue=75000
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 50, 1) // Revenue=45000
 
 		// Create project without inherited budget
 		project, _ := fixtures.createTestProject(t, ctx, "Test Inherit Project", domain.ProjectStatusPlanning)
@@ -422,21 +422,21 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 		resp, err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.Equal(t, 2, resp.DimensionsCount)
+		assert.Equal(t, 2, resp.ItemsCount)
 
-		// Verify dimensions were cloned
-		projectDims, err := fixtures.dimensionRepo.GetByParent(ctx, domain.BudgetParentProject, project.ID)
+		// Verify items were cloned
+		projectItems, err := fixtures.budgetItemRepo.ListByParent(ctx, domain.BudgetParentProject, project.ID)
 		require.NoError(t, err)
-		assert.Len(t, projectDims, 2)
+		assert.Len(t, projectItems, 2)
 
-		// Verify dimension values
-		assert.Equal(t, "Steel Structure", projectDims[0].CustomName)
-		assert.Equal(t, float64(50000), projectDims[0].Cost)
-		assert.Equal(t, float64(75000), projectDims[0].Revenue)
+		// Verify item values
+		assert.Equal(t, "Steel Structure", projectItems[0].Name)
+		assert.Equal(t, float64(50000), projectItems[0].ExpectedCost)
+		assert.Equal(t, float64(50), projectItems[0].ExpectedMargin)
 
-		assert.Equal(t, "Assembly", projectDims[1].CustomName)
-		assert.Equal(t, float64(30000), projectDims[1].Cost)
-		assert.Equal(t, float64(45000), projectDims[1].Revenue)
+		assert.Equal(t, "Assembly", projectItems[1].Name)
+		assert.Equal(t, float64(30000), projectItems[1].ExpectedCost)
+		assert.Equal(t, float64(50), projectItems[1].ExpectedMargin)
 
 		// Verify project was updated
 		updatedProject, err := svc.GetByID(ctx, project.ID)
@@ -480,19 +480,19 @@ func TestProjectService_GetBudgetSummary(t *testing.T) {
 
 	ctx := createProjectTestContext()
 
-	t.Run("get budget summary for project with dimensions", func(t *testing.T) {
+	t.Run("get budget summary for project with budget items", func(t *testing.T) {
 		project, _ := fixtures.createTestProject(t, ctx, "Test Budget Summary", domain.ProjectStatusActive)
 
-		// Add budget dimensions
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentProject, project.ID, "Dim 1", 10000, 15000, 0)
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentProject, project.ID, "Dim 2", 20000, 30000, 1)
+		// Add budget items
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentProject, project.ID, "Item 1", 10000, 50, 0) // Revenue=15000
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentProject, project.ID, "Item 2", 20000, 50, 1) // Revenue=30000
 
 		summary, err := svc.GetBudgetSummary(ctx, project.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, summary)
 		assert.Equal(t, domain.BudgetParentProject, summary.ParentType)
 		assert.Equal(t, project.ID, summary.ParentID)
-		assert.Equal(t, 2, summary.DimensionCount)
+		assert.Equal(t, 2, summary.ItemCount)
 		assert.Equal(t, float64(30000), summary.TotalCost)
 		assert.Equal(t, float64(45000), summary.TotalRevenue)
 		assert.Equal(t, float64(15000), summary.TotalProfit)

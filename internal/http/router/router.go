@@ -35,9 +35,9 @@ type Router struct {
 	authHandler             *handler.AuthHandler
 	companyHandler          *handler.CompanyHandler
 	auditHandler            *handler.AuditHandler
-	contactHandler          *handler.ContactHandler
-	budgetDimensionHandler  *handler.BudgetDimensionHandler
-	notificationHandler     *handler.NotificationHandler
+	contactHandler      *handler.ContactHandler
+	budgetItemHandler   *handler.BudgetItemHandler
+	notificationHandler *handler.NotificationHandler
 	activityHandler         *handler.ActivityHandler
 }
 
@@ -60,7 +60,7 @@ func NewRouter(
 	companyHandler *handler.CompanyHandler,
 	auditHandler *handler.AuditHandler,
 	contactHandler *handler.ContactHandler,
-	budgetDimensionHandler *handler.BudgetDimensionHandler,
+	budgetItemHandler *handler.BudgetItemHandler,
 	notificationHandler *handler.NotificationHandler,
 	activityHandler *handler.ActivityHandler,
 ) *Router {
@@ -82,9 +82,9 @@ func NewRouter(
 		authHandler:             authHandler,
 		companyHandler:          companyHandler,
 		auditHandler:            auditHandler,
-		contactHandler:          contactHandler,
-		budgetDimensionHandler:  budgetDimensionHandler,
-		notificationHandler:     notificationHandler,
+		contactHandler:      contactHandler,
+		budgetItemHandler:   budgetItemHandler,
+		notificationHandler: notificationHandler,
 		activityHandler:         activityHandler,
 	}
 }
@@ -289,16 +289,16 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/activities", rt.offerHandler.GetActivities)
 
 				// Budget endpoints
-				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetDimensions)
-				r.Get("/{id}/budget", rt.budgetDimensionHandler.GetOfferBudgetWithDimensions)
+				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetItems)
+				r.Get("/{id}/budget", rt.budgetItemHandler.GetOfferBudgetWithDimensions)
 				r.Post("/{id}/recalculate", rt.offerHandler.RecalculateTotals)
 
-				// Budget dimension sub-resources
-				r.Get("/{id}/budget/dimensions", rt.budgetDimensionHandler.ListOfferDimensions)
-				r.Post("/{id}/budget/dimensions", rt.budgetDimensionHandler.AddToOffer)
-				r.Put("/{id}/budget/dimensions/{dimensionId}", rt.budgetDimensionHandler.UpdateOfferDimension)
-				r.Delete("/{id}/budget/dimensions/{dimensionId}", rt.budgetDimensionHandler.DeleteOfferDimension)
-				r.Put("/{id}/budget/reorder", rt.budgetDimensionHandler.ReorderOfferDimensions)
+				// Budget item sub-resources
+				r.Get("/{id}/budget/dimensions", rt.budgetItemHandler.ListOfferDimensions)
+				r.Post("/{id}/budget/dimensions", rt.budgetItemHandler.AddToOffer)
+				r.Put("/{id}/budget/dimensions/{dimensionId}", rt.budgetItemHandler.UpdateOfferDimension)
+				r.Delete("/{id}/budget/dimensions/{dimensionId}", rt.budgetItemHandler.DeleteOfferDimension)
+				r.Put("/{id}/budget/reorder", rt.budgetItemHandler.ReorderOfferDimensions)
 			})
 
 			// Deals

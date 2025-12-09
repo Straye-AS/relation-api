@@ -47,8 +47,8 @@ func (r *OfferRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Of
 	return &offer, nil
 }
 
-// GetByIDWithBudgetDimensions retrieves an offer by ID with all related data including budget dimensions
-func (r *OfferRepository) GetByIDWithBudgetDimensions(ctx context.Context, id uuid.UUID) (*domain.Offer, []domain.BudgetDimension, error) {
+// GetByIDWithBudgetItems retrieves an offer by ID with all related data including budget items
+func (r *OfferRepository) GetByIDWithBudgetItems(ctx context.Context, id uuid.UUID) (*domain.Offer, []domain.BudgetItem, error) {
 	var offer domain.Offer
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
@@ -61,18 +61,17 @@ func (r *OfferRepository) GetByIDWithBudgetDimensions(ctx context.Context, id uu
 		return nil, nil, err
 	}
 
-	// Fetch budget dimensions separately (polymorphic relationship)
-	var dimensions []domain.BudgetDimension
+	// Fetch budget items separately (polymorphic relationship)
+	var items []domain.BudgetItem
 	err = r.db.WithContext(ctx).
-		Preload("Category").
 		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentOffer, id).
 		Order("display_order ASC, created_at ASC").
-		Find(&dimensions).Error
+		Find(&items).Error
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load budget dimensions: %w", err)
+		return nil, nil, fmt.Errorf("failed to load budget items: %w", err)
 	}
 
-	return &offer, dimensions, nil
+	return &offer, items, nil
 }
 
 // Update saves an offer after verifying company access
@@ -266,21 +265,21 @@ func (r *OfferRepository) UpdatePhase(ctx context.Context, id uuid.UUID, phase d
 	return nil
 }
 
-// CalculateTotalsFromDimensions calculates and updates the offer's Value field
-// by summing the revenue from all budget dimensions linked to this offer
+// CalculateTotalsFromBudgetItems calculates and updates the offer's Value field
+// by summing the expected_revenue from all budget items linked to this offer
 // Applies company filter for multi-tenant isolation on the update
-func (r *OfferRepository) CalculateTotalsFromDimensions(ctx context.Context, offerID uuid.UUID) (float64, error) {
+func (r *OfferRepository) CalculateTotalsFromBudgetItems(ctx context.Context, offerID uuid.UUID) (float64, error) {
 	var totalRevenue float64
 
-	// Calculate total revenue from budget dimensions
+	// Calculate total revenue from budget items
 	err := r.db.WithContext(ctx).
-		Model(&domain.BudgetDimension{}).
+		Model(&domain.BudgetItem{}).
 		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentOffer, offerID).
-		Select("COALESCE(SUM(revenue), 0)").
+		Select("COALESCE(SUM(expected_revenue), 0)").
 		Scan(&totalRevenue).Error
 
 	if err != nil {
-		return 0, fmt.Errorf("failed to calculate totals from dimensions: %w", err)
+		return 0, fmt.Errorf("failed to calculate totals from budget items: %w", err)
 	}
 
 	// Update the offer's Value field with company filter
@@ -301,9 +300,9 @@ func (r *OfferRepository) CalculateTotalsFromDimensions(ctx context.Context, off
 	return totalRevenue, nil
 }
 
-// GetBudgetDimensionsCount returns the number of budget dimensions for an offer
+// GetBudgetItemsCount returns the number of budget items for an offer
 // Applies company filter via subquery for multi-tenant isolation
-func (r *OfferRepository) GetBudgetDimensionsCount(ctx context.Context, offerID uuid.UUID) (int, error) {
+func (r *OfferRepository) GetBudgetItemsCount(ctx context.Context, offerID uuid.UUID) (int, error) {
 	var count int64
 
 	// Build subquery to filter offers by company
@@ -311,7 +310,7 @@ func (r *OfferRepository) GetBudgetDimensionsCount(ctx context.Context, offerID 
 	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
 
 	err := r.db.WithContext(ctx).
-		Model(&domain.BudgetDimension{}).
+		Model(&domain.BudgetItem{}).
 		Where("parent_type = ? AND parent_id IN (?)", domain.BudgetParentOffer, offerSubquery).
 		Count(&count).Error
 	return int(count), err
@@ -321,9 +320,10 @@ func (r *OfferRepository) GetBudgetDimensionsCount(ctx context.Context, offerID 
 // Applies company filter via subquery for multi-tenant isolation
 func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUID) (*domain.BudgetSummary, error) {
 	var result struct {
-		TotalCost      float64
-		TotalRevenue   float64
-		DimensionCount int
+		TotalCost    float64
+		TotalRevenue float64
+		TotalProfit  float64
+		ItemCount    int
 	}
 
 	// Build subquery to filter offers by company
@@ -331,9 +331,9 @@ func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUI
 	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
 
 	err := r.db.WithContext(ctx).
-		Model(&domain.BudgetDimension{}).
+		Model(&domain.BudgetItem{}).
 		Where("parent_type = ? AND parent_id IN (?)", domain.BudgetParentOffer, offerSubquery).
-		Select("COALESCE(SUM(cost), 0) as total_cost, COALESCE(SUM(revenue), 0) as total_revenue, COUNT(*) as dimension_count").
+		Select("COALESCE(SUM(expected_cost), 0) as total_cost, COALESCE(SUM(expected_revenue), 0) as total_revenue, COALESCE(SUM(expected_profit), 0) as total_profit, COUNT(*) as item_count").
 		Scan(&result).Error
 
 	if err != nil {
@@ -341,15 +341,15 @@ func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUI
 	}
 
 	summary := &domain.BudgetSummary{
-		TotalCost:      result.TotalCost,
-		TotalRevenue:   result.TotalRevenue,
-		TotalMargin:    result.TotalRevenue - result.TotalCost,
-		DimensionCount: result.DimensionCount,
+		TotalCost:    result.TotalCost,
+		TotalRevenue: result.TotalRevenue,
+		TotalProfit:  result.TotalProfit,
+		ItemCount:    result.ItemCount,
 	}
 
-	// Calculate margin percent: ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
+	// Calculate margin percent: (Profit / Revenue) * 100, 0 if revenue=0
 	if result.TotalRevenue > 0 {
-		summary.MarginPercent = ((result.TotalRevenue - result.TotalCost) / result.TotalRevenue) * 100
+		summary.MarginPercent = (result.TotalProfit / result.TotalRevenue) * 100
 	}
 
 	return summary, nil

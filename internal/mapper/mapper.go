@@ -227,92 +227,73 @@ func ToOfferItemDTO(item *domain.OfferItem) domain.OfferItemDTO {
 	}
 }
 
-// ToBudgetDimensionCategoryDTO converts BudgetDimensionCategory to BudgetDimensionCategoryDTO
-func ToBudgetDimensionCategoryDTO(cat *domain.BudgetDimensionCategory) domain.BudgetDimensionCategoryDTO {
-	return domain.BudgetDimensionCategoryDTO{
-		ID:           cat.ID,
-		Name:         cat.Name,
-		Description:  cat.Description,
-		DisplayOrder: cat.DisplayOrder,
-		IsActive:     cat.IsActive,
+// ToBudgetItemDTO converts BudgetItem to BudgetItemDTO
+func ToBudgetItemDTO(item *domain.BudgetItem) domain.BudgetItemDTO {
+	return domain.BudgetItemDTO{
+		ID:              item.ID,
+		ParentType:      item.ParentType,
+		ParentID:        item.ParentID,
+		Name:            item.Name,
+		ExpectedCost:    item.ExpectedCost,
+		ExpectedMargin:  item.ExpectedMargin,
+		ExpectedRevenue: item.ExpectedRevenue,
+		ExpectedProfit:  item.ExpectedProfit,
+		Quantity:        item.Quantity,
+		PricePerItem:    item.PricePerItem,
+		Description:     item.Description,
+		DisplayOrder:    item.DisplayOrder,
+		CreatedAt:       item.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:       item.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
 
-// ToBudgetDimensionDTO converts BudgetDimension to BudgetDimensionDTO
-func ToBudgetDimensionDTO(dim *domain.BudgetDimension) domain.BudgetDimensionDTO {
-	dto := domain.BudgetDimensionDTO{
-		ID:                  dim.ID,
-		ParentType:          dim.ParentType,
-		ParentID:            dim.ParentID,
-		CategoryID:          dim.CategoryID,
-		CustomName:          dim.CustomName,
-		Name:                dim.GetName(),
-		Cost:                dim.Cost,
-		Revenue:             dim.Revenue,
-		TargetMarginPercent: dim.TargetMarginPercent,
-		MarginOverride:      dim.MarginOverride,
-		MarginPercent:       dim.MarginPercent,
-		Description:         dim.Description,
-		Quantity:            dim.Quantity,
-		Unit:                dim.Unit,
-		DisplayOrder:        dim.DisplayOrder,
-		CreatedAt:           dim.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:           dim.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-	}
-
-	if dim.Category != nil {
-		catDTO := ToBudgetDimensionCategoryDTO(dim.Category)
-		dto.Category = &catDTO
-	}
-
-	return dto
-}
-
-// ToBudgetSummaryDTO creates a summary DTO from budget dimensions
-func ToBudgetSummaryDTO(parentType domain.BudgetParentType, parentID uuid.UUID, dimensions []domain.BudgetDimension) domain.BudgetSummaryDTO {
+// ToBudgetSummaryDTO creates a summary DTO from budget items
+func ToBudgetSummaryDTO(parentType domain.BudgetParentType, parentID uuid.UUID, items []domain.BudgetItem) domain.BudgetSummaryDTO {
 	totalCost := 0.0
 	totalRevenue := 0.0
+	totalProfit := 0.0
 
-	for _, dim := range dimensions {
-		totalCost += dim.Cost
-		totalRevenue += dim.Revenue
+	for _, item := range items {
+		totalCost += item.ExpectedCost
+		totalRevenue += item.ExpectedRevenue
+		totalProfit += item.ExpectedProfit
 	}
 
-	overallMargin := 0.0
+	marginPercent := 0.0
 	if totalRevenue > 0 {
-		overallMargin = ((totalRevenue - totalCost) / totalRevenue) * 100
+		marginPercent = (totalProfit / totalRevenue) * 100
 	}
 
 	return domain.BudgetSummaryDTO{
-		ParentType:           parentType,
-		ParentID:             parentID,
-		DimensionCount:       len(dimensions),
-		TotalCost:            totalCost,
-		TotalRevenue:         totalRevenue,
-		OverallMarginPercent: overallMargin,
-		TotalProfit:          totalRevenue - totalCost,
+		ParentType:    parentType,
+		ParentID:      parentID,
+		ItemCount:     len(items),
+		TotalCost:     totalCost,
+		TotalRevenue:  totalRevenue,
+		TotalProfit:   totalProfit,
+		MarginPercent: marginPercent,
 	}
 }
 
 // ToProjectActualCostDTO converts ProjectActualCost to ProjectActualCostDTO
 func ToProjectActualCostDTO(cost *domain.ProjectActualCost) domain.ProjectActualCostDTO {
 	dto := domain.ProjectActualCostDTO{
-		ID:                cost.ID,
-		ProjectID:         cost.ProjectID,
-		CostType:          cost.CostType,
-		Description:       cost.Description,
-		Amount:            cost.Amount,
-		Currency:          cost.Currency,
-		CostDate:          cost.CostDate.Format("2006-01-02"),
-		BudgetDimensionID: cost.BudgetDimensionID,
-		ERPSource:         cost.ERPSource,
-		ERPReference:      cost.ERPReference,
-		ERPTransactionID:  cost.ERPTransactionID,
-		IsApproved:        cost.IsApproved,
-		ApprovedByID:      cost.ApprovedByID,
-		Notes:             cost.Notes,
-		CreatedAt:         cost.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:         cost.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		ID:               cost.ID,
+		ProjectID:        cost.ProjectID,
+		CostType:         cost.CostType,
+		Description:      cost.Description,
+		Amount:           cost.Amount,
+		Currency:         cost.Currency,
+		CostDate:         cost.CostDate.Format("2006-01-02"),
+		BudgetItemID:     cost.BudgetItemID,
+		ERPSource:        cost.ERPSource,
+		ERPReference:     cost.ERPReference,
+		ERPTransactionID: cost.ERPTransactionID,
+		IsApproved:       cost.IsApproved,
+		ApprovedByID:     cost.ApprovedByID,
+		Notes:            cost.Notes,
+		CreatedAt:        cost.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:        cost.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
 	if cost.PostingDate != nil {

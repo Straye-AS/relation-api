@@ -7,6 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// MaxPageSize is the maximum allowed page size for paginated queries
+const MaxPageSize = 200
+
 // ApplyCompanyFilter applies the multi-tenant company filter to a GORM query
 // This should be called on queries that need to be filtered by company_id
 // If no filter is set (user has access to all companies), the query is returned unchanged

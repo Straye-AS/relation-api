@@ -32,14 +32,14 @@ var (
 
 // ProjectService handles business logic for projects
 type ProjectService struct {
-	projectRepo    *repository.ProjectRepository
-	offerRepo      *repository.OfferRepository
-	customerRepo   *repository.CustomerRepository
-	dimensionRepo  *repository.BudgetDimensionRepository
-	activityRepo   *repository.ActivityRepository
-	companyService *CompanyService
-	logger         *zap.Logger
-	db             *gorm.DB
+	projectRepo     *repository.ProjectRepository
+	offerRepo       *repository.OfferRepository
+	customerRepo    *repository.CustomerRepository
+	budgetItemRepo  *repository.BudgetItemRepository
+	activityRepo    *repository.ActivityRepository
+	companyService  *CompanyService
+	logger          *zap.Logger
+	db              *gorm.DB
 }
 
 // NewProjectService creates a new ProjectService with basic dependencies
@@ -62,7 +62,7 @@ func NewProjectServiceWithDeps(
 	projectRepo *repository.ProjectRepository,
 	offerRepo *repository.OfferRepository,
 	customerRepo *repository.CustomerRepository,
-	dimensionRepo *repository.BudgetDimensionRepository,
+	budgetItemRepo *repository.BudgetItemRepository,
 	activityRepo *repository.ActivityRepository,
 	companyService *CompanyService,
 	logger *zap.Logger,
@@ -72,7 +72,7 @@ func NewProjectServiceWithDeps(
 		projectRepo:    projectRepo,
 		offerRepo:      offerRepo,
 		customerRepo:   customerRepo,
-		dimensionRepo:  dimensionRepo,
+		budgetItemRepo: budgetItemRepo,
 		activityRepo:   activityRepo,
 		companyService: companyService,
 		logger:         logger,
@@ -166,8 +166,8 @@ func (s *ProjectService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pro
 }
 
 // GetByIDWithRelations retrieves a project with all related data
-func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.ProjectDTO, []domain.BudgetDimensionDTO, []domain.ActivityDTO, error) {
-	project, dimensions, activities, err := s.projectRepo.GetByIDWithRelations(ctx, id)
+func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.ProjectDTO, []domain.BudgetItemDTO, []domain.ActivityDTO, error) {
+	project, budgetItems, activities, err := s.projectRepo.GetByIDWithRelations(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, nil, ErrProjectNotFound
@@ -177,9 +177,9 @@ func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID)
 
 	projectDTO := mapper.ToProjectDTO(project)
 
-	dimensionDTOs := make([]domain.BudgetDimensionDTO, len(dimensions))
-	for i, dim := range dimensions {
-		dimensionDTOs[i] = mapper.ToBudgetDimensionDTO(&dim)
+	itemDTOs := make([]domain.BudgetItemDTO, len(budgetItems))
+	for i, item := range budgetItems {
+		itemDTOs[i] = mapper.ToBudgetItemDTO(&item)
 	}
 
 	activityDTOs := make([]domain.ActivityDTO, len(activities))
@@ -187,7 +187,7 @@ func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID)
 		activityDTOs[i] = mapper.ToActivityDTO(&act)
 	}
 
-	return &projectDTO, dimensionDTOs, activityDTOs, nil
+	return &projectDTO, itemDTOs, activityDTOs, nil
 }
 
 // GetByIDWithDetails retrieves a project with full details including budget summary
@@ -457,9 +457,9 @@ func (s *ProjectService) ListWithFilters(ctx context.Context, page, pageSize int
 // Budget Inheritance Methods
 // ============================================================================
 
-// InheritBudgetFromOffer clones budget dimensions from an offer to the project.
+// InheritBudgetFromOffer clones budget items from an offer to the project.
 // This is typically called when a project is created from a won offer.
-// Returns the updated project and the count of dimensions cloned.
+// Returns the updated project and the count of items cloned.
 func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, offerID uuid.UUID) (*domain.InheritBudgetResponse, error) {
 	// Verify project exists
 	project, err := s.projectRepo.GetByID(ctx, projectID)
@@ -491,23 +491,23 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 		return nil, ErrOfferNotWon
 	}
 
-	// Get budget dimensions from offer
-	if s.dimensionRepo == nil {
-		return nil, fmt.Errorf("budget dimension repository not available")
+	// Get budget items from offer
+	if s.budgetItemRepo == nil {
+		return nil, fmt.Errorf("budget item repository not available")
 	}
-	dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, offerID)
+	items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, offerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get offer budget dimensions: %w", err)
+		return nil, fmt.Errorf("failed to get offer budget items: %w", err)
 	}
 
-	dimensionsCount := len(dimensions)
+	itemsCount := len(items)
 
-	if dimensionsCount == 0 {
-		s.logger.Info("no budget dimensions to inherit from offer",
+	if itemsCount == 0 {
+		s.logger.Info("no budget items to inherit from offer",
 			zap.String("projectID", projectID.String()),
 			zap.String("offerID", offerID.String()))
 
-		// Still update project to link to offer even if no dimensions
+		// Still update project to link to offer even if no items
 		project.OfferID = &offerID
 		project.Budget = offer.Value
 		if err := s.projectRepo.Update(ctx, project); err != nil {
@@ -521,8 +521,8 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 		}
 		dto := mapper.ToProjectDTO(project)
 		return &domain.InheritBudgetResponse{
-			Project:         &dto,
-			DimensionsCount: 0,
+			Project:    &dto,
+			ItemsCount: 0,
 		}, nil
 	}
 
@@ -532,24 +532,21 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Clone each dimension
-		for _, dim := range dimensions {
-			cloned := domain.BudgetDimension{
-				ParentType:          domain.BudgetParentProject,
-				ParentID:            projectID,
-				CategoryID:          dim.CategoryID,
-				CustomName:          dim.CustomName,
-				Cost:                dim.Cost,
-				Revenue:             dim.Revenue,
-				TargetMarginPercent: dim.TargetMarginPercent,
-				MarginOverride:      dim.MarginOverride,
-				Description:         dim.Description,
-				Quantity:            dim.Quantity,
-				Unit:                dim.Unit,
-				DisplayOrder:        dim.DisplayOrder,
+		// Clone each budget item
+		for _, item := range items {
+			cloned := domain.BudgetItem{
+				ParentType:     domain.BudgetParentProject,
+				ParentID:       projectID,
+				Name:           item.Name,
+				ExpectedCost:   item.ExpectedCost,
+				ExpectedMargin: item.ExpectedMargin,
+				Quantity:       item.Quantity,
+				PricePerItem:   item.PricePerItem,
+				Description:    item.Description,
+				DisplayOrder:   item.DisplayOrder,
 			}
 			if err := tx.Create(&cloned).Error; err != nil {
-				return fmt.Errorf("failed to clone budget dimension: %w", err)
+				return fmt.Errorf("failed to clone budget item: %w", err)
 			}
 		}
 
@@ -570,7 +567,7 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 
 	// Log activity
 	s.logActivity(ctx, projectID, "Budget inherited from offer",
-		fmt.Sprintf("Budget dimensions (%d items) inherited from offer '%s'", dimensionsCount, offer.Title))
+		fmt.Sprintf("Budget items (%d items) inherited from offer '%s'", itemsCount, offer.Title))
 
 	// Reload project to get updated data
 	project, err = s.projectRepo.GetByID(ctx, projectID)
@@ -580,8 +577,8 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 	dto := mapper.ToProjectDTO(project)
 
 	return &domain.InheritBudgetResponse{
-		Project:         &dto,
-		DimensionsCount: dimensionsCount,
+		Project:    &dto,
+		ItemsCount: itemsCount,
 	}, nil
 }
 
@@ -602,13 +599,13 @@ func (s *ProjectService) GetBudgetSummary(ctx context.Context, id uuid.UUID) (*d
 	}
 
 	dto := &domain.BudgetSummaryDTO{
-		ParentType:           domain.BudgetParentProject,
-		ParentID:             id,
-		DimensionCount:       summary.DimensionCount,
-		TotalCost:            summary.TotalCost,
-		TotalRevenue:         summary.TotalRevenue,
-		OverallMarginPercent: summary.MarginPercent,
-		TotalProfit:          summary.TotalMargin,
+		ParentType:    domain.BudgetParentProject,
+		ParentID:      id,
+		ItemCount:     summary.ItemCount,
+		TotalCost:     summary.TotalCost,
+		TotalRevenue:  summary.TotalRevenue,
+		TotalProfit:   summary.TotalProfit,
+		MarginPercent: summary.MarginPercent,
 	}
 
 	return dto, nil

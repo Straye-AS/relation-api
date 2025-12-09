@@ -51,7 +51,7 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
-	dimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
 
 	companyService := service.NewCompanyService(companyRepo, logger)
@@ -60,7 +60,7 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 		projectRepo,
 		offerRepo,
 		customerRepo,
-		dimensionRepo,
+		budgetItemRepo,
 		activityRepo,
 		companyService,
 		logger,
@@ -804,23 +804,23 @@ func createTestOfferForProject(t *testing.T, db *gorm.DB, customer *domain.Custo
 	return offer
 }
 
-// Helper to create budget dimensions for an offer
-func createTestBudgetDimensions(t *testing.T, db *gorm.DB, offerID uuid.UUID, count int) []domain.BudgetDimension {
-	dimensions := make([]domain.BudgetDimension, count)
+// Helper to create budget items for an offer
+func createTestBudgetItems(t *testing.T, db *gorm.DB, offerID uuid.UUID, count int) []domain.BudgetItem {
+	items := make([]domain.BudgetItem, count)
 	for i := 0; i < count; i++ {
-		dim := domain.BudgetDimension{
-			ParentType:   domain.BudgetParentOffer,
-			ParentID:     offerID,
-			CustomName:   fmt.Sprintf("Test Dimension %d", i+1),
-			Cost:         float64(10000 * (i + 1)),
-			Revenue:      float64(15000 * (i + 1)),
-			DisplayOrder: i,
+		item := domain.BudgetItem{
+			ParentType:     domain.BudgetParentOffer,
+			ParentID:       offerID,
+			Name:           fmt.Sprintf("Test Item %d", i+1),
+			ExpectedCost:   float64(10000 * (i + 1)),
+			ExpectedMargin: 50, // 50% margin
+			DisplayOrder:   i,
 		}
-		err := db.Create(&dim).Error
+		err := db.Create(&item).Error
 		require.NoError(t, err)
-		dimensions[i] = dim
+		items[i] = item
 	}
-	return dimensions
+	return items
 }
 
 // TestProjectHandler_InheritBudget tests the InheritBudget endpoint
@@ -833,9 +833,9 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "Inherit Budget Customer")
 
 	t.Run("inherit budget from won offer successfully", func(t *testing.T) {
-		// Create a won offer with budget dimensions
+		// Create a won offer with budget items
 		offer := createTestOfferForProject(t, db, customer, "Won Offer", domain.OfferPhaseWon, 150000, userCtx.UserID.String())
-		createTestBudgetDimensions(t, db, offer.ID, 3)
+		createTestBudgetItems(t, db, offer.ID, 3)
 
 		// Create a project to inherit into
 		project := createTestProject(t, db, customer, "Project for Inheritance", domain.ProjectStatusPlanning, userCtx.UserID.String())
@@ -863,19 +863,19 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, project.ID, result.Project.ID)
-		assert.Equal(t, 3, result.DimensionsCount)
+		assert.Equal(t, 3, result.ItemsCount)
 		assert.Equal(t, 150000.0, result.Project.Budget)
 		assert.True(t, result.Project.HasDetailedBudget)
 		assert.NotNil(t, result.Project.OfferID)
 		assert.Equal(t, offer.ID, *result.Project.OfferID)
 	})
 
-	t.Run("inherit budget from won offer without dimensions", func(t *testing.T) {
-		// Create a won offer without budget dimensions
-		offer := createTestOfferForProject(t, db, customer, "Won Offer No Dims", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
+	t.Run("inherit budget from won offer without budget items", func(t *testing.T) {
+		// Create a won offer without budget items
+		offer := createTestOfferForProject(t, db, customer, "Won Offer No Items", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
 
 		// Create a project to inherit into
-		project := createTestProject(t, db, customer, "Project No Dims", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project No Items", domain.ProjectStatusPlanning, userCtx.UserID.String())
 
 		reqBody := domain.InheritBudgetRequest{
 			OfferID: offer.ID,
@@ -899,7 +899,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.NotNil(t, result.Project)
-		assert.Equal(t, 0, result.DimensionsCount)
+		assert.Equal(t, 0, result.ItemsCount)
 		assert.Equal(t, 100000.0, result.Project.Budget)
 		assert.NotNil(t, result.Project.OfferID)
 	})

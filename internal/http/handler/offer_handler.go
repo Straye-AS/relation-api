@@ -506,12 +506,12 @@ func (h *OfferHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default IncludeDimensions to true when cloning.
+	// Default IncludeBudget to true when cloning.
 	// Using *bool allows distinguishing between "not specified" (nil -> default true)
-	// and "explicitly set to false" (user wants to exclude dimensions).
-	if req.IncludeDimensions == nil {
-		includeDims := true
-		req.IncludeDimensions = &includeDims
+	// and "explicitly set to false" (user wants to exclude budget items).
+	if req.IncludeBudget == nil {
+		includeBudget := true
+		req.IncludeBudget = &includeBudget
 	}
 
 	if err := validate.Struct(req); err != nil {
@@ -530,9 +530,9 @@ func (h *OfferHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, offer)
 }
 
-// GetWithBudgetDimensions godoc
+// GetWithBudgetItems godoc
 // @Summary Get offer with budget details
-// @Description Get an offer including budget dimensions and summary calculations
+// @Description Get an offer including budget items and summary calculations
 // @Tags Offers
 // @Produce json
 // @Param id path string true "Offer ID"
@@ -543,16 +543,16 @@ func (h *OfferHandler) Clone(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Security ApiKeyAuth
 // @Router /offers/{id}/detail [get]
-func (h *OfferHandler) GetWithBudgetDimensions(w http.ResponseWriter, r *http.Request) {
+func (h *OfferHandler) GetWithBudgetItems(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
 		return
 	}
 
-	offer, err := h.offerService.GetByIDWithBudgetDimensions(r.Context(), id)
+	offer, err := h.offerService.GetByIDWithBudgetItems(r.Context(), id)
 	if err != nil {
-		h.logger.Error("failed to get offer with budget dimensions", zap.Error(err), zap.String("offer_id", id.String()))
+		h.logger.Error("failed to get offer with budget items", zap.Error(err), zap.String("offer_id", id.String()))
 		h.handleOfferError(w, err)
 		return
 	}

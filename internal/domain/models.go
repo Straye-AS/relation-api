@@ -335,8 +335,8 @@ type ProjectActualCost struct {
 	Currency          string           `gorm:"type:varchar(3);not null;default:'NOK'"`
 	CostDate          time.Time        `gorm:"type:date;not null;column:cost_date"`
 	PostingDate       *time.Time       `gorm:"type:date;column:posting_date"`
-	BudgetDimensionID *uuid.UUID       `gorm:"type:uuid;column:budget_dimension_id"`
-	BudgetDimension   *BudgetDimension `gorm:"foreignKey:BudgetDimensionID"`
+	BudgetItemID *uuid.UUID  `gorm:"type:uuid;column:budget_item_id"`
+	BudgetItem   *BudgetItem `gorm:"foreignKey:BudgetItemID"`
 	ERPSource         ERPSource        `gorm:"type:erp_source;not null;default:'manual';column:erp_source"`
 	ERPReference      string           `gorm:"type:varchar(100);column:erp_reference"`
 	ERPTransactionID  string           `gorm:"type:varchar(100);column:erp_transaction_id"`
@@ -410,22 +410,23 @@ func (OfferNumberSequence) TableName() string {
 }
 
 // GetCompanyPrefix returns the offer number prefix for a company
+// Format: 2-letter slug used in offer numbers e.g., ST-2025-001
 func GetCompanyPrefix(companyID CompanyID) string {
 	switch companyID {
 	case CompanyStalbygg:
-		return "STB"
+		return "ST"
 	case CompanyHybridbygg:
-		return "HYB"
+		return "HB"
 	case CompanyIndustri:
-		return "IND"
+		return "IN"
 	case CompanyTak:
-		return "TAK"
+		return "TK"
 	case CompanyMontasje:
-		return "MON"
+		return "MO"
 	case CompanyGruppen:
-		return "GRP"
+		return "GR"
 	default:
-		return "GRP"
+		return "GR"
 	}
 }
 
@@ -443,44 +444,7 @@ type OfferItem struct {
 	Unit        string    `gorm:"type:varchar(50)"`
 }
 
-// BudgetDimensionCategory represents a predefined budget line type
-// Categories can be company-specific (CompanyID set) or global (CompanyID null)
-type BudgetDimensionCategory struct {
-	ID           string     `gorm:"type:varchar(50);primaryKey" json:"id"`
-	CompanyID    *CompanyID `gorm:"type:varchar(50);column:company_id;index" json:"companyId,omitempty"` // nil = global category available to all companies
-	Name         string     `gorm:"type:varchar(200);not null" json:"name"`
-	Description  string     `gorm:"type:text" json:"description,omitempty"`
-	DisplayOrder int        `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
-	IsActive     bool       `gorm:"not null;default:true;column:is_active" json:"isActive"`
-	CreatedAt    time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt    time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
-}
-
-// TableName returns the table name for BudgetDimensionCategory
-func (BudgetDimensionCategory) TableName() string {
-	return "budget_dimension_categories"
-}
-
-// BudgetCategoryID represents known budget dimension category IDs
-// These are reference constants - actual seed data is loaded separately
-type BudgetCategoryID string
-
-const (
-	BudgetCategorySteelStructure  BudgetCategoryID = "steel_structure"
-	BudgetCategoryHybridStructure BudgetCategoryID = "hybrid_structure"
-	BudgetCategoryRoofing         BudgetCategoryID = "roofing"
-	BudgetCategoryCladding        BudgetCategoryID = "cladding"
-	BudgetCategoryFoundation      BudgetCategoryID = "foundation"
-	BudgetCategoryAssembly        BudgetCategoryID = "assembly"
-	BudgetCategoryTransport       BudgetCategoryID = "transport"
-	BudgetCategoryEngineering     BudgetCategoryID = "engineering"
-	BudgetCategoryProjectMgmt     BudgetCategoryID = "project_management"
-	BudgetCategoryCraneRigging    BudgetCategoryID = "crane_rigging"
-	BudgetCategoryMiscellaneous   BudgetCategoryID = "miscellaneous"
-	BudgetCategoryContingency     BudgetCategoryID = "contingency"
-)
-
-// BudgetParentType represents the type of entity a budget dimension belongs to
+// BudgetParentType represents the type of entity a budget item belongs to
 type BudgetParentType string
 
 const (
@@ -488,42 +452,37 @@ const (
 	BudgetParentProject BudgetParentType = "project"
 )
 
-// BudgetDimension represents a budget line item that can belong to an offer or project
-type BudgetDimension struct {
-	ID                  uuid.UUID                `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	ParentType          BudgetParentType         `gorm:"type:budget_parent_type;not null;column:parent_type" json:"parentType"`
-	ParentID            uuid.UUID                `gorm:"type:uuid;not null;column:parent_id" json:"parentId"`
-	CategoryID          *string                  `gorm:"type:varchar(50);column:category_id" json:"categoryId,omitempty"`
-	Category            *BudgetDimensionCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
-	CustomName          string                   `gorm:"type:varchar(200);column:custom_name" json:"customName,omitempty"`
-	Cost                float64                  `gorm:"type:decimal(15,2);not null;default:0" json:"cost"`
-	Revenue             float64                  `gorm:"type:decimal(15,2);not null;default:0" json:"revenue"`
-	TargetMarginPercent *float64                 `gorm:"type:decimal(5,2);column:target_margin_percent" json:"targetMarginPercent,omitempty"`
-	MarginOverride      bool                     `gorm:"not null;default:false;column:margin_override" json:"marginOverride"`
-	MarginPercent       float64                  `gorm:"type:decimal(5,2);column:margin_percent;->" json:"marginPercent"` // Read-only, computed by DB
-	Description         string                   `gorm:"type:text" json:"description,omitempty"`
-	Quantity            *float64                 `gorm:"type:decimal(10,2)" json:"quantity,omitempty"`
-	Unit                string                   `gorm:"type:varchar(50)" json:"unit,omitempty"`
-	DisplayOrder        int                      `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
-	CreatedAt           time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt           time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+// BudgetItem represents a flexible budget line item that can belong to an offer or project
+// Users define their own budget items with name, cost, margin, and optional quantity/price fields
+type BudgetItem struct {
+	ID              uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	ParentType      BudgetParentType `gorm:"type:budget_parent_type;not null;column:parent_type" json:"parentType"`
+	ParentID        uuid.UUID        `gorm:"type:uuid;not null;column:parent_id" json:"parentId"`
+	Name            string           `gorm:"type:varchar(200);not null" json:"name"`
+	ExpectedCost    float64          `gorm:"type:decimal(15,2);not null;default:0;column:expected_cost" json:"expectedCost"`
+	ExpectedMargin  float64          `gorm:"type:decimal(5,2);not null;default:0;column:expected_margin" json:"expectedMargin"` // Percentage 0-100
+	ExpectedRevenue float64          `gorm:"type:decimal(15,2);column:expected_revenue;->" json:"expectedRevenue"`              // Computed: cost / (1 - margin/100)
+	ExpectedProfit  float64          `gorm:"type:decimal(15,2);column:expected_profit;->" json:"expectedProfit"`                // Computed: revenue - cost
+	Quantity        *float64         `gorm:"type:decimal(10,2)" json:"quantity,omitempty"`
+	PricePerItem    *float64         `gorm:"type:decimal(15,2);column:price_per_item" json:"pricePerItem,omitempty"`
+	Description     string           `gorm:"type:text" json:"description,omitempty"`
+	DisplayOrder    int              `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
+	CreatedAt       time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt       time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
-// GetName returns the display name (category name or custom name)
-func (bd *BudgetDimension) GetName() string {
-	if bd.Category != nil {
-		return bd.Category.Name
-	}
-	return bd.CustomName
+// TableName returns the table name for BudgetItem
+func (BudgetItem) TableName() string {
+	return "budget_items"
 }
 
 // BudgetSummary holds aggregated budget totals for a parent entity (offer or project)
 type BudgetSummary struct {
-	TotalCost      float64 `json:"totalCost"`
-	TotalRevenue   float64 `json:"totalRevenue"`
-	TotalMargin    float64 `json:"totalMargin"`   // Revenue - Cost
-	MarginPercent  float64 `json:"marginPercent"` // ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
-	DimensionCount int     `json:"dimensionCount"`
+	TotalCost     float64 `json:"totalCost"`
+	TotalRevenue  float64 `json:"totalRevenue"`
+	TotalProfit   float64 `json:"totalProfit"`
+	MarginPercent float64 `json:"marginPercent"` // (Profit / Revenue) * 100, 0 if revenue=0
+	ItemCount     int     `json:"itemCount"`
 }
 
 // ActivityTargetType represents the type of entity an activity is associated with

@@ -42,7 +42,7 @@ type DealService struct {
 	projectRepo      *repository.ProjectRepository
 	activityRepo     *repository.ActivityRepository
 	offerRepo        *repository.OfferRepository
-	dimensionRepo    *repository.BudgetDimensionRepository
+	budgetItemRepo   *repository.BudgetItemRepository
 	notificationRepo *repository.NotificationRepository
 	logger           *zap.Logger
 	db               *gorm.DB
@@ -55,7 +55,7 @@ func NewDealService(
 	projectRepo *repository.ProjectRepository,
 	activityRepo *repository.ActivityRepository,
 	offerRepo *repository.OfferRepository,
-	dimensionRepo *repository.BudgetDimensionRepository,
+	budgetItemRepo *repository.BudgetItemRepository,
 	notificationRepo *repository.NotificationRepository,
 	logger *zap.Logger,
 	db *gorm.DB,
@@ -67,7 +67,7 @@ func NewDealService(
 		projectRepo:      projectRepo,
 		activityRepo:     activityRepo,
 		offerRepo:        offerRepo,
-		dimensionRepo:    dimensionRepo,
+		budgetItemRepo:   budgetItemRepo,
 		notificationRepo: notificationRepo,
 		logger:           logger,
 		db:               db,
@@ -843,44 +843,41 @@ func (s *DealService) CreateOfferFromDeal(ctx context.Context, dealID uuid.UUID,
 			return fmt.Errorf("failed to create offer: %w", err)
 		}
 
-		// If template offer provided, copy budget dimensions
-		if req.TemplateOfferID != nil && s.dimensionRepo != nil {
-			dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, *req.TemplateOfferID)
-			if err == nil && len(dimensions) > 0 {
-				s.logger.Info("copying budget dimensions from template offer",
+		// If template offer provided, copy budget items
+		if req.TemplateOfferID != nil && s.budgetItemRepo != nil {
+			items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, *req.TemplateOfferID)
+			if err == nil && len(items) > 0 {
+				s.logger.Info("copying budget items from template offer",
 					zap.String("template_offer_id", req.TemplateOfferID.String()),
 					zap.String("new_offer_id", createdOffer.ID.String()),
-					zap.Int("dimension_count", len(dimensions)))
+					zap.Int("item_count", len(items)))
 
 				totalRevenue := 0.0
-				for _, dim := range dimensions {
-					cloned := domain.BudgetDimension{
-						ParentType:          domain.BudgetParentOffer,
-						ParentID:            createdOffer.ID,
-						CategoryID:          dim.CategoryID,
-						CustomName:          dim.CustomName,
-						Cost:                dim.Cost,
-						Revenue:             dim.Revenue,
-						TargetMarginPercent: dim.TargetMarginPercent,
-						MarginOverride:      dim.MarginOverride,
-						Description:         dim.Description,
-						Quantity:            dim.Quantity,
-						Unit:                dim.Unit,
-						DisplayOrder:        dim.DisplayOrder,
+				for _, item := range items {
+					cloned := domain.BudgetItem{
+						ParentType:     domain.BudgetParentOffer,
+						ParentID:       createdOffer.ID,
+						Name:           item.Name,
+						ExpectedCost:   item.ExpectedCost,
+						ExpectedMargin: item.ExpectedMargin,
+						Quantity:       item.Quantity,
+						PricePerItem:   item.PricePerItem,
+						Description:    item.Description,
+						DisplayOrder:   item.DisplayOrder,
 					}
 					if err := tx.Create(&cloned).Error; err != nil {
-						s.logger.Warn("failed to clone budget dimension",
+						s.logger.Warn("failed to clone budget item",
 							zap.Error(err),
-							zap.String("dimension_id", dim.ID.String()))
+							zap.String("item_id", item.ID.String()))
 					}
-					totalRevenue += dim.Revenue
+					totalRevenue += item.ExpectedRevenue
 				}
 
-				// Update offer value from dimensions if template was used
+				// Update offer value from items if template was used
 				if totalRevenue > 0 {
 					createdOffer.Value = totalRevenue
 					if err := tx.Save(createdOffer).Error; err != nil {
-						s.logger.Warn("failed to update offer value from dimensions", zap.Error(err))
+						s.logger.Warn("failed to update offer value from items", zap.Error(err))
 					}
 				}
 			}

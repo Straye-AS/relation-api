@@ -140,8 +140,8 @@ func (r *ProjectRepository) Search(ctx context.Context, searchQuery string, limi
 }
 
 // GetByIDWithRelations retrieves a project by ID with all related data
-// Preloads: Customer, Offer, Deal, BudgetDimensions, Activities
-func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.Project, []domain.BudgetDimension, []domain.Activity, error) {
+// Preloads: Customer, Offer, Deal, BudgetItems, Activities
+func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.Project, []domain.BudgetItem, []domain.Activity, error) {
 	var project domain.Project
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
@@ -154,15 +154,14 @@ func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UU
 		return nil, nil, nil, err
 	}
 
-	// Fetch budget dimensions separately (polymorphic relationship)
-	var dimensions []domain.BudgetDimension
+	// Fetch budget items separately (polymorphic relationship)
+	var items []domain.BudgetItem
 	err = r.db.WithContext(ctx).
-		Preload("Category").
 		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentProject, id).
 		Order("display_order ASC, created_at ASC").
-		Find(&dimensions).Error
+		Find(&items).Error
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load budget dimensions: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to load budget items: %w", err)
 	}
 
 	// Fetch activities separately (polymorphic relationship)
@@ -176,12 +175,12 @@ func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UU
 		return nil, nil, nil, fmt.Errorf("failed to load activities: %w", err)
 	}
 
-	return &project, dimensions, activities, nil
+	return &project, items, activities, nil
 }
 
 // CalculateBudgetMetrics calculates budget metrics for a project
 // Returns: budget, spent, remaining, percent_used
-// If hasDetailedBudget is true, spent is calculated from BudgetDimensions cost sum
+// If hasDetailedBudget is true, spent is calculated from BudgetItems expected_cost sum
 // Otherwise, it uses the project's Spent field directly
 func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectID uuid.UUID) (*ProjectBudgetMetrics, error) {
 	// First get the project to get budget and check if it has detailed budget
@@ -199,15 +198,15 @@ func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectI
 
 	// Calculate spent based on whether project uses detailed budget
 	if project.HasDetailedBudget {
-		// Sum cost from budget dimensions
+		// Sum expected_cost from budget items
 		var totalCost float64
 		err = r.db.WithContext(ctx).
-			Model(&domain.BudgetDimension{}).
+			Model(&domain.BudgetItem{}).
 			Where("parent_type = ? AND parent_id = ?", domain.BudgetParentProject, projectID).
-			Select("COALESCE(SUM(cost), 0)").
+			Select("COALESCE(SUM(expected_cost), 0)").
 			Scan(&totalCost).Error
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate budget dimension costs: %w", err)
+			return nil, fmt.Errorf("failed to calculate budget item costs: %w", err)
 		}
 		metrics.Spent = totalCost
 	} else {
@@ -285,18 +284,19 @@ func (r *ProjectRepository) UpdateHealth(ctx context.Context, projectID uuid.UUI
 	return nil
 }
 
-// GetBudgetSummary returns aggregated budget totals for a project's budget dimensions
+// GetBudgetSummary returns aggregated budget totals for a project's budget items
 func (r *ProjectRepository) GetBudgetSummary(ctx context.Context, projectID uuid.UUID) (*domain.BudgetSummary, error) {
 	var result struct {
-		TotalCost      float64
-		TotalRevenue   float64
-		DimensionCount int
+		TotalCost    float64
+		TotalRevenue float64
+		TotalProfit  float64
+		ItemCount    int
 	}
 
 	err := r.db.WithContext(ctx).
-		Model(&domain.BudgetDimension{}).
+		Model(&domain.BudgetItem{}).
 		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentProject, projectID).
-		Select("COALESCE(SUM(cost), 0) as total_cost, COALESCE(SUM(revenue), 0) as total_revenue, COUNT(*) as dimension_count").
+		Select("COALESCE(SUM(expected_cost), 0) as total_cost, COALESCE(SUM(expected_revenue), 0) as total_revenue, COALESCE(SUM(expected_profit), 0) as total_profit, COUNT(*) as item_count").
 		Scan(&result).Error
 
 	if err != nil {
@@ -304,15 +304,15 @@ func (r *ProjectRepository) GetBudgetSummary(ctx context.Context, projectID uuid
 	}
 
 	summary := &domain.BudgetSummary{
-		TotalCost:      result.TotalCost,
-		TotalRevenue:   result.TotalRevenue,
-		TotalMargin:    result.TotalRevenue - result.TotalCost,
-		DimensionCount: result.DimensionCount,
+		TotalCost:    result.TotalCost,
+		TotalRevenue: result.TotalRevenue,
+		TotalProfit:  result.TotalProfit,
+		ItemCount:    result.ItemCount,
 	}
 
-	// Calculate margin percent: ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
+	// Calculate margin percent: (Profit / Revenue) * 100, 0 if revenue=0
 	if result.TotalRevenue > 0 {
-		summary.MarginPercent = ((result.TotalRevenue - result.TotalCost) / result.TotalRevenue) * 100
+		summary.MarginPercent = (result.TotalProfit / result.TotalRevenue) * 100
 	}
 
 	return summary, nil

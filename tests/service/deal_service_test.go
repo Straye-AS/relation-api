@@ -37,10 +37,10 @@ func createDealService(t *testing.T, db *gorm.DB) *service.DealService {
 	projectRepo := repository.NewProjectRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
-	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 
-	return service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, logger, db)
+	return service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, logger, db)
 }
 
 func createTestContext() context.Context {
@@ -828,25 +828,25 @@ func TestDealService_CreateOfferFromDealWithTemplate(t *testing.T) {
 		}
 		require.NoError(t, db.Create(templateOffer).Error)
 
-		// Add budget dimensions to template
-		dim1 := &domain.BudgetDimension{
-			ParentType:   domain.BudgetParentOffer,
-			ParentID:     templateOffer.ID,
-			CustomName:   "Labor",
-			Cost:         10000,
-			Revenue:      15000,
-			DisplayOrder: 0,
+		// Add budget items to template
+		item1 := &domain.BudgetItem{
+			ParentType:     domain.BudgetParentOffer,
+			ParentID:       templateOffer.ID,
+			Name:           "Labor",
+			ExpectedCost:   10000,
+			ExpectedMargin: 50, // 50% margin -> Revenue=15000
+			DisplayOrder:   0,
 		}
-		dim2 := &domain.BudgetDimension{
-			ParentType:   domain.BudgetParentOffer,
-			ParentID:     templateOffer.ID,
-			CustomName:   "Materials",
-			Cost:         5000,
-			Revenue:      8000,
-			DisplayOrder: 1,
+		item2 := &domain.BudgetItem{
+			ParentType:     domain.BudgetParentOffer,
+			ParentID:       templateOffer.ID,
+			Name:           "Materials",
+			ExpectedCost:   5000,
+			ExpectedMargin: 60, // 60% margin -> Revenue=8000
+			DisplayOrder:   1,
 		}
-		require.NoError(t, db.Create(dim1).Error)
-		require.NoError(t, db.Create(dim2).Error)
+		require.NoError(t, db.Create(item1).Error)
+		require.NoError(t, db.Create(item2).Error)
 
 		// Create deal
 		deal, err := svc.Create(ctx, &domain.CreateDealRequest{
@@ -867,19 +867,19 @@ func TestDealService_CreateOfferFromDealWithTemplate(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// Verify budget dimensions were copied
-		var newDimensions []domain.BudgetDimension
+		// Verify budget items were copied
+		var newItems []domain.BudgetItem
 		err = db.Where("parent_type = ? AND parent_id = ?", domain.BudgetParentOffer, result.Offer.ID).
 			Order("display_order ASC").
-			Find(&newDimensions).Error
+			Find(&newItems).Error
 		require.NoError(t, err)
-		assert.Len(t, newDimensions, 2)
-		assert.Equal(t, "Labor", newDimensions[0].CustomName)
-		assert.Equal(t, float64(10000), newDimensions[0].Cost)
-		assert.Equal(t, float64(15000), newDimensions[0].Revenue)
-		assert.Equal(t, "Materials", newDimensions[1].CustomName)
+		assert.Len(t, newItems, 2)
+		assert.Equal(t, "Labor", newItems[0].Name)
+		assert.Equal(t, float64(10000), newItems[0].ExpectedCost)
+		assert.Equal(t, float64(50), newItems[0].ExpectedMargin)
+		assert.Equal(t, "Materials", newItems[1].Name)
 
-		// Offer value should be updated from dimensions
+		// Offer value should be updated from budget items
 		assert.Equal(t, float64(23000), result.Offer.Value) // 15000 + 8000
 	})
 }

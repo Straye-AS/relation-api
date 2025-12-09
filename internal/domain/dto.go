@@ -160,45 +160,33 @@ type OfferItemDTO struct {
 	Unit        string    `json:"unit,omitempty"`
 }
 
-// Budget Dimension DTOs
+// Budget Item DTOs
 
-type BudgetDimensionCategoryDTO struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Description  string `json:"description,omitempty"`
-	DisplayOrder int    `json:"displayOrder"`
-	IsActive     bool   `json:"isActive"`
-}
-
-type BudgetDimensionDTO struct {
-	ID                  uuid.UUID                   `json:"id"`
-	ParentType          BudgetParentType            `json:"parentType"`
-	ParentID            uuid.UUID                   `json:"parentId"`
-	CategoryID          *string                     `json:"categoryId,omitempty"`
-	Category            *BudgetDimensionCategoryDTO `json:"category,omitempty"`
-	CustomName          string                      `json:"customName,omitempty"`
-	Name                string                      `json:"name"` // Resolved name (category or custom)
-	Cost                float64                     `json:"cost"`
-	Revenue             float64                     `json:"revenue"`
-	TargetMarginPercent *float64                    `json:"targetMarginPercent,omitempty"`
-	MarginOverride      bool                        `json:"marginOverride"`
-	MarginPercent       float64                     `json:"marginPercent"`
-	Description         string                      `json:"description,omitempty"`
-	Quantity            *float64                    `json:"quantity,omitempty"`
-	Unit                string                      `json:"unit,omitempty"`
-	DisplayOrder        int                         `json:"displayOrder"`
-	CreatedAt           string                      `json:"createdAt"`
-	UpdatedAt           string                      `json:"updatedAt"`
+type BudgetItemDTO struct {
+	ID              uuid.UUID        `json:"id"`
+	ParentType      BudgetParentType `json:"parentType"`
+	ParentID        uuid.UUID        `json:"parentId"`
+	Name            string           `json:"name"`
+	ExpectedCost    float64          `json:"expectedCost"`
+	ExpectedMargin  float64          `json:"expectedMargin"`
+	ExpectedRevenue float64          `json:"expectedRevenue"`
+	ExpectedProfit  float64          `json:"expectedProfit"`
+	Quantity        *float64         `json:"quantity,omitempty"`
+	PricePerItem    *float64         `json:"pricePerItem,omitempty"`
+	Description     string           `json:"description,omitempty"`
+	DisplayOrder    int              `json:"displayOrder"`
+	CreatedAt       string           `json:"createdAt"`
+	UpdatedAt       string           `json:"updatedAt"`
 }
 
 type BudgetSummaryDTO struct {
-	ParentType           BudgetParentType `json:"parentType"`
-	ParentID             uuid.UUID        `json:"parentId"`
-	DimensionCount       int              `json:"dimensionCount"`
-	TotalCost            float64          `json:"totalCost"`
-	TotalRevenue         float64          `json:"totalRevenue"`
-	OverallMarginPercent float64          `json:"overallMarginPercent"`
-	TotalProfit          float64          `json:"totalProfit"`
+	ParentType    BudgetParentType `json:"parentType,omitempty"`
+	ParentID      uuid.UUID        `json:"parentId,omitempty"`
+	TotalCost     float64          `json:"totalCost"`
+	TotalRevenue  float64          `json:"totalRevenue"`
+	TotalProfit   float64          `json:"totalProfit"`
+	MarginPercent float64          `json:"marginPercent"`
+	ItemCount     int              `json:"itemCount"`
 }
 
 type ProjectDTO struct {
@@ -231,25 +219,25 @@ type ProjectDTO struct {
 // Project Actual Cost DTOs
 
 type ProjectActualCostDTO struct {
-	ID                uuid.UUID  `json:"id"`
-	ProjectID         uuid.UUID  `json:"projectId"`
-	CostType          CostType   `json:"costType"`
-	Description       string     `json:"description"`
-	Amount            float64    `json:"amount"`
-	Currency          string     `json:"currency"`
-	CostDate          string     `json:"costDate"`
-	PostingDate       string     `json:"postingDate,omitempty"`
-	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
-	ERPSource         ERPSource  `json:"erpSource"`
-	ERPReference      string     `json:"erpReference,omitempty"`
-	ERPTransactionID  string     `json:"erpTransactionId,omitempty"`
-	ERPSyncedAt       string     `json:"erpSyncedAt,omitempty"`
-	IsApproved        bool       `json:"isApproved"`
-	ApprovedByID      string     `json:"approvedById,omitempty"`
-	ApprovedAt        string     `json:"approvedAt,omitempty"`
-	Notes             string     `json:"notes,omitempty"`
-	CreatedAt         string     `json:"createdAt"`
-	UpdatedAt         string     `json:"updatedAt"`
+	ID               uuid.UUID  `json:"id"`
+	ProjectID        uuid.UUID  `json:"projectId"`
+	CostType         CostType   `json:"costType"`
+	Description      string     `json:"description"`
+	Amount           float64    `json:"amount"`
+	Currency         string     `json:"currency"`
+	CostDate         string     `json:"costDate"`
+	PostingDate      string     `json:"postingDate,omitempty"`
+	BudgetItemID     *uuid.UUID `json:"budgetItemId,omitempty"`
+	ERPSource        ERPSource  `json:"erpSource"`
+	ERPReference     string     `json:"erpReference,omitempty"`
+	ERPTransactionID string     `json:"erpTransactionId,omitempty"`
+	ERPSyncedAt      string     `json:"erpSyncedAt,omitempty"`
+	IsApproved       bool       `json:"isApproved"`
+	ApprovedByID     string     `json:"approvedById,omitempty"`
+	ApprovedAt       string     `json:"approvedAt,omitempty"`
+	Notes            string     `json:"notes,omitempty"`
+	CreatedAt        string     `json:"createdAt"`
+	UpdatedAt        string     `json:"updatedAt"`
 }
 
 type ProjectCostSummaryDTO struct {
@@ -670,85 +658,76 @@ type UpdateOfferItemRequest struct {
 	Unit        string  `json:"unit,omitempty" validate:"max=50"`
 }
 
-// Budget Dimension Request DTOs
+// Budget Item Request DTOs
 
-type CreateBudgetDimensionRequest struct {
-	ParentType          BudgetParentType `json:"parentType" validate:"required"`
-	ParentID            uuid.UUID        `json:"parentId" validate:"required"`
-	CategoryID          *string          `json:"categoryId,omitempty" validate:"omitempty,max=50"`
-	CustomName          string           `json:"customName,omitempty" validate:"max=200"`
-	Cost                float64          `json:"cost" validate:"gte=0"`
-	Revenue             float64          `json:"revenue,omitempty" validate:"gte=0"`
-	TargetMarginPercent *float64         `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
-	MarginOverride      bool             `json:"marginOverride,omitempty"`
-	Description         string           `json:"description,omitempty"`
-	Quantity            *float64         `json:"quantity,omitempty" validate:"omitempty,gte=0"`
-	Unit                string           `json:"unit,omitempty" validate:"max=50"`
-	DisplayOrder        int              `json:"displayOrder,omitempty" validate:"gte=0"`
+type CreateBudgetItemRequest struct {
+	ParentType     BudgetParentType `json:"parentType" validate:"required"`
+	ParentID       uuid.UUID        `json:"parentId" validate:"required"`
+	Name           string           `json:"name" validate:"required,max=200"`
+	ExpectedCost   float64          `json:"expectedCost" validate:"gte=0"`
+	ExpectedMargin float64          `json:"expectedMargin" validate:"gte=0,lte=100"`
+	Quantity       *float64         `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	PricePerItem   *float64         `json:"pricePerItem,omitempty" validate:"omitempty,gte=0"`
+	Description    string           `json:"description,omitempty"`
+	DisplayOrder   int              `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
-type UpdateBudgetDimensionRequest struct {
-	CategoryID          *string  `json:"categoryId,omitempty" validate:"omitempty,max=50"`
-	CustomName          string   `json:"customName,omitempty" validate:"max=200"`
-	Cost                float64  `json:"cost" validate:"gte=0"`
-	Revenue             float64  `json:"revenue,omitempty" validate:"gte=0"`
-	TargetMarginPercent *float64 `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
-	MarginOverride      bool     `json:"marginOverride,omitempty"`
-	Description         string   `json:"description,omitempty"`
-	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
-	Unit                string   `json:"unit,omitempty" validate:"max=50"`
-	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
+type UpdateBudgetItemRequest struct {
+	Name           string   `json:"name" validate:"required,max=200"`
+	ExpectedCost   float64  `json:"expectedCost" validate:"gte=0"`
+	ExpectedMargin float64  `json:"expectedMargin" validate:"gte=0,lte=100"`
+	Quantity       *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	PricePerItem   *float64 `json:"pricePerItem,omitempty" validate:"omitempty,gte=0"`
+	Description    string   `json:"description,omitempty"`
+	DisplayOrder   int      `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
-// ReorderDimensionsRequest contains the ordered list of dimension IDs
-type ReorderDimensionsRequest struct {
+// ReorderBudgetItemsRequest contains the ordered list of budget item IDs
+type ReorderBudgetItemsRequest struct {
 	OrderedIDs []uuid.UUID `json:"orderedIds" validate:"required,min=1"`
 }
 
-// AddOfferBudgetDimensionRequest is the simplified request for adding dimensions to an offer
+// AddOfferBudgetItemRequest is the simplified request for adding budget items to an offer
 // ParentType and ParentID are inferred from the URL
-type AddOfferBudgetDimensionRequest struct {
-	CategoryID          *string  `json:"categoryId,omitempty" validate:"omitempty,max=50"`
-	CustomName          string   `json:"customName,omitempty" validate:"max=200"`
-	Cost                float64  `json:"cost" validate:"gt=0"`
-	Revenue             float64  `json:"revenue,omitempty" validate:"gte=0"`
-	TargetMarginPercent *float64 `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
-	MarginOverride      bool     `json:"marginOverride,omitempty"`
-	Description         string   `json:"description,omitempty"`
-	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
-	Unit                string   `json:"unit,omitempty" validate:"max=50"`
-	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
+type AddOfferBudgetItemRequest struct {
+	Name           string   `json:"name" validate:"required,max=200"`
+	ExpectedCost   float64  `json:"expectedCost" validate:"gte=0"`
+	ExpectedMargin float64  `json:"expectedMargin" validate:"gte=0,lte=100"`
+	Quantity       *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	PricePerItem   *float64 `json:"pricePerItem,omitempty" validate:"omitempty,gte=0"`
+	Description    string   `json:"description,omitempty"`
+	DisplayOrder   int      `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
 // Project Actual Cost Request DTOs
 
 type CreateProjectActualCostRequest struct {
-	ProjectID         uuid.UUID  `json:"projectId" validate:"required"`
-	CostType          CostType   `json:"costType" validate:"required"`
-	Description       string     `json:"description" validate:"required,max=500"`
-	Amount            float64    `json:"amount" validate:"required"`
-	Currency          string     `json:"currency,omitempty" validate:"max=3"`
-	CostDate          time.Time  `json:"costDate" validate:"required"`
-	PostingDate       *time.Time `json:"postingDate,omitempty"`
-	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
-	ERPSource         ERPSource  `json:"erpSource,omitempty"`
-	ERPReference      string     `json:"erpReference,omitempty" validate:"max=100"`
-	ERPTransactionID  string     `json:"erpTransactionId,omitempty" validate:"max=100"`
-	Notes             string     `json:"notes,omitempty"`
+	ProjectID        uuid.UUID  `json:"projectId" validate:"required"`
+	CostType         CostType   `json:"costType" validate:"required"`
+	Description      string     `json:"description" validate:"required,max=500"`
+	Amount           float64    `json:"amount" validate:"required"`
+	Currency         string     `json:"currency,omitempty" validate:"max=3"`
+	CostDate         time.Time  `json:"costDate" validate:"required"`
+	PostingDate      *time.Time `json:"postingDate,omitempty"`
+	BudgetItemID     *uuid.UUID `json:"budgetItemId,omitempty"`
+	ERPSource        ERPSource  `json:"erpSource,omitempty"`
+	ERPReference     string     `json:"erpReference,omitempty" validate:"max=100"`
+	ERPTransactionID string     `json:"erpTransactionId,omitempty" validate:"max=100"`
+	Notes            string     `json:"notes,omitempty"`
 }
 
 type UpdateProjectActualCostRequest struct {
-	CostType          CostType   `json:"costType" validate:"required"`
-	Description       string     `json:"description" validate:"required,max=500"`
-	Amount            float64    `json:"amount" validate:"required"`
-	Currency          string     `json:"currency,omitempty" validate:"max=3"`
-	CostDate          time.Time  `json:"costDate" validate:"required"`
-	PostingDate       *time.Time `json:"postingDate,omitempty"`
-	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
-	ERPSource         ERPSource  `json:"erpSource,omitempty"`
-	ERPReference      string     `json:"erpReference,omitempty" validate:"max=100"`
-	ERPTransactionID  string     `json:"erpTransactionId,omitempty" validate:"max=100"`
-	Notes             string     `json:"notes,omitempty"`
+	CostType         CostType   `json:"costType" validate:"required"`
+	Description      string     `json:"description" validate:"required,max=500"`
+	Amount           float64    `json:"amount" validate:"required"`
+	Currency         string     `json:"currency,omitempty" validate:"max=3"`
+	CostDate         time.Time  `json:"costDate" validate:"required"`
+	PostingDate      *time.Time `json:"postingDate,omitempty"`
+	BudgetItemID     *uuid.UUID `json:"budgetItemId,omitempty"`
+	ERPSource        ERPSource  `json:"erpSource,omitempty"`
+	ERPReference     string     `json:"erpReference,omitempty" validate:"max=100"`
+	ERPTransactionID string     `json:"erpTransactionId,omitempty" validate:"max=100"`
+	Notes            string     `json:"notes,omitempty"`
 }
 
 type ApproveProjectActualCostRequest struct {
@@ -784,9 +763,9 @@ type AdvanceOfferRequest struct {
 
 // CloneOfferRequest contains options for cloning an offer
 type CloneOfferRequest struct {
-	NewTitle          string `json:"newTitle,omitempty" validate:"max=200"`
-	IncludeDimensions *bool  `json:"includeDimensions,omitempty"` // Default true - clone budget dimensions (nil treated as true)
-	IncludeFiles      bool   `json:"includeFiles"`                // Default false - files are not cloned by default
+	NewTitle         string `json:"newTitle,omitempty" validate:"max=200"`
+	IncludeBudget    *bool  `json:"includeBudget,omitempty"` // Default true - clone budget items (nil treated as true)
+	IncludeFiles     bool   `json:"includeFiles"`            // Default false - files are not cloned by default
 }
 
 // AcceptOfferRequest contains options when accepting an offer
@@ -807,12 +786,12 @@ type RejectOfferRequest struct {
 	Reason string `json:"reason,omitempty" validate:"max=500"`
 }
 
-// OfferDetailDTO includes offer with budget dimensions and summary
+// OfferDetailDTO includes offer with budget items and summary
 type OfferDetailDTO struct {
 	OfferDTO
-	BudgetDimensions []BudgetDimensionDTO `json:"budgetDimensions,omitempty"`
-	BudgetSummary    *BudgetSummaryDTO    `json:"budgetSummary,omitempty"`
-	FilesCount       int                  `json:"filesCount"`
+	BudgetItems   []BudgetItemDTO   `json:"budgetItems,omitempty"`
+	BudgetSummary *BudgetSummaryDTO `json:"budgetSummary,omitempty"`
+	FilesCount    int               `json:"filesCount"`
 }
 
 type ProjectBudgetDTO struct {
@@ -1019,8 +998,8 @@ type InheritBudgetRequest struct {
 
 // InheritBudgetResponse contains the result of budget inheritance from an offer
 type InheritBudgetResponse struct {
-	Project         *ProjectDTO `json:"project"`
-	DimensionsCount int         `json:"dimensionsCount"`
+	Project    *ProjectDTO `json:"project"`
+	ItemsCount int         `json:"itemsCount"`
 }
 
 // ProjectWithDetailsDTO includes project data with related entities and budget summary

@@ -36,7 +36,7 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 	offerItemRepo := repository.NewOfferItemRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
-	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
@@ -48,7 +48,7 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 		offerItemRepo,
 		customerRepo,
 		projectRepo,
-		budgetDimensionRepo,
+		budgetItemRepo,
 		fileRepo,
 		activityRepo,
 		companyService,
@@ -627,10 +627,10 @@ func TestOfferHandler_Clone(t *testing.T) {
 	t.Run("clone offer with new title", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
 
-		includeDimensions := true
+		includeBudget := true
 		reqBody := domain.CloneOfferRequest{
-			NewTitle:          "Cloned Offer",
-			IncludeDimensions: &includeDimensions,
+			NewTitle:      "Cloned Offer",
+			IncludeBudget: &includeBudget,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -655,9 +655,9 @@ func TestOfferHandler_Clone(t *testing.T) {
 	t.Run("clone offer without title uses default", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseDraft)
 
-		includeDimensions := true
+		includeBudget := true
 		reqBody := domain.CloneOfferRequest{
-			IncludeDimensions: &includeDimensions,
+			IncludeBudget: &includeBudget,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -741,8 +741,8 @@ func TestOfferHandler_GetBudgetSummary(t *testing.T) {
 	})
 }
 
-// TestOfferHandler_GetWithBudgetDimensions tests the GetWithBudgetDimensions endpoint
-func TestOfferHandler_GetWithBudgetDimensions(t *testing.T) {
+// TestOfferHandler_GetWithBudgetItems tests the GetWithBudgetItems endpoint
+func TestOfferHandler_GetWithBudgetItems(t *testing.T) {
 	db := setupOfferHandlerTestDB(t)
 	h := createOfferHandler(t, db)
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
@@ -755,7 +755,7 @@ func TestOfferHandler_GetWithBudgetDimensions(t *testing.T) {
 		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
 
 		rr := httptest.NewRecorder()
-		h.GetWithBudgetDimensions(rr, req)
+		h.GetWithBudgetItems(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -770,7 +770,7 @@ func TestOfferHandler_GetWithBudgetDimensions(t *testing.T) {
 		req = req.WithContext(withChiContext(ctx, map[string]string{"id": uuid.New().String()}))
 
 		rr := httptest.NewRecorder()
-		h.GetWithBudgetDimensions(rr, req)
+		h.GetWithBudgetItems(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})

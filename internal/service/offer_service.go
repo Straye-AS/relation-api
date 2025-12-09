@@ -20,7 +20,7 @@ type OfferService struct {
 	offerItemRepo  *repository.OfferItemRepository
 	customerRepo   *repository.CustomerRepository
 	projectRepo    *repository.ProjectRepository
-	dimensionRepo  *repository.BudgetDimensionRepository
+	budgetItemRepo *repository.BudgetItemRepository
 	fileRepo       *repository.FileRepository
 	activityRepo   *repository.ActivityRepository
 	companyService *CompanyService
@@ -33,7 +33,7 @@ func NewOfferService(
 	offerItemRepo *repository.OfferItemRepository,
 	customerRepo *repository.CustomerRepository,
 	projectRepo *repository.ProjectRepository,
-	dimensionRepo *repository.BudgetDimensionRepository,
+	budgetItemRepo *repository.BudgetItemRepository,
 	fileRepo *repository.FileRepository,
 	activityRepo *repository.ActivityRepository,
 	companyService *CompanyService,
@@ -45,7 +45,7 @@ func NewOfferService(
 		offerItemRepo:  offerItemRepo,
 		customerRepo:   customerRepo,
 		projectRepo:    projectRepo,
-		dimensionRepo:  dimensionRepo,
+		budgetItemRepo: budgetItemRepo,
 		fileRepo:       fileRepo,
 		activityRepo:   activityRepo,
 		companyService: companyService,
@@ -191,23 +191,23 @@ func (s *OfferService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Offer
 	return dto, nil
 }
 
-// GetByIDWithBudgetDimensions retrieves an offer with budget dimensions and summary
-func (s *OfferService) GetByIDWithBudgetDimensions(ctx context.Context, id uuid.UUID) (*domain.OfferDetailDTO, error) {
-	offer, dimensions, err := s.offerRepo.GetByIDWithBudgetDimensions(ctx, id)
+// GetByIDWithBudgetItems retrieves an offer with budget items and summary
+func (s *OfferService) GetByIDWithBudgetItems(ctx context.Context, id uuid.UUID) (*domain.OfferDetailDTO, error) {
+	offer, items, err := s.offerRepo.GetByIDWithBudgetItems(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOfferNotFound
 		}
-		return nil, fmt.Errorf("failed to get offer with dimensions: %w", err)
+		return nil, fmt.Errorf("failed to get offer with budget items: %w", err)
 	}
 
 	// Convert offer to DTO
 	offerDTO := mapper.ToOfferDTO(offer)
 
-	// Convert dimensions to DTOs
-	dimensionDTOs := make([]domain.BudgetDimensionDTO, len(dimensions))
-	for i, dim := range dimensions {
-		dimensionDTOs[i] = mapper.ToBudgetDimensionDTO(&dim)
+	// Convert budget items to DTOs
+	itemDTOs := make([]domain.BudgetItemDTO, len(items))
+	for i, item := range items {
+		itemDTOs[i] = mapper.ToBudgetItemDTO(&item)
 	}
 
 	// Get budget summary
@@ -219,13 +219,13 @@ func (s *OfferService) GetByIDWithBudgetDimensions(ctx context.Context, id uuid.
 	var summaryDTO *domain.BudgetSummaryDTO
 	if summary != nil {
 		summaryDTO = &domain.BudgetSummaryDTO{
-			ParentType:           domain.BudgetParentOffer,
-			ParentID:             id,
-			DimensionCount:       summary.DimensionCount,
-			TotalCost:            summary.TotalCost,
-			TotalRevenue:         summary.TotalRevenue,
-			OverallMarginPercent: summary.MarginPercent,
-			TotalProfit:          summary.TotalMargin,
+			ParentType:    domain.BudgetParentOffer,
+			ParentID:      id,
+			TotalCost:     summary.TotalCost,
+			TotalRevenue:  summary.TotalRevenue,
+			TotalProfit:   summary.TotalProfit,
+			MarginPercent: summary.MarginPercent,
+			ItemCount:     summary.ItemCount,
 		}
 	}
 
@@ -233,10 +233,10 @@ func (s *OfferService) GetByIDWithBudgetDimensions(ctx context.Context, id uuid.
 	filesCount, _ := s.offerRepo.GetFilesCount(ctx, id)
 
 	dto := &domain.OfferDetailDTO{
-		OfferDTO:         offerDTO,
-		BudgetDimensions: dimensionDTOs,
-		BudgetSummary:    summaryDTO,
-		FilesCount:       filesCount,
+		OfferDTO:      offerDTO,
+		BudgetItems:   itemDTOs,
+		BudgetSummary: summaryDTO,
+		FilesCount:    filesCount,
 	}
 
 	return dto, nil
@@ -444,29 +444,26 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				return fmt.Errorf("%w: %v", ErrProjectCreationFailed, err)
 			}
 
-			// Clone budget dimensions from offer to project
-			if s.dimensionRepo != nil {
-				dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, offer.ID)
-				if err == nil && len(dimensions) > 0 {
-					for _, dim := range dimensions {
-						cloned := domain.BudgetDimension{
-							ParentType:          domain.BudgetParentProject,
-							ParentID:            project.ID,
-							CategoryID:          dim.CategoryID,
-							CustomName:          dim.CustomName,
-							Cost:                dim.Cost,
-							Revenue:             dim.Revenue,
-							TargetMarginPercent: dim.TargetMarginPercent,
-							MarginOverride:      dim.MarginOverride,
-							Description:         dim.Description,
-							Quantity:            dim.Quantity,
-							Unit:                dim.Unit,
-							DisplayOrder:        dim.DisplayOrder,
+			// Clone budget items from offer to project
+			if s.budgetItemRepo != nil {
+				items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, offer.ID)
+				if err == nil && len(items) > 0 {
+					for _, item := range items {
+						cloned := domain.BudgetItem{
+							ParentType:     domain.BudgetParentProject,
+							ParentID:       project.ID,
+							Name:           item.Name,
+							ExpectedCost:   item.ExpectedCost,
+							ExpectedMargin: item.ExpectedMargin,
+							Quantity:       item.Quantity,
+							PricePerItem:   item.PricePerItem,
+							Description:    item.Description,
+							DisplayOrder:   item.DisplayOrder,
 						}
 						if err := tx.Create(&cloned).Error; err != nil {
-							s.logger.Warn("failed to clone budget dimension",
+							s.logger.Warn("failed to clone budget item",
 								zap.Error(err),
-								zap.String("dimension_id", dim.ID.String()))
+								zap.String("item_id", item.ID.String()))
 						}
 					}
 					// Mark project as having detailed budget
@@ -651,30 +648,27 @@ func (s *OfferService) CloneOffer(ctx context.Context, id uuid.UUID, req *domain
 			return fmt.Errorf("failed to create cloned offer: %w", err)
 		}
 
-		// Clone budget dimensions if requested (default behavior - nil or true means include)
-		includeDimensions := req.IncludeDimensions == nil || *req.IncludeDimensions
-		if includeDimensions && s.dimensionRepo != nil {
-			dimensions, err := s.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, id)
-			if err == nil && len(dimensions) > 0 {
-				for _, dim := range dimensions {
-					cloned := domain.BudgetDimension{
-						ParentType:          domain.BudgetParentOffer,
-						ParentID:            newOffer.ID,
-						CategoryID:          dim.CategoryID,
-						CustomName:          dim.CustomName,
-						Cost:                dim.Cost,
-						Revenue:             dim.Revenue,
-						TargetMarginPercent: dim.TargetMarginPercent,
-						MarginOverride:      dim.MarginOverride,
-						Description:         dim.Description,
-						Quantity:            dim.Quantity,
-						Unit:                dim.Unit,
-						DisplayOrder:        dim.DisplayOrder,
+		// Clone budget items if requested (default behavior - nil or true means include)
+		includeBudget := req.IncludeBudget == nil || *req.IncludeBudget
+		if includeBudget && s.budgetItemRepo != nil {
+			items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, id)
+			if err == nil && len(items) > 0 {
+				for _, item := range items {
+					cloned := domain.BudgetItem{
+						ParentType:     domain.BudgetParentOffer,
+						ParentID:       newOffer.ID,
+						Name:           item.Name,
+						ExpectedCost:   item.ExpectedCost,
+						ExpectedMargin: item.ExpectedMargin,
+						Quantity:       item.Quantity,
+						PricePerItem:   item.PricePerItem,
+						Description:    item.Description,
+						DisplayOrder:   item.DisplayOrder,
 					}
 					if err := tx.Create(&cloned).Error; err != nil {
-						s.logger.Warn("failed to clone budget dimension",
+						s.logger.Warn("failed to clone budget item",
 							zap.Error(err),
-							zap.String("dimension_id", dim.ID.String()))
+							zap.String("item_id", item.ID.String()))
 					}
 				}
 			}
@@ -726,19 +720,19 @@ func (s *OfferService) GetBudgetSummary(ctx context.Context, id uuid.UUID) (*dom
 	}
 
 	dto := &domain.BudgetSummaryDTO{
-		ParentType:           domain.BudgetParentOffer,
-		ParentID:             id,
-		DimensionCount:       summary.DimensionCount,
-		TotalCost:            summary.TotalCost,
-		TotalRevenue:         summary.TotalRevenue,
-		OverallMarginPercent: summary.MarginPercent,
-		TotalProfit:          summary.TotalMargin,
+		ParentType:    domain.BudgetParentOffer,
+		ParentID:      id,
+		TotalCost:     summary.TotalCost,
+		TotalRevenue:  summary.TotalRevenue,
+		TotalProfit:   summary.TotalProfit,
+		MarginPercent: summary.MarginPercent,
+		ItemCount:     summary.ItemCount,
 	}
 
 	return dto, nil
 }
 
-// RecalculateTotals recalculates the offer value from budget dimensions
+// RecalculateTotals recalculates the offer value from budget items
 func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -748,8 +742,8 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 		return nil, fmt.Errorf("failed to get offer: %w", err)
 	}
 
-	// Calculate totals from budget dimensions
-	newValue, err := s.offerRepo.CalculateTotalsFromDimensions(ctx, id)
+	// Calculate totals from budget items
+	newValue, err := s.offerRepo.CalculateTotalsFromBudgetItems(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate totals: %w", err)
 	}
@@ -762,7 +756,7 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 
 	// Log activity
 	s.logActivity(ctx, id, "Offer totals recalculated",
-		fmt.Sprintf("Offer '%s' value updated to %.2f from budget dimensions", offer.Title, newValue))
+		fmt.Sprintf("Offer '%s' value updated to %.2f from budget items", offer.Title, newValue))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -773,6 +767,7 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 // ============================================================================
 
 // Advance updates the offer phase (legacy method, prefer specific lifecycle methods)
+// When transitioning from draft to in_progress, generates a unique offer number
 func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.AdvanceOfferRequest) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -809,8 +804,26 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 			}
 		}
 
-		// If only responsible user is set but no company, we can proceed (company is optional for in_progress)
-		// The company validation is primarily to infer the responsible user if missing
+		// Validate company ID for offer number generation
+		if !domain.IsValidCompanyID(string(offer.CompanyID)) {
+			return nil, ErrInvalidCompanyID
+		}
+
+		// Generate offer number only if not already set (immutability check)
+		if offer.OfferNumber == "" {
+			offerNumber, err := s.offerRepo.GenerateOfferNumber(ctx, offer.CompanyID)
+			if err != nil {
+				s.logger.Error("failed to generate offer number",
+					zap.Error(err),
+					zap.String("offerID", id.String()),
+					zap.String("companyID", string(offer.CompanyID)))
+				return nil, fmt.Errorf("%w: %v", ErrOfferNumberGenerationFailed, err)
+			}
+			offer.OfferNumber = offerNumber
+			s.logger.Info("generated offer number",
+				zap.String("offerID", id.String()),
+				zap.String("offerNumber", offerNumber))
+		}
 	}
 
 	offer.Phase = req.Phase
@@ -822,7 +835,12 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 	// Log activity
 	activityBody := fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase)
 	if oldPhase == domain.OfferPhaseDraft && req.Phase == domain.OfferPhaseInProgress {
-		activityBody = fmt.Sprintf("Offer '%s' advanced to in progress (responsible: %s)", offer.Title, offer.ResponsibleUserID)
+		if offer.OfferNumber != "" {
+			activityBody = fmt.Sprintf("Offer '%s' advanced to in progress with offer number %s (responsible: %s)",
+				offer.Title, offer.OfferNumber, offer.ResponsibleUserID)
+		} else {
+			activityBody = fmt.Sprintf("Offer '%s' advanced to in progress (responsible: %s)", offer.Title, offer.ResponsibleUserID)
+		}
 	}
 	s.logActivity(ctx, offer.ID, "Offer phase advanced", activityBody)
 

@@ -115,8 +115,7 @@ func run() error {
 	userRoleRepo := repository.NewUserRoleRepository(db, log)
 	userPermissionRepo := repository.NewUserPermissionRepository(db, log)
 	auditLogRepo := repository.NewAuditLogRepository(db)
-	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
-	budgetDimensionCategoryRepo := repository.NewBudgetDimensionCategoryRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
 
 	// Initialize services
@@ -125,15 +124,15 @@ func run() error {
 
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
-	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetDimensionRepo, activityRepo, companyService, log, db)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetDimensionRepo, fileRepo, activityRepo, companyService, log, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetItemRepo, activityRepo, companyService, log, db)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, companyService, log, db)
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
-	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, log, db)
+	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 	auditLogService := service.NewAuditLogService(auditLogRepo, log)
-	budgetDimensionService := service.NewBudgetDimensionService(budgetDimensionRepo, budgetDimensionCategoryRepo, offerRepo, projectRepo, activityRepo, log)
+	budgetItemService := service.NewBudgetItemService(budgetItemRepo, offerRepo, projectRepo, log)
 	notificationService := service.NewNotificationService(notificationRepo, log)
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
 
@@ -156,7 +155,7 @@ func run() error {
 	authHandler := handler.NewAuthHandler(userRepo, permissionService, graphClient, log)
 	companyHandler := handler.NewCompanyHandler(companyService, log)
 	auditHandler := handler.NewAuditHandler(auditLogService, log)
-	budgetDimensionHandler := handler.NewBudgetDimensionHandler(budgetDimensionService, log)
+	budgetItemHandler := handler.NewBudgetItemHandler(budgetItemService, log)
 	notificationHandler := handler.NewNotificationHandler(notificationService, log)
 	activityHandler := handler.NewActivityHandler(activityService, log)
 
@@ -180,7 +179,7 @@ func run() error {
 		companyHandler,
 		auditHandler,
 		contactHandler,
-		budgetDimensionHandler,
+		budgetItemHandler,
 		notificationHandler,
 		activityHandler,
 	)

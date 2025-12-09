@@ -86,19 +86,24 @@ func createOfferTestFile(t *testing.T, db *gorm.DB, offerID uuid.UUID, filename 
 	return file
 }
 
-// createOfferTestBudgetDimension creates a budget dimension for an offer
-func createOfferTestBudgetDimension(t *testing.T, db *gorm.DB, offerID uuid.UUID, customName string, cost, revenue float64, displayOrder int) *domain.BudgetDimension {
+// createOfferTestBudgetItem creates a budget item for an offer
+func createOfferTestBudgetItem(t *testing.T, db *gorm.DB, offerID uuid.UUID, name string, cost, revenue float64, displayOrder int) *domain.BudgetItem {
 	id := uuid.New()
-	err := db.Exec(`INSERT INTO budget_dimensions (id, parent_type, parent_id, custom_name, cost, revenue, display_order)
+	// Calculate margin: margin = (revenue - cost) / revenue * 100 (when revenue > 0)
+	margin := 0.0
+	if revenue > 0 {
+		margin = (revenue - cost) / revenue * 100
+	}
+	err := db.Exec(`INSERT INTO budget_items (id, parent_type, parent_id, name, expected_cost, expected_margin, display_order)
                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, domain.BudgetParentOffer, offerID, customName, cost, revenue, displayOrder).Error
+		id, domain.BudgetParentOffer, offerID, name, cost, margin, displayOrder).Error
 	require.NoError(t, err)
 
-	var dimension domain.BudgetDimension
-	err = db.First(&dimension, "id = ?", id).Error
+	var item domain.BudgetItem
+	err = db.First(&item, "id = ?", id).Error
 	require.NoError(t, err)
 
-	return &dimension
+	return &item
 }
 
 func TestOfferRepository_Create(t *testing.T) {
@@ -167,42 +172,42 @@ func TestOfferRepository_GetByID(t *testing.T) {
 	})
 }
 
-func TestOfferRepository_GetByIDWithBudgetDimensions(t *testing.T) {
+func TestOfferRepository_GetByIDWithBudgetItems(t *testing.T) {
 	db := setupOfferTestDB(t)
 	repo := repository.NewOfferRepository(db)
 
-	t.Run("returns offer with budget dimensions", func(t *testing.T) {
-		offer := createOfferTestOffer(t, db, "Test Offer WithDimensions", domain.OfferPhaseDraft, domain.OfferStatusActive)
+	t.Run("returns offer with budget items", func(t *testing.T) {
+		offer := createOfferTestOffer(t, db, "Test Offer WithItems", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
-		// Create budget dimensions
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Dimension 1", 1000, 1500, 0)
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Dimension 2", 2000, 3000, 1)
+		// Create budget items
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Item 1", 1000, 1500, 0)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Item 2", 2000, 3000, 1)
 
-		found, dimensions, err := repo.GetByIDWithBudgetDimensions(context.Background(), offer.ID)
+		found, items, err := repo.GetByIDWithBudgetItems(context.Background(), offer.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, found)
 		assert.Equal(t, offer.ID, found.ID)
-		assert.Len(t, dimensions, 2)
+		assert.Len(t, items, 2)
 
 		// Verify ordering by display_order
-		assert.Equal(t, "Test Dimension 1", dimensions[0].CustomName)
-		assert.Equal(t, "Test Dimension 2", dimensions[1].CustomName)
+		assert.Equal(t, "Test Item 1", items[0].Name)
+		assert.Equal(t, "Test Item 2", items[1].Name)
 	})
 
-	t.Run("returns empty dimensions for offer without any", func(t *testing.T) {
-		offer := createOfferTestOffer(t, db, "Test Offer NoDimensions", domain.OfferPhaseDraft, domain.OfferStatusActive)
+	t.Run("returns empty items for offer without any", func(t *testing.T) {
+		offer := createOfferTestOffer(t, db, "Test Offer NoItems", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
-		found, dimensions, err := repo.GetByIDWithBudgetDimensions(context.Background(), offer.ID)
+		found, items, err := repo.GetByIDWithBudgetItems(context.Background(), offer.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, found)
-		assert.Len(t, dimensions, 0)
+		assert.Len(t, items, 0)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		found, dimensions, err := repo.GetByIDWithBudgetDimensions(context.Background(), uuid.New())
+		found, items, err := repo.GetByIDWithBudgetItems(context.Background(), uuid.New())
 		assert.Error(t, err)
 		assert.Nil(t, found)
-		assert.Nil(t, dimensions)
+		assert.Nil(t, items)
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 }
@@ -456,36 +461,36 @@ func TestOfferRepository_UpdatePhase(t *testing.T) {
 	})
 }
 
-func TestOfferRepository_CalculateTotalsFromDimensions(t *testing.T) {
+func TestOfferRepository_CalculateTotalsFromBudgetItems(t *testing.T) {
 	db := setupOfferTestDB(t)
 	repo := repository.NewOfferRepository(db)
 
-	t.Run("calculate totals from multiple dimensions", func(t *testing.T) {
+	t.Run("calculate totals from multiple budget items", func(t *testing.T) {
 		offer := createOfferTestOffer(t, db, "Test Offer Calculate 1", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
-		// Create budget dimensions with known revenue values
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Calc Dim 1", 1000, 1500, 0)
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Calc Dim 2", 2000, 3000, 1)
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Calc Dim 3", 3000, 4500, 2)
+		// Create budget items with known revenue values
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Calc Item 1", 1000, 1500, 0)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Calc Item 2", 2000, 3000, 1)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Calc Item 3", 3000, 4500, 2)
 		// Total revenue: 1500 + 3000 + 4500 = 9000
 
-		totalRevenue, err := repo.CalculateTotalsFromDimensions(context.Background(), offer.ID)
+		totalRevenue, err := repo.CalculateTotalsFromBudgetItems(context.Background(), offer.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, 9000.0, totalRevenue)
+		assert.InDelta(t, 9000.0, totalRevenue, 1.0) // Allow small delta due to computed fields
 
 		// Verify the offer's Value was updated
 		found, err := repo.GetByID(context.Background(), offer.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, 9000.0, found.Value)
+		assert.InDelta(t, 9000.0, found.Value, 1.0)
 	})
 
-	t.Run("calculate totals with no dimensions returns zero", func(t *testing.T) {
+	t.Run("calculate totals with no items returns zero", func(t *testing.T) {
 		offer := createOfferTestOffer(t, db, "Test Offer Calculate 2", domain.OfferPhaseDraft, domain.OfferStatusActive)
 		offer.Value = 5000 // Set initial value
 		err := db.Save(offer).Error
 		require.NoError(t, err)
 
-		totalRevenue, err := repo.CalculateTotalsFromDimensions(context.Background(), offer.ID)
+		totalRevenue, err := repo.CalculateTotalsFromBudgetItems(context.Background(), offer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, 0.0, totalRevenue)
 
@@ -496,31 +501,31 @@ func TestOfferRepository_CalculateTotalsFromDimensions(t *testing.T) {
 	})
 
 	t.Run("calculate totals for non-existent offer", func(t *testing.T) {
-		_, err := repo.CalculateTotalsFromDimensions(context.Background(), uuid.New())
+		_, err := repo.CalculateTotalsFromBudgetItems(context.Background(), uuid.New())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 }
 
-func TestOfferRepository_GetBudgetDimensionsCount(t *testing.T) {
+func TestOfferRepository_GetBudgetItemsCount(t *testing.T) {
 	db := setupOfferTestDB(t)
 	repo := repository.NewOfferRepository(db)
 
-	t.Run("count dimensions for offer", func(t *testing.T) {
-		offer := createOfferTestOffer(t, db, "Test Offer Dim Count", domain.OfferPhaseDraft, domain.OfferStatusActive)
+	t.Run("count items for offer", func(t *testing.T) {
+		offer := createOfferTestOffer(t, db, "Test Offer Item Count", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Count Dim 1", 1000, 1500, 0)
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Count Dim 2", 2000, 3000, 1)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Count Item 1", 1000, 1500, 0)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Count Item 2", 2000, 3000, 1)
 
-		count, err := repo.GetBudgetDimensionsCount(context.Background(), offer.ID)
+		count, err := repo.GetBudgetItemsCount(context.Background(), offer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, count)
 	})
 
-	t.Run("count dimensions for offer with none", func(t *testing.T) {
-		offer := createOfferTestOffer(t, db, "Test Offer No Dims", domain.OfferPhaseDraft, domain.OfferStatusActive)
+	t.Run("count items for offer with none", func(t *testing.T) {
+		offer := createOfferTestOffer(t, db, "Test Offer No Items", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
-		count, err := repo.GetBudgetDimensionsCount(context.Background(), offer.ID)
+		count, err := repo.GetBudgetItemsCount(context.Background(), offer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, count)
 	})
@@ -530,26 +535,26 @@ func TestOfferRepository_GetBudgetSummary(t *testing.T) {
 	db := setupOfferTestDB(t)
 	repo := repository.NewOfferRepository(db)
 
-	t.Run("get budget summary with multiple dimensions", func(t *testing.T) {
+	t.Run("get budget summary with multiple items", func(t *testing.T) {
 		offer := createOfferTestOffer(t, db, "Test Offer Summary", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
-		// Create dimensions with known values
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Summary Dim 1", 1000, 1500, 0)
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Summary Dim 2", 2000, 3000, 1)
-		createOfferTestBudgetDimension(t, db, offer.ID, "Test Summary Dim 3", 3000, 4500, 2)
+		// Create items with known values (revenue computed from cost and margin)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Summary Item 1", 1000, 1500, 0)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Summary Item 2", 2000, 3000, 1)
+		createOfferTestBudgetItem(t, db, offer.ID, "Test Summary Item 3", 3000, 4500, 2)
 		// Totals: Cost=6000, Revenue=9000
 
 		summary, err := repo.GetBudgetSummary(context.Background(), offer.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, summary)
-		assert.Equal(t, 6000.0, summary.TotalCost)
-		assert.Equal(t, 9000.0, summary.TotalRevenue)
-		assert.Equal(t, 3000.0, summary.TotalMargin)
-		assert.InDelta(t, 33.33, summary.MarginPercent, 0.01) // (9000-6000)/9000*100
-		assert.Equal(t, 3, summary.DimensionCount)
+		assert.InDelta(t, 6000.0, summary.TotalCost, 1.0)
+		assert.InDelta(t, 9000.0, summary.TotalRevenue, 1.0)
+		assert.InDelta(t, 3000.0, summary.TotalProfit, 1.0)
+		assert.InDelta(t, 33.33, summary.MarginPercent, 1.0) // (9000-6000)/9000*100
+		assert.Equal(t, 3, summary.ItemCount)
 	})
 
-	t.Run("get budget summary for offer with no dimensions", func(t *testing.T) {
+	t.Run("get budget summary for offer with no items", func(t *testing.T) {
 		offer := createOfferTestOffer(t, db, "Test Offer Empty Summary", domain.OfferPhaseDraft, domain.OfferStatusActive)
 
 		summary, err := repo.GetBudgetSummary(context.Background(), offer.ID)
@@ -557,9 +562,9 @@ func TestOfferRepository_GetBudgetSummary(t *testing.T) {
 		assert.NotNil(t, summary)
 		assert.Equal(t, 0.0, summary.TotalCost)
 		assert.Equal(t, 0.0, summary.TotalRevenue)
-		assert.Equal(t, 0.0, summary.TotalMargin)
+		assert.Equal(t, 0.0, summary.TotalProfit)
 		assert.Equal(t, 0.0, summary.MarginPercent)
-		assert.Equal(t, 0, summary.DimensionCount)
+		assert.Equal(t, 0, summary.ItemCount)
 	})
 }
 

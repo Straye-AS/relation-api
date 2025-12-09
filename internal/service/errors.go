@@ -93,4 +93,10 @@ var (
 
 	// ErrProjectNotFound is returned when a project is not found
 	ErrProjectNotFound = errors.New("project not found")
+
+	// ErrInvalidCompanyID is returned when an invalid company ID is provided
+	ErrInvalidCompanyID = errors.New("invalid company ID")
+
+	// ErrOfferNumberGenerationFailed is returned when offer number generation fails
+	ErrOfferNumberGenerationFailed = errors.New("failed to generate offer number")
 )
