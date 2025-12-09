@@ -495,7 +495,29 @@ func (s *CustomerService) ListWithFilters(ctx context.Context, page, pageSize in
 // FuzzySearchBestMatch finds the single best matching customer for a query
 // Uses multiple matching strategies including exact, prefix, contains, and trigram similarity
 // Returns the best match with a confidence score
+// Special case: query "all" returns all customers
 func (s *CustomerService) FuzzySearchBestMatch(ctx context.Context, query string) (*domain.FuzzyCustomerSearchResponse, error) {
+	// Special case: return all customers when query is "all"
+	if strings.ToLower(strings.TrimSpace(query)) == "all" {
+		customers, err := s.customerRepo.GetAllMinimal(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get all customers: %w", err)
+		}
+
+		dtos := make([]domain.CustomerMinimalDTO, len(customers))
+		for i, c := range customers {
+			dtos[i] = domain.CustomerMinimalDTO{
+				ID:   c.ID,
+				Name: c.Name,
+			}
+		}
+
+		return &domain.FuzzyCustomerSearchResponse{
+			Customers: dtos,
+			Found:     len(dtos) > 0,
+		}, nil
+	}
+
 	result, err := s.customerRepo.FuzzySearchBestMatch(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search customer: %w", err)
@@ -509,9 +531,12 @@ func (s *CustomerService) FuzzySearchBestMatch(ctx context.Context, query string
 		}, nil
 	}
 
-	dto := mapper.ToCustomerDTO(&result.Customer, 0, 0)
+	minimalDTO := domain.CustomerMinimalDTO{
+		ID:   result.Customer.ID,
+		Name: result.Customer.Name,
+	}
 	return &domain.FuzzyCustomerSearchResponse{
-		Customer:   &dto,
+		Customer:   &minimalDTO,
 		Confidence: result.Similarity,
 		Found:      true,
 	}, nil

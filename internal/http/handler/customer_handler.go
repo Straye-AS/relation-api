@@ -106,11 +106,11 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // FuzzySearch godoc
 // @Summary Fuzzy search for best matching customer
-// @Description Find the single best matching customer for a query using fuzzy matching (handles typos, abbreviations, partial matches)
+// @Description Find the single best matching customer for a query using fuzzy matching (handles typos, abbreviations, partial matches). Use q=all to get all customers. Returns minimal customer data (id and name only). Also supports email domain matching (e.g., 'hauk@straye.no' matches 'Straye').
 // @Tags Customers
 // @Accept json
 // @Produce json
-// @Param q query string true "Search query (e.g., 'AF', 'NTN', 'Veidikke')"
+// @Param q query string true "Search query (e.g., 'AF', 'NTN', 'Veidikke', 'all' for all customers, or email like 'user@company.no')"
 // @Success 200 {object} domain.FuzzyCustomerSearchResponse
 // @Failure 400 {object} domain.ErrorResponse
 // @Failure 500 {object} domain.ErrorResponse

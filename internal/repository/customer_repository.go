@@ -341,6 +341,51 @@ func (r *CustomerRepository) FuzzySearchBestMatch(ctx context.Context, query str
 	queryLower := strings.ToLower(query)
 	queryPattern := "%" + queryLower + "%"
 
+	// Check if query looks like an email - extract domain for matching
+	var emailDomain string
+	if strings.Contains(query, "@") {
+		parts := strings.Split(queryLower, "@")
+		if len(parts) == 2 && parts[1] != "" {
+			// Extract company name from domain (e.g., "afgruppen.no" -> "afgruppen")
+			domainParts := strings.Split(parts[1], ".")
+			if len(domainParts) > 0 {
+				emailDomain = domainParts[0]
+			}
+		}
+	}
+
+	// Strategy 0: Email domain match (if query is an email)
+	// Match "hauk@straye.no" to "Straye", "test@afgruppen.no" to "AF Gruppen"
+	if emailDomain != "" {
+		// First try exact email match on customer email field
+		var emailMatch domain.Customer
+		err := r.db.WithContext(ctx).
+			Where("LOWER(email) = ? AND status != ?", queryLower, domain.CustomerStatusInactive).
+			First(&emailMatch).Error
+		if err == nil {
+			return &FuzzySearchResult{Customer: emailMatch, Similarity: 1.0}, nil
+		}
+
+		// Try matching domain to customer name
+		var domainMatch domain.Customer
+		err = r.db.WithContext(ctx).
+			Where("LOWER(name) LIKE ? AND status != ?", "%"+emailDomain+"%", domain.CustomerStatusInactive).
+			Order("LENGTH(name) ASC").
+			First(&domainMatch).Error
+		if err == nil {
+			return &FuzzySearchResult{Customer: domainMatch, Similarity: 0.9}, nil
+		}
+
+		// Try matching domain to customer email domain
+		var emailDomainMatch domain.Customer
+		err = r.db.WithContext(ctx).
+			Where("LOWER(email) LIKE ? AND status != ?", "%@"+emailDomain+"%", domain.CustomerStatusInactive).
+			First(&emailDomainMatch).Error
+		if err == nil {
+			return &FuzzySearchResult{Customer: emailDomainMatch, Similarity: 0.9}, nil
+		}
+	}
+
 	// Strategy 1: Exact match (highest confidence)
 	var exactMatch domain.Customer
 	err := r.db.WithContext(ctx).
@@ -443,6 +488,17 @@ func (r *CustomerRepository) FuzzySearchBestMatch(ctx context.Context, query str
 	}
 
 	return nil, nil // No match found
+}
+
+// GetAllMinimal returns all active customers with minimal fields (id and name)
+func (r *CustomerRepository) GetAllMinimal(ctx context.Context) ([]domain.Customer, error) {
+	var customers []domain.Customer
+	err := r.db.WithContext(ctx).
+		Select("id, name").
+		Where("status != ?", domain.CustomerStatusInactive).
+		Order("name ASC").
+		Find(&customers).Error
+	return customers, err
 }
 
 // GetTopCustomersWithOfferStats returns top customers ranked by offer count within a time window
