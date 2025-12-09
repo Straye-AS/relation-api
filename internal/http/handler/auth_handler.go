@@ -17,6 +17,7 @@ import (
 // UserRepository interface for dependency injection
 type UserRepository interface {
 	Upsert(ctx context.Context, user *domain.User) error
+	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 }
 
 // PermissionServiceInterface for dependency injection
@@ -143,12 +144,43 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("failed to upsert user", zap.Error(err))
 	}
 
+	// Fetch user from database to get persisted roles and company
+	dbUser, err := h.userRepo.GetByEmail(r.Context(), userCtx.Email)
+	if err != nil {
+		h.logger.Warn("failed to fetch user from database", zap.Error(err))
+	}
+
+	// Use database roles and company if available, otherwise fallback to JWT
+	roles := userCtx.RolesAsStrings()
+	companyID := userCtx.CompanyID
+	isSuperAdmin := userCtx.IsSuperAdmin()
+	isCompanyAdmin := userCtx.IsCompanyAdmin()
+
+	if dbUser != nil {
+		// Override with database values if they exist
+		if len(dbUser.Roles) > 0 {
+			roles = dbUser.Roles
+			// Check if super_admin or company_admin is in database roles
+			for _, role := range dbUser.Roles {
+				if role == string(domain.RoleSuperAdmin) {
+					isSuperAdmin = true
+				}
+				if role == string(domain.RoleCompanyAdmin) {
+					isCompanyAdmin = true
+				}
+			}
+		}
+		if dbUser.CompanyID != nil && *dbUser.CompanyID != "" {
+			companyID = *dbUser.CompanyID
+		}
+	}
+
 	// Build company info if present
 	var company *domain.CompanyDTO
-	if userCtx.CompanyID != "" {
+	if companyID != "" {
 		company = &domain.CompanyDTO{
-			ID:   string(userCtx.CompanyID),
-			Name: getCompanyDisplayName(userCtx.CompanyID),
+			ID:   string(companyID),
+			Name: getCompanyDisplayName(companyID),
 		}
 	}
 
@@ -156,11 +188,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		ID:             userCtx.UserID.String(),
 		Name:           userCtx.DisplayName,
 		Email:          userCtx.Email,
-		Roles:          userCtx.RolesAsStrings(),
+		Roles:          roles,
 		Company:        company,
 		Initials:       userCtx.GetDisplayNameInitials(),
-		IsSuperAdmin:   userCtx.IsSuperAdmin(),
-		IsCompanyAdmin: userCtx.IsCompanyAdmin(),
+		IsSuperAdmin:   isSuperAdmin,
+		IsCompanyAdmin: isCompanyAdmin,
 	}
 
 	respondJSON(w, http.StatusOK, dto)

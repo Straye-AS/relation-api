@@ -101,12 +101,14 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		recentActivityDTOs[i] = mapper.ToActivityDTO(&a)
 	}
 
-	// Build pipeline phase data
+	// Build pipeline phase data with values
 	pipeline := []domain.PipelinePhaseData{}
-	for phase, count := range offerStats.ByPhase {
+	for phase, phaseStats := range offerStats.ByPhaseStats {
 		pipeline = append(pipeline, domain.PipelinePhaseData{
-			Phase: phase,
-			Count: count,
+			Phase:         phase,
+			Count:         phaseStats.Count,
+			TotalValue:    phaseStats.TotalValue,
+			WeightedValue: phaseStats.WeightedValue,
 		})
 	}
 

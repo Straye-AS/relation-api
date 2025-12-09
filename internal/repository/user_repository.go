@@ -50,6 +50,24 @@ func (r *UserRepository) Upsert(ctx context.Context, user *domain.User) error {
 		return err
 	}
 
-	user.ID = existing.ID
-	return r.db.WithContext(ctx).Save(user).Error
+	// Update only specific fields from login, preserving manually-assigned roles and company
+	updates := map[string]interface{}{
+		"name":            user.DisplayName,
+		"last_login_at":   user.LastLoginAt,
+		"last_ip_address": user.LastIPAddress,
+		"azure_ad_roles":  user.AzureADRoles,
+	}
+
+	// Only update these fields if they have values (don't overwrite with empty)
+	if user.Department != "" {
+		updates["department"] = user.Department
+	}
+	if user.FirstName != "" {
+		updates["first_name"] = user.FirstName
+	}
+	if user.LastName != "" {
+		updates["last_name"] = user.LastName
+	}
+
+	return r.db.WithContext(ctx).Model(&domain.User{}).Where("id = ?", existing.ID).Updates(updates).Error
 }

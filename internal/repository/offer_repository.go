@@ -353,6 +353,13 @@ func (r *OfferRepository) GetBudgetSummary(ctx context.Context, offerID uuid.UUI
 	return summary, nil
 }
 
+// PhaseStats holds stats for a single phase
+type PhaseStats struct {
+	Count         int
+	TotalValue    float64
+	WeightedValue float64
+}
+
 // OfferStats holds aggregated offer statistics for dashboard
 type OfferStats struct {
 	TotalOffers    int64
@@ -362,13 +369,15 @@ type OfferStats struct {
 	TotalValue     float64
 	WeightedValue  float64
 	ByPhase        map[domain.OfferPhase]int
+	ByPhaseStats   map[domain.OfferPhase]PhaseStats
 	AvgProbability float64
 }
 
 // GetOfferStats returns aggregated offer statistics for the dashboard
 func (r *OfferRepository) GetOfferStats(ctx context.Context) (*OfferStats, error) {
 	stats := &OfferStats{
-		ByPhase: make(map[domain.OfferPhase]int),
+		ByPhase:      make(map[domain.OfferPhase]int),
+		ByPhaseStats: make(map[domain.OfferPhase]PhaseStats),
 	}
 
 	// Build base query with company filter
@@ -430,21 +439,28 @@ func (r *OfferRepository) GetOfferStats(ctx context.Context) (*OfferStats, error
 		return nil, fmt.Errorf("failed to calculate weighted value: %w", err)
 	}
 
-	// Count by phase
-	type phaseCount struct {
-		Phase domain.OfferPhase
-		Count int
+	// Count and values by phase
+	type phaseStats struct {
+		Phase         domain.OfferPhase
+		Count         int
+		TotalValue    float64
+		WeightedValue float64
 	}
-	var phaseCounts []phaseCount
+	var phaseStatsList []phaseStats
 	phaseQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Select("phase, COUNT(*) as count").
+		Select("phase, COUNT(*) as count, COALESCE(SUM(value), 0) as total_value, COALESCE(SUM(value * probability / 100), 0) as weighted_value").
 		Group("phase")
 	phaseQuery = ApplyCompanyFilter(ctx, phaseQuery)
-	if err := phaseQuery.Scan(&phaseCounts).Error; err != nil {
+	if err := phaseQuery.Scan(&phaseStatsList).Error; err != nil {
 		return nil, fmt.Errorf("failed to count offers by phase: %w", err)
 	}
-	for _, pc := range phaseCounts {
-		stats.ByPhase[pc.Phase] = pc.Count
+	for _, ps := range phaseStatsList {
+		stats.ByPhase[ps.Phase] = ps.Count
+		stats.ByPhaseStats[ps.Phase] = PhaseStats{
+			Count:         ps.Count,
+			TotalValue:    ps.TotalValue,
+			WeightedValue: ps.WeightedValue,
+		}
 	}
 
 	// Average probability of active offers
