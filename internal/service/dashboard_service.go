@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/mapper"
@@ -37,103 +38,119 @@ func NewDashboardService(
 	}
 }
 
+// GetMetrics returns dashboard metrics using a rolling 12-month window
+// All metrics exclude draft and expired offers from calculations
 func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMetrics, error) {
-	// Get offer statistics
-	offerStats, err := s.offerRepo.GetOfferStats(ctx)
-	if err != nil {
-		s.logger.Warn("failed to get offer stats", zap.Error(err))
-		offerStats = &repository.OfferStats{ByPhase: make(map[domain.OfferPhase]int)}
+	// Calculate 12-month window cutoff
+	since := time.Now().AddDate(-1, 0, 0)
+	const recentLimit = 10
+
+	metrics := &domain.DashboardMetrics{
+		Pipeline:         []domain.PipelinePhaseData{},
+		RecentOffers:     []domain.OfferDTO{},
+		RecentProjects:   []domain.ProjectDTO{},
+		RecentActivities: []domain.ActivityDTO{},
+		TopCustomers:     []domain.TopCustomerDTO{},
 	}
 
-	// Get win rate
-	winRate, err := s.offerRepo.GetWinRate(ctx)
+	// Get offer statistics (12-month window, excluding drafts and expired)
+	offerStats, err := s.offerRepo.GetDashboardOfferStats(ctx, since)
 	if err != nil {
-		s.logger.Warn("failed to get win rate", zap.Error(err))
+		s.logger.Warn("failed to get dashboard offer stats", zap.Error(err))
+	} else {
+		metrics.TotalOfferCount = offerStats.TotalOfferCount
+		metrics.OfferReserve = offerStats.OfferReserve
+		metrics.WeightedOfferReserve = offerStats.WeightedOfferReserve
+		metrics.AverageProbability = offerStats.AverageProbability
 	}
 
-	// Get recent offers
-	recentOffers, err := s.offerRepo.GetRecentOffers(ctx, 5)
+	// Get pipeline statistics by phase
+	pipelineStats, err := s.offerRepo.GetDashboardPipelineStats(ctx, since)
+	if err != nil {
+		s.logger.Warn("failed to get dashboard pipeline stats", zap.Error(err))
+	} else {
+		for _, ps := range pipelineStats {
+			metrics.Pipeline = append(metrics.Pipeline, domain.PipelinePhaseData{
+				Phase:         ps.Phase,
+				Count:         ps.Count,
+				TotalValue:    ps.TotalValue,
+				WeightedValue: ps.WeightedValue,
+			})
+		}
+	}
+
+	// Get win rate statistics (12-month window)
+	winRateStats, err := s.offerRepo.GetDashboardWinRateStats(ctx, since)
+	if err != nil {
+		s.logger.Warn("failed to get dashboard win rate stats", zap.Error(err))
+	} else {
+		metrics.WinRateMetrics = domain.WinRateMetrics{
+			WonCount:        winRateStats.WonCount,
+			LostCount:       winRateStats.LostCount,
+			WonValue:        winRateStats.WonValue,
+			LostValue:       winRateStats.LostValue,
+			WinRate:         winRateStats.WinRate,
+			EconomicWinRate: winRateStats.EconomicWinRate,
+		}
+	}
+
+	// Get project statistics (order reserve and total invoiced)
+	projectStats, err := s.projectRepo.GetDashboardProjectStats(ctx, since)
+	if err != nil {
+		s.logger.Warn("failed to get dashboard project stats", zap.Error(err))
+	} else {
+		metrics.OrderReserve = projectStats.OrderReserve
+		metrics.TotalInvoiced = projectStats.TotalInvoiced
+		metrics.TotalValue = projectStats.OrderReserve + projectStats.TotalInvoiced
+	}
+
+	// Get recent offers (12-month window, excluding drafts)
+	recentOffers, err := s.offerRepo.GetRecentOffersInWindow(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent offers", zap.Error(err))
-	}
-	recentOfferDTOs := make([]domain.OfferDTO, len(recentOffers))
-	for i, o := range recentOffers {
-		recentOfferDTOs[i] = mapper.ToOfferDTO(&o)
-	}
-
-	// Get active projects
-	activeProjects, err := s.projectRepo.GetActiveProjects(ctx, 5)
-	if err != nil {
-		s.logger.Warn("failed to get active projects", zap.Error(err))
-	}
-	activeProjectDTOs := make([]domain.ProjectDTO, len(activeProjects))
-	for i, p := range activeProjects {
-		activeProjectDTOs[i] = mapper.ToProjectDTO(&p)
+	} else {
+		for _, o := range recentOffers {
+			metrics.RecentOffers = append(metrics.RecentOffers, mapper.ToOfferDTO(&o))
+		}
 	}
 
-	// Get recent projects
-	recentProjects, err := s.projectRepo.GetRecentProjects(ctx, 5)
+	// Get recent projects (12-month window)
+	recentProjects, err := s.projectRepo.GetRecentProjectsInWindow(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent projects", zap.Error(err))
-	}
-	recentProjectDTOs := make([]domain.ProjectDTO, len(recentProjects))
-	for i, p := range recentProjects {
-		recentProjectDTOs[i] = mapper.ToProjectDTO(&p)
-	}
-
-	// Get top customers
-	topCustomers, err := s.customerRepo.GetTopCustomers(ctx, 5)
-	if err != nil {
-		s.logger.Warn("failed to get top customers", zap.Error(err))
-	}
-	topCustomerDTOs := make([]domain.CustomerDTO, len(topCustomers))
-	for i, c := range topCustomers {
-		topCustomerDTOs[i] = mapper.ToCustomerDTO(&c, 0, 0)
+	} else {
+		for _, p := range recentProjects {
+			metrics.RecentProjects = append(metrics.RecentProjects, mapper.ToProjectDTO(&p))
+		}
 	}
 
-	// Get recent activities
-	recentActivities, err := s.activityRepo.GetRecentActivities(ctx, 10)
+	// Get recent activities (12-month window)
+	recentActivities, err := s.activityRepo.GetRecentActivitiesInWindow(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent activities", zap.Error(err))
-	}
-	recentActivityDTOs := make([]domain.ActivityDTO, len(recentActivities))
-	for i, a := range recentActivities {
-		recentActivityDTOs[i] = mapper.ToActivityDTO(&a)
-	}
-
-	// Build pipeline phase data with values
-	pipeline := []domain.PipelinePhaseData{}
-	for phase, phaseStats := range offerStats.ByPhaseStats {
-		pipeline = append(pipeline, domain.PipelinePhaseData{
-			Phase:         phase,
-			Count:         phaseStats.Count,
-			TotalValue:    phaseStats.TotalValue,
-			WeightedValue: phaseStats.WeightedValue,
-		})
+	} else {
+		for _, a := range recentActivities {
+			metrics.RecentActivities = append(metrics.RecentActivities, mapper.ToActivityDTO(&a))
+		}
 	}
 
-	return &domain.DashboardMetrics{
-		TotalOffers:           int(offerStats.TotalOffers),
-		ActiveOffers:          int(offerStats.ActiveOffers),
-		WonOffers:             int(offerStats.WonOffers),
-		LostOffers:            int(offerStats.LostOffers),
-		TotalValue:            offerStats.TotalValue,
-		WeightedValue:         offerStats.WeightedValue,
-		AverageProbability:    offerStats.AvgProbability,
-		OffersByPhase:         offerStats.ByPhase,
-		Pipeline:              pipeline,
-		OfferReserve:          offerStats.TotalValue,
-		WinRate:               winRate,
-		RevenueForecast30Days: offerStats.WeightedValue * 0.3, // Simple estimate
-		RevenueForecast90Days: offerStats.WeightedValue * 0.7, // Simple estimate
-		TopDisciplines:        []domain.DisciplineStats{},
-		ActiveProjects:        activeProjectDTOs,
-		TopCustomers:          topCustomerDTOs,
-		TeamPerformance:       []domain.TeamMemberStats{},
-		RecentOffers:          recentOfferDTOs,
-		RecentProjects:        recentProjectDTOs,
-		RecentActivities:      recentActivityDTOs,
-	}, nil
+	// Get top customers (12-month window, ranked by offer count)
+	topCustomers, err := s.customerRepo.GetTopCustomersWithOfferStats(ctx, since, recentLimit)
+	if err != nil {
+		s.logger.Warn("failed to get top customers with offer stats", zap.Error(err))
+	} else {
+		for _, c := range topCustomers {
+			metrics.TopCustomers = append(metrics.TopCustomers, domain.TopCustomerDTO{
+				ID:            c.CustomerID,
+				Name:          c.CustomerName,
+				OrgNumber:     c.OrgNumber,
+				OfferCount:    c.OfferCount,
+				EconomicValue: c.EconomicValue,
+			})
+		}
+	}
+
+	return metrics, nil
 }
 
 func (s *DashboardService) Search(ctx context.Context, query string) (*domain.SearchResults, error) {

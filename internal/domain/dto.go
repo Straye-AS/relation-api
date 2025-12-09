@@ -377,30 +377,58 @@ type PipelinePhaseData struct {
 	Count         int        `json:"count"`
 	TotalValue    float64    `json:"totalValue"`
 	WeightedValue float64    `json:"weightedValue"`
-	Offers        []OfferDTO `json:"offers"`
+	Offers        []OfferDTO `json:"offers,omitempty"`
 }
 
+// WinRateMetrics holds win/loss statistics for transparency
+type WinRateMetrics struct {
+	WonCount        int     `json:"wonCount"`
+	LostCount       int     `json:"lostCount"`
+	WonValue        float64 `json:"wonValue"`
+	LostValue       float64 `json:"lostValue"`
+	WinRate         float64 `json:"winRate"`         // won_count / (won_count + lost_count), 0-1 scale
+	EconomicWinRate float64 `json:"economicWinRate"` // won_value / (won_value + lost_value), 0-1 scale
+}
+
+// TopCustomerDTO represents a customer with offer statistics for the dashboard
+type TopCustomerDTO struct {
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	OrgNumber     string    `json:"orgNumber,omitempty"`
+	OfferCount    int       `json:"offerCount"`
+	EconomicValue float64   `json:"economicValue"` // Total value of their offers
+}
+
+// DashboardMetrics contains all metrics for the dashboard
+// All metrics use a rolling 12-month window from the current date
+// Drafts and expired offers are excluded from all calculations
 type DashboardMetrics struct {
-	TotalOffers           int                 `json:"totalOffers"`
-	ActiveOffers          int                 `json:"activeOffers"`
-	WonOffers             int                 `json:"wonOffers"`
-	LostOffers            int                 `json:"lostOffers"`
-	TotalValue            float64             `json:"totalValue"`
-	WeightedValue         float64             `json:"weightedValue"`
-	AverageProbability    float64             `json:"averageProbability"`
-	OffersByPhase         map[OfferPhase]int  `json:"offersByPhase"`
-	Pipeline              []PipelinePhaseData `json:"pipeline"`
-	OfferReserve          float64             `json:"offerReserve"`
-	WinRate               float64             `json:"winRate"`
-	RevenueForecast30Days float64             `json:"revenueForecast30Days"`
-	RevenueForecast90Days float64             `json:"revenueForecast90Days"`
-	TopDisciplines        []DisciplineStats   `json:"topDisciplines"`
-	ActiveProjects        []ProjectDTO        `json:"activeProjects"`
-	TopCustomers          []CustomerDTO       `json:"topCustomers"`
-	TeamPerformance       []TeamMemberStats   `json:"teamPerformance"`
-	RecentOffers          []OfferDTO          `json:"recentOffers"`
-	RecentProjects        []ProjectDTO        `json:"recentProjects"`
-	RecentActivities      []ActivityDTO       `json:"recentActivities"`
+	// Offer Metrics (12-month window, excluding drafts and expired)
+	TotalOfferCount      int     `json:"totalOfferCount"`      // Count of offers excluding drafts and expired
+	OfferReserve         float64 `json:"offerReserve"`         // Total value of active offers (in_progress, sent)
+	WeightedOfferReserve float64 `json:"weightedOfferReserve"` // Sum of (value * probability/100) for active offers
+	AverageProbability   float64 `json:"averageProbability"`   // Average probability of active offers
+
+	// Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
+	Pipeline []PipelinePhaseData `json:"pipeline"`
+
+	// Win Rate Metrics (12-month window)
+	WinRateMetrics WinRateMetrics `json:"winRateMetrics"`
+
+	// Order Reserve (from active projects)
+	OrderReserve float64 `json:"orderReserve"` // Sum of (budget - spent) on active projects
+
+	// Financial Summary
+	TotalInvoiced float64 `json:"totalInvoiced"` // Sum of "spent" on all projects in 12-month window
+	TotalValue    float64 `json:"totalValue"`    // orderReserve + totalInvoiced
+
+	// Recent Lists (12-month window, limit 10 each)
+	RecentOffers     []OfferDTO    `json:"recentOffers"`     // Last created offers (excluding drafts)
+	RecentProjects   []ProjectDTO  `json:"recentProjects"`   // Last created projects
+	RecentActivities []ActivityDTO `json:"recentActivities"` // Last activities
+
+	// Top Customers (12-month window, limit 10)
+	TopCustomers []TopCustomerDTO `json:"topCustomers"` // Ranked by offer count
 }
 
 // Search DTOs

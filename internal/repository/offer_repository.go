@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
@@ -512,4 +513,200 @@ func (r *OfferRepository) GetWinRate(ctx context.Context) (float64, error) {
 	}
 
 	return float64(won) / float64(total) * 100, nil
+}
+
+// DashboardOfferStats holds offer statistics for the dashboard with 12-month window
+type DashboardOfferStats struct {
+	TotalOfferCount      int     // Count of offers excluding drafts and expired
+	OfferReserve         float64 // Total value of active offers (in_progress, sent)
+	WeightedOfferReserve float64 // Sum of (value * probability/100) for active offers
+	AverageProbability   float64 // Average probability of active offers
+}
+
+// DashboardPipelineStats holds pipeline phase statistics for the dashboard
+type DashboardPipelineStats struct {
+	Phase         domain.OfferPhase
+	Count         int
+	TotalValue    float64
+	WeightedValue float64
+}
+
+// DashboardWinRateStats holds win/loss statistics for the dashboard
+type DashboardWinRateStats struct {
+	WonCount        int
+	LostCount       int
+	WonValue        float64
+	LostValue       float64
+	WinRate         float64 // won_count / (won_count + lost_count), 0-1 scale
+	EconomicWinRate float64 // won_value / (won_value + lost_value), 0-1 scale
+}
+
+// GetDashboardOfferStats returns offer statistics for the dashboard within a 12-month window
+// Excludes drafts and expired offers from all calculations
+func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time.Time) (*DashboardOfferStats, error) {
+	stats := &DashboardOfferStats{}
+
+	// Valid phases for counting (excludes draft and expired)
+	validPhases := []domain.OfferPhase{
+		domain.OfferPhaseInProgress,
+		domain.OfferPhaseSent,
+		domain.OfferPhaseWon,
+		domain.OfferPhaseLost,
+	}
+
+	// Active phases for reserve calculation
+	activePhases := []domain.OfferPhase{
+		domain.OfferPhaseInProgress,
+		domain.OfferPhaseSent,
+	}
+
+	// Total offer count (excluding drafts and expired)
+	countQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("created_at >= ?", since).
+		Where("phase IN ?", validPhases)
+	countQuery = ApplyCompanyFilter(ctx, countQuery)
+	var totalCount int64
+	if err := countQuery.Count(&totalCount).Error; err != nil {
+		return nil, fmt.Errorf("failed to count offers: %w", err)
+	}
+	stats.TotalOfferCount = int(totalCount)
+
+	// Offer reserve (sum of value for active offers: in_progress, sent)
+	reserveQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("created_at >= ?", since).
+		Where("phase IN ?", activePhases)
+	reserveQuery = ApplyCompanyFilter(ctx, reserveQuery)
+	if err := reserveQuery.Select("COALESCE(SUM(value), 0)").Scan(&stats.OfferReserve).Error; err != nil {
+		return nil, fmt.Errorf("failed to sum offer reserve: %w", err)
+	}
+
+	// Weighted offer reserve (sum of value * probability / 100 for active offers)
+	weightedQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("created_at >= ?", since).
+		Where("phase IN ?", activePhases)
+	weightedQuery = ApplyCompanyFilter(ctx, weightedQuery)
+	if err := weightedQuery.Select("COALESCE(SUM(value * probability / 100), 0)").Scan(&stats.WeightedOfferReserve).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate weighted reserve: %w", err)
+	}
+
+	// Average probability of active offers
+	avgProbQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("created_at >= ?", since).
+		Where("phase IN ?", activePhases)
+	avgProbQuery = ApplyCompanyFilter(ctx, avgProbQuery)
+	if err := avgProbQuery.Select("COALESCE(AVG(probability), 0)").Scan(&stats.AverageProbability).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate avg probability: %w", err)
+	}
+
+	return stats, nil
+}
+
+// GetDashboardPipelineStats returns pipeline statistics by phase for the dashboard
+// Includes only: in_progress, sent, won, lost (excludes draft and expired)
+func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since time.Time) ([]DashboardPipelineStats, error) {
+	// Valid phases for pipeline (excludes draft and expired)
+	validPhases := []domain.OfferPhase{
+		domain.OfferPhaseInProgress,
+		domain.OfferPhaseSent,
+		domain.OfferPhaseWon,
+		domain.OfferPhaseLost,
+	}
+
+	type phaseResult struct {
+		Phase         domain.OfferPhase
+		Count         int
+		TotalValue    float64
+		WeightedValue float64
+	}
+	var results []phaseResult
+
+	query := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Select("phase, COUNT(*) as count, COALESCE(SUM(value), 0) as total_value, COALESCE(SUM(value * probability / 100), 0) as weighted_value").
+		Where("created_at >= ?", since).
+		Where("phase IN ?", validPhases).
+		Group("phase")
+	query = ApplyCompanyFilter(ctx, query)
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get pipeline stats: %w", err)
+	}
+
+	// Convert to DashboardPipelineStats
+	pipelineStats := make([]DashboardPipelineStats, len(results))
+	for i, r := range results {
+		pipelineStats[i] = DashboardPipelineStats{
+			Phase:         r.Phase,
+			Count:         r.Count,
+			TotalValue:    r.TotalValue,
+			WeightedValue: r.WeightedValue,
+		}
+	}
+
+	return pipelineStats, nil
+}
+
+// GetDashboardWinRateStats returns win rate statistics for the dashboard within a 12-month window
+func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since time.Time) (*DashboardWinRateStats, error) {
+	stats := &DashboardWinRateStats{}
+
+	// Get won count and value
+	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("created_at >= ?", since).
+		Where("phase = ?", domain.OfferPhaseWon)
+	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
+
+	var wonResult struct {
+		Count      int64
+		TotalValue float64
+	}
+	if err := wonQuery.Select("COUNT(*) as count, COALESCE(SUM(value), 0) as total_value").Scan(&wonResult).Error; err != nil {
+		return nil, fmt.Errorf("failed to get won stats: %w", err)
+	}
+	stats.WonCount = int(wonResult.Count)
+	stats.WonValue = wonResult.TotalValue
+
+	// Get lost count and value
+	lostQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("created_at >= ?", since).
+		Where("phase = ?", domain.OfferPhaseLost)
+	lostQuery = ApplyCompanyFilter(ctx, lostQuery)
+
+	var lostResult struct {
+		Count      int64
+		TotalValue float64
+	}
+	if err := lostQuery.Select("COUNT(*) as count, COALESCE(SUM(value), 0) as total_value").Scan(&lostResult).Error; err != nil {
+		return nil, fmt.Errorf("failed to get lost stats: %w", err)
+	}
+	stats.LostCount = int(lostResult.Count)
+	stats.LostValue = lostResult.TotalValue
+
+	// Calculate win rate (count-based): won / (won + lost)
+	totalCount := stats.WonCount + stats.LostCount
+	if totalCount > 0 {
+		stats.WinRate = float64(stats.WonCount) / float64(totalCount)
+	}
+
+	// Calculate economic win rate (value-based): won_value / (won_value + lost_value)
+	totalValue := stats.WonValue + stats.LostValue
+	if totalValue > 0 {
+		stats.EconomicWinRate = stats.WonValue / totalValue
+	}
+
+	return stats, nil
+}
+
+// GetRecentOffersInWindow returns the most recent offers created within the time window
+// Excludes drafts from the results
+func (r *OfferRepository) GetRecentOffersInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Offer, error) {
+	var offers []domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("created_at >= ?", since).
+		Where("phase != ?", domain.OfferPhaseDraft).
+		Order("created_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&offers).Error
+	return offers, err
 }

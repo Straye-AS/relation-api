@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
@@ -384,6 +385,49 @@ func (r *ProjectRepository) GetRecentProjects(ctx context.Context, limit int) ([
 	var projects []domain.Project
 	query := r.db.WithContext(ctx).
 		Order("updated_at DESC").
+		Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&projects).Error
+	return projects, err
+}
+
+// DashboardProjectStats holds project statistics for the dashboard
+type DashboardProjectStats struct {
+	OrderReserve  float64 // Sum of (budget - spent) on active projects
+	TotalInvoiced float64 // Sum of "spent" on all projects in the time window
+}
+
+// GetDashboardProjectStats returns project statistics for the dashboard within a time window
+func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since time.Time) (*DashboardProjectStats, error) {
+	stats := &DashboardProjectStats{}
+
+	// Order reserve: sum of (budget - spent) on active projects
+	// Only count projects with status "active"
+	reserveQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("status = ?", domain.ProjectStatusActive)
+	reserveQuery = ApplyCompanyFilter(ctx, reserveQuery)
+	if err := reserveQuery.Select("COALESCE(SUM(budget - spent), 0)").Scan(&stats.OrderReserve).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate order reserve: %w", err)
+	}
+
+	// Total invoiced: sum of "spent" on all projects in the time window
+	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("created_at >= ?", since)
+	invoicedQuery = ApplyCompanyFilter(ctx, invoicedQuery)
+	if err := invoicedQuery.Select("COALESCE(SUM(spent), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate total invoiced: %w", err)
+	}
+
+	return stats, nil
+}
+
+// GetRecentProjectsInWindow returns the most recently created projects within the time window
+func (r *ProjectRepository) GetRecentProjectsInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Project, error) {
+	var projects []domain.Project
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("created_at >= ?", since).
+		Order("created_at DESC").
 		Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&projects).Error
