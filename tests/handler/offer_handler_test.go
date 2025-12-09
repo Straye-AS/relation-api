@@ -39,9 +39,10 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
-	companyRepo := repository.NewCompanyRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
-	companyService := service.NewCompanyService(companyRepo, logger)
+	companyService := service.NewCompanyService(logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
 	offerService := service.NewOfferService(
 		offerRepo,
@@ -52,6 +53,7 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 		fileRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		logger,
 		db,
 	)
