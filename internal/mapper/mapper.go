@@ -184,6 +184,12 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		items[i] = ToOfferItemDTO(&item)
 	}
 
+	var dueDate *string
+	if offer.DueDate != nil {
+		formatted := offer.DueDate.Format("2006-01-02T15:04:05Z")
+		dueDate = &formatted
+	}
+
 	return domain.OfferDTO{
 		ID:                  offer.ID,
 		Title:               offer.Title,
@@ -201,6 +207,7 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		Items:               items,
 		Description:         offer.Description,
 		Notes:               offer.Notes,
+		DueDate:             dueDate,
 	}
 }
 

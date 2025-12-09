@@ -144,6 +144,7 @@ type OfferDTO struct {
 	Items               []OfferItemDTO `json:"items"`
 	Description         string         `json:"description,omitempty"`
 	Notes               string         `json:"notes,omitempty"`
+	DueDate             *string        `json:"dueDate,omitempty"` // ISO 8601
 }
 
 type OfferItemDTO struct {
@@ -578,14 +579,15 @@ type UpdateProjectRequest struct {
 type CreateOfferRequest struct {
 	Title             string                   `json:"title" validate:"required,max=200"`
 	CustomerID        uuid.UUID                `json:"customerId" validate:"required"`
-	CompanyID         CompanyID                `json:"companyId" validate:"required"`
-	Phase             OfferPhase               `json:"phase" validate:"required"`
-	Probability       int                      `json:"probability" validate:"min=0,max=100"`
-	Status            OfferStatus              `json:"status" validate:"required"`
-	ResponsibleUserID string                   `json:"responsibleUserId" validate:"required"`
-	Items             []CreateOfferItemRequest `json:"items" validate:"required,min=1"`
+	CompanyID         CompanyID                `json:"companyId,omitempty"`
+	Phase             OfferPhase               `json:"phase,omitempty"`
+	Probability       *int                     `json:"probability,omitempty" validate:"omitempty,min=0,max=100"`
+	Status            OfferStatus              `json:"status,omitempty"`
+	ResponsibleUserID string                   `json:"responsibleUserId,omitempty"`
+	Items             []CreateOfferItemRequest `json:"items,omitempty"`
 	Description       string                   `json:"description,omitempty"`
 	Notes             string                   `json:"notes,omitempty"`
+	DueDate           *time.Time               `json:"dueDate,omitempty"`
 }
 
 type UpdateOfferRequest struct {
@@ -596,6 +598,7 @@ type UpdateOfferRequest struct {
 	ResponsibleUserID string      `json:"responsibleUserId" validate:"required"`
 	Description       string      `json:"description,omitempty"`
 	Notes             string      `json:"notes,omitempty"`
+	DueDate           *time.Time  `json:"dueDate,omitempty"`
 }
 
 type CreateOfferItemRequest struct {

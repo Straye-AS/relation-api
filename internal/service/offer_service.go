@@ -62,7 +62,7 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		return nil, fmt.Errorf("failed to verify customer: %w", err)
 	}
 
-	// Calculate value from items
+	// Calculate value from items (if provided)
 	totalValue := 0.0
 	items := make([]domain.OfferItem, len(req.Items))
 	for i, itemReq := range req.Items {
@@ -79,19 +79,44 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		totalValue += itemReq.Revenue
 	}
 
+	// Set defaults for optional fields
+	companyID := req.CompanyID
+	if companyID == "" && customer.CompanyID != nil {
+		companyID = *customer.CompanyID
+	}
+	if companyID == "" {
+		companyID = domain.CompanyGruppen // Default fallback
+	}
+
+	phase := req.Phase
+	if phase == "" {
+		phase = domain.OfferPhaseDraft
+	}
+
+	status := req.Status
+	if status == "" {
+		status = domain.OfferStatusActive
+	}
+
+	probability := 0
+	if req.Probability != nil {
+		probability = *req.Probability
+	}
+
 	offer := &domain.Offer{
 		Title:               req.Title,
 		CustomerID:          req.CustomerID,
 		CustomerName:        customer.Name,
-		CompanyID:           req.CompanyID,
-		Phase:               req.Phase,
-		Probability:         req.Probability,
+		CompanyID:           companyID,
+		Phase:               phase,
+		Probability:         probability,
 		Value:               totalValue,
-		Status:              req.Status,
+		Status:              status,
 		ResponsibleUserID:   req.ResponsibleUserID,
 		ResponsibleUserName: "", // Populated by handler/external user lookup if needed
 		Description:         req.Description,
 		Notes:               req.Notes,
+		DueDate:             req.DueDate,
 		Items:               items,
 	}
 
@@ -224,6 +249,7 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	offer.ResponsibleUserID = req.ResponsibleUserID
 	offer.Description = req.Description
 	offer.Notes = req.Notes
+	offer.DueDate = req.DueDate
 
 	// Recalculate value from items
 	offer.Value = mapper.CalculateOfferValue(offer.Items)

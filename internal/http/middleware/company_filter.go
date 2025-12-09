@@ -68,11 +68,21 @@ func (m *CompanyFilterMiddleware) Filter(next http.Handler) http.Handler {
 				RequestedByGruppenUser: userCtx.IsGruppenUser(),
 			}
 		} else {
-			// No specific company requested - use user's default filter
-			companyFilter := userCtx.GetCompanyFilter()
-			filter = &auth.CompanyFilter{
-				CompanyID:              companyFilter,
-				RequestedByGruppenUser: false,
+			// No specific company requested via query param
+			// Use the user's CompanyID (which may have been set via X-Company-Id header)
+			// If the company is set and is not gruppen/all, use it as filter
+			if userCtx.CompanyID != "" && userCtx.CompanyID != domain.CompanyGruppen && userCtx.CompanyID != domain.CompanyAll {
+				companyID := userCtx.CompanyID
+				filter = &auth.CompanyFilter{
+					CompanyID:              &companyID,
+					RequestedByGruppenUser: false,
+				}
+			} else {
+				// No specific company - show all data
+				filter = &auth.CompanyFilter{
+					CompanyID:              nil,
+					RequestedByGruppenUser: false,
+				}
 			}
 		}
 

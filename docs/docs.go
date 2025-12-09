@@ -6774,12 +6774,7 @@ const docTemplate = `{
         "domain.CreateOfferRequest": {
             "type": "object",
             "required": [
-                "companyId",
                 "customerId",
-                "items",
-                "phase",
-                "responsibleUserId",
-                "status",
                 "title"
             ],
             "properties": {
@@ -6792,9 +6787,11 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "dueDate": {
+                    "type": "string"
+                },
                 "items": {
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/domain.CreateOfferItemRequest"
                     }
@@ -7524,6 +7521,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "dueDate": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -7589,6 +7590,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "dueDate": {
+                    "description": "ISO 8601",
                     "type": "string"
                 },
                 "filesCount": {
@@ -8511,6 +8516,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "description": {
+                    "type": "string"
+                },
+                "dueDate": {
                     "type": "string"
                 },
                 "notes": {

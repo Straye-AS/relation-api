@@ -231,6 +231,65 @@ func TestCompanyFilterMiddleware_NoUserContext(t *testing.T) {
 	assert.True(t, handlerCalled, "Handler should be called even without user context")
 }
 
+func TestCompanyFilterMiddleware_APIServiceUser_WithCompanyHeader(t *testing.T) {
+	logger := zap.NewNop()
+	m := middleware.NewCompanyFilterMiddleware(logger)
+
+	// Simulate an API service user (SuperAdmin + APIService roles) with X-Company-ID set to stalbygg
+	// This is the scenario when using API key authentication with X-Company-ID header
+	userCtx := &auth.UserContext{
+		UserID:    uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+		CompanyID: domain.CompanyStalbygg, // Set via X-Company-ID header in auth middleware
+		Roles:     []domain.UserRoleType{domain.RoleSuperAdmin, domain.RoleAPIService},
+	}
+
+	var capturedFilter *auth.CompanyFilter
+	handler := m.Filter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedFilter, _ = auth.CompanyFilterFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Request WITHOUT company_id query param - should still filter by stalbygg
+	req := httptest.NewRequest("GET", "/api/v1/dashboard/metrics", nil)
+	req = req.WithContext(auth.WithUserContext(req.Context(), userCtx))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.NotNil(t, capturedFilter)
+	assert.NotNil(t, capturedFilter.CompanyID, "API service user with specific company should have company filter applied")
+	assert.Equal(t, domain.CompanyStalbygg, *capturedFilter.CompanyID)
+}
+
+func TestCompanyFilterMiddleware_APIServiceUser_WithGruppenHeader(t *testing.T) {
+	logger := zap.NewNop()
+	m := middleware.NewCompanyFilterMiddleware(logger)
+
+	// API service user with X-Company-ID set to gruppen (or not set, defaulting to gruppen)
+	userCtx := &auth.UserContext{
+		UserID:    uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+		CompanyID: domain.CompanyGruppen, // Default when X-Company-ID not provided
+		Roles:     []domain.UserRoleType{domain.RoleSuperAdmin, domain.RoleAPIService},
+	}
+
+	var capturedFilter *auth.CompanyFilter
+	handler := m.Filter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedFilter, _ = auth.CompanyFilterFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/v1/dashboard/metrics", nil)
+	req = req.WithContext(auth.WithUserContext(req.Context(), userCtx))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.NotNil(t, capturedFilter)
+	assert.Nil(t, capturedFilter.CompanyID, "API service user with gruppen company should see all data")
+}
+
 func TestCompanyFilterMiddleware_AllCompaniesValid(t *testing.T) {
 	logger := zap.NewNop()
 	m := middleware.NewCompanyFilterMiddleware(logger)

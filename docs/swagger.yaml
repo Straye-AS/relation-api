@@ -783,10 +783,11 @@ definitions:
         type: string
       description:
         type: string
+      dueDate:
+        type: string
       items:
         items:
           $ref: '#/definitions/domain.CreateOfferItemRequest'
-        minItems: 1
         type: array
       notes:
         type: string
@@ -804,12 +805,7 @@ definitions:
         maxLength: 200
         type: string
     required:
-    - companyId
     - customerId
-    - items
-    - phase
-    - responsibleUserId
-    - status
     - title
     type: object
   domain.CreateProjectRequest:
@@ -1298,6 +1294,9 @@ definitions:
         type: string
       description:
         type: string
+      dueDate:
+        description: ISO 8601
+        type: string
       id:
         type: string
       items:
@@ -1342,6 +1341,9 @@ definitions:
       customerName:
         type: string
       description:
+        type: string
+      dueDate:
+        description: ISO 8601
         type: string
       filesCount:
         type: integer
@@ -1974,6 +1976,8 @@ definitions:
   domain.UpdateOfferRequest:
     properties:
       description:
+        type: string
+      dueDate:
         type: string
       notes:
         type: string

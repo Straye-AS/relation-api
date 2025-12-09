@@ -384,6 +384,7 @@ type Offer struct {
 	ResponsibleUserName string      `gorm:"type:varchar(200)"`
 	Description         string      `gorm:"type:text"`
 	Notes               string      `gorm:"type:text"`
+	DueDate             *time.Time  `gorm:"type:timestamp;index"`
 	Items               []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
 	Files               []File      `gorm:"foreignKey:OfferID"`
 }

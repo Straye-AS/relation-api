@@ -40,7 +40,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 			if m.validateAPIKey(apiKey) {
 				// Determine company ID from header, default to gruppen
 				companyID := domain.CompanyGruppen
-				if companyHeader := r.Header.Get("X-Company-ID"); companyHeader != "" {
+				if companyHeader := r.Header.Get("X-Company-Id"); companyHeader != "" {
 					if domain.IsValidCompanyID(companyHeader) {
 						companyID = domain.CompanyID(companyHeader)
 					}
@@ -63,6 +63,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 					zap.String("auth_type", "api_key"),
 					zap.String("user_id", userCtx.UserID.String()),
 					zap.String("user_email", userCtx.Email),
+					zap.String("company_id", string(companyID)),
 					zap.Duration("auth_duration", time.Since(start)),
 				)
 
@@ -106,6 +107,14 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		// Store the access token for OBO flow (to call Graph API)
 		userCtx.AccessToken = token
 
+		// Allow X-Company-Id header to override the user's company
+		// This allows any user to filter data by any company
+		if companyHeader := r.Header.Get("X-Company-Id"); companyHeader != "" {
+			if domain.IsValidCompanyID(companyHeader) {
+				userCtx.CompanyID = domain.CompanyID(companyHeader)
+			}
+		}
+
 		// Log successful JWT authentication
 		m.logger.Info("request authenticated",
 			zap.String("method", r.Method),
@@ -113,6 +122,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 			zap.String("auth_type", "jwt"),
 			zap.String("user_id", userCtx.UserID.String()),
 			zap.String("user_email", userCtx.Email),
+			zap.String("company_id", string(userCtx.CompanyID)),
 			zap.Strings("roles", userCtx.RolesAsStrings()),
 			zap.Duration("auth_duration", time.Since(start)),
 		)

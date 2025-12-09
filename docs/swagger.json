@@ -6768,12 +6768,7 @@
         "domain.CreateOfferRequest": {
             "type": "object",
             "required": [
-                "companyId",
                 "customerId",
-                "items",
-                "phase",
-                "responsibleUserId",
-                "status",
                 "title"
             ],
             "properties": {
@@ -6786,9 +6781,11 @@
                 "description": {
                     "type": "string"
                 },
+                "dueDate": {
+                    "type": "string"
+                },
                 "items": {
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/domain.CreateOfferItemRequest"
                     }
@@ -7518,6 +7515,10 @@
                 "description": {
                     "type": "string"
                 },
+                "dueDate": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -7583,6 +7584,10 @@
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "dueDate": {
+                    "description": "ISO 8601",
                     "type": "string"
                 },
                 "filesCount": {
@@ -8505,6 +8510,9 @@
             ],
             "properties": {
                 "description": {
+                    "type": "string"
+                },
+                "dueDate": {
                     "type": "string"
                 },
                 "notes": {
