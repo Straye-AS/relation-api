@@ -35,9 +35,9 @@ type Router struct {
 	authHandler             *handler.AuthHandler
 	companyHandler          *handler.CompanyHandler
 	auditHandler            *handler.AuditHandler
-	contactHandler      *handler.ContactHandler
-	budgetItemHandler   *handler.BudgetItemHandler
-	notificationHandler *handler.NotificationHandler
+	contactHandler          *handler.ContactHandler
+	budgetItemHandler       *handler.BudgetItemHandler
+	notificationHandler     *handler.NotificationHandler
 	activityHandler         *handler.ActivityHandler
 }
 
@@ -82,9 +82,9 @@ func NewRouter(
 		authHandler:             authHandler,
 		companyHandler:          companyHandler,
 		auditHandler:            auditHandler,
-		contactHandler:      contactHandler,
-		budgetItemHandler:   budgetItemHandler,
-		notificationHandler: notificationHandler,
+		contactHandler:          contactHandler,
+		budgetItemHandler:       budgetItemHandler,
+		notificationHandler:     notificationHandler,
 		activityHandler:         activityHandler,
 	}
 }

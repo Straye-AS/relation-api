@@ -737,7 +737,8 @@ func (s *OfferService) GetBudgetSummary(ctx context.Context, id uuid.UUID) (*dom
 
 // RecalculateTotals recalculates the offer value from budget items
 func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
-	offer, err := s.offerRepo.GetByID(ctx, id)
+	// First check if the offer exists
+	_, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOfferNotFound
@@ -751,8 +752,8 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 		return nil, fmt.Errorf("failed to calculate totals: %w", err)
 	}
 
-	// Reload offer
-	offer, err = s.offerRepo.GetByID(ctx, id)
+	// Reload offer with updated values
+	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		s.logger.Warn("failed to reload offer after recalculate", zap.Error(err))
 	}

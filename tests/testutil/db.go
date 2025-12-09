@@ -54,6 +54,7 @@ func CleanupTestData(t *testing.T, db *gorm.DB) {
 		"contact_relationships",
 		"contacts",
 		"customers",
+		"number_sequences",
 	}
 
 	for _, table := range tables {
