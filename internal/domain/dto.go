@@ -681,6 +681,7 @@ type CreateOfferRequest struct {
 	Probability       *int                     `json:"probability,omitempty" validate:"omitempty,min=0,max=100"`
 	Status            OfferStatus              `json:"status,omitempty"`
 	ResponsibleUserID string                   `json:"responsibleUserId,omitempty"`
+	ProjectID         *uuid.UUID               `json:"projectId,omitempty"` // Link to existing project (auto-created if not provided and phase != draft)
 	Items             []CreateOfferItemRequest `json:"items,omitempty"`
 	Description       string                   `json:"description,omitempty"`
 	Notes             string                   `json:"notes,omitempty"`
@@ -822,7 +823,8 @@ type OfferWithItemsDTO struct {
 }
 
 type AdvanceOfferRequest struct {
-	Phase OfferPhase `json:"phase" validate:"required"`
+	Phase     OfferPhase `json:"phase" validate:"required"`
+	ProjectID *uuid.UUID `json:"projectId,omitempty"` // Link to existing project (auto-created if not provided and advancing to in_progress)
 }
 
 // Offer Lifecycle DTOs
@@ -850,6 +852,14 @@ type AcceptOfferResponse struct {
 // RejectOfferRequest contains the reason for rejecting an offer
 type RejectOfferRequest struct {
 	Reason string `json:"reason,omitempty" validate:"max=500"`
+}
+
+// OfferWithProjectResponse contains an offer and optionally an auto-created project
+// Used when creating/advancing offers that trigger project auto-creation
+type OfferWithProjectResponse struct {
+	Offer          *OfferDTO   `json:"offer"`
+	Project        *ProjectDTO `json:"project,omitempty"`        // Present if a project was auto-created
+	ProjectCreated bool        `json:"projectCreated,omitempty"` // True if a new project was created
 }
 
 // WinOfferRequest contains options when winning an offer within a project context

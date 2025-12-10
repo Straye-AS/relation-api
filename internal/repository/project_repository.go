@@ -158,9 +158,14 @@ func (r *ProjectRepository) Search(ctx context.Context, searchQuery string, limi
 	var projects []domain.Project
 	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
 	query := r.db.WithContext(ctx).Preload("Customer").
-		Where("LOWER(name) LIKE ? OR LOWER(summary) LIKE ?", searchPattern, searchPattern)
+		Where(`LOWER(name) LIKE ? OR
+			LOWER(summary) LIKE ? OR
+			LOWER(project_number) LIKE ? OR
+			LOWER(customer_name) LIKE ? OR
+			LOWER(description) LIKE ?`,
+			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Limit(limit).Find(&projects).Error
+	err := query.Order("created_at DESC").Limit(limit).Find(&projects).Error
 	return projects, err
 }
 
@@ -576,4 +581,69 @@ func (r *ProjectRepository) CountByPhase(ctx context.Context) (map[domain.Projec
 	}
 
 	return counts, nil
+}
+
+// CancelProject updates the project status and phase to cancelled
+func (r *ProjectRepository) CancelProject(ctx context.Context, projectID uuid.UUID) error {
+	updates := map[string]interface{}{
+		"phase":  domain.ProjectPhaseCancelled,
+		"status": domain.ProjectStatusCancelled,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to cancel project: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// RecalculateBestOfferEconomics recalculates the project's CalculatedOfferValue and Budget
+// based on the highest value active offer linked to the project.
+// This should only be called for projects in the tilbud phase.
+func (r *ProjectRepository) RecalculateBestOfferEconomics(ctx context.Context, projectID uuid.UUID) error {
+	// Find the highest value active offer for this project
+	var maxValue float64
+	err := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("project_id = ?", projectID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		}).
+		Select("COALESCE(MAX(value), 0)").
+		Scan(&maxValue).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to calculate best offer value: %w", err)
+	}
+
+	// Update project with the calculated value
+	updates := map[string]interface{}{
+		"calculated_offer_value": maxValue,
+		"budget":                 maxValue,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID).
+		Where("phase = ?", domain.ProjectPhaseTilbud) // Only update tilbud phase projects
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project economics: %w", result.Error)
+	}
+
+	return nil
 }

@@ -59,6 +59,15 @@ func NewOfferService(
 
 // Create creates a new offer with initial items
 func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferRequest) (*domain.OfferDTO, error) {
+	resp, err := s.CreateWithProjectResponse(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Offer, nil
+}
+
+// CreateWithProjectResponse creates a new offer and returns both the offer and any auto-created project
+func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domain.CreateOfferRequest) (*domain.OfferWithProjectResponse, error) {
 	// Verify customer exists
 	customer, err := s.customerRepo.GetByID(ctx, req.CustomerID)
 	if err != nil {
@@ -166,8 +175,62 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		}
 	}
 
-	if err := s.offerRepo.Create(ctx, offer); err != nil {
-		return nil, fmt.Errorf("failed to create offer: %w", err)
+	// Track project creation result
+	var projectLinkRes *projectLinkResult
+
+	// Handle project linking/creation for non-draft offers
+	if !s.isDraftPhase(phase) {
+		// For non-draft offers, ensure project exists (either provided or auto-created)
+		// But first create the offer so we have its ID for linking
+		if err := s.offerRepo.Create(ctx, offer); err != nil {
+			return nil, fmt.Errorf("failed to create offer: %w", err)
+		}
+
+		// Now handle project linking
+		if req.ProjectID != nil {
+			// User provided a project ID - validate and link
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, req.ProjectID)
+			if err != nil {
+				// Rollback offer creation
+				_ = s.offerRepo.Delete(ctx, offer.ID)
+				return nil, err
+			}
+		} else {
+			// Auto-create project
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil)
+			if err != nil {
+				// Rollback offer creation
+				_ = s.offerRepo.Delete(ctx, offer.ID)
+				return nil, err
+			}
+		}
+
+		// Link offer to project
+		offer.ProjectID = &projectLinkRes.ProjectID
+		if err := s.offerRepo.LinkToProject(ctx, offer.ID, projectLinkRes.ProjectID); err != nil {
+			return nil, fmt.Errorf("failed to link offer to project: %w", err)
+		}
+
+		// Update project economics (CalculatedOfferValue)
+		if projectLinkRes.Project != nil && projectLinkRes.Project.Phase == domain.ProjectPhaseTilbud {
+			if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, projectLinkRes.ProjectID); err != nil {
+				s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+			}
+		}
+	} else {
+		// Draft offer - optionally link to provided project (but don't auto-create)
+		if req.ProjectID != nil {
+			// Validate the project if provided
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, req.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			offer.ProjectID = &projectLinkRes.ProjectID
+		}
+
+		if err := s.offerRepo.Create(ctx, offer); err != nil {
+			return nil, fmt.Errorf("failed to create offer: %w", err)
+		}
 	}
 
 	// Reload with relations
@@ -177,11 +240,27 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 	}
 
 	// Log activity
-	s.logActivity(ctx, offer.ID, "Offer created",
-		fmt.Sprintf("Offer '%s' was created for customer %s", offer.Title, offer.CustomerName))
+	activityBody := fmt.Sprintf("Offer '%s' was created for customer %s", offer.Title, offer.CustomerName)
+	if projectLinkRes != nil && projectLinkRes.ProjectCreated {
+		activityBody = fmt.Sprintf("Offer '%s' was created for customer %s with auto-created project '%s'",
+			offer.Title, offer.CustomerName, projectLinkRes.Project.Name)
+	}
+	s.logActivity(ctx, offer.ID, "Offer created", activityBody)
 
-	dto := mapper.ToOfferDTO(offer)
-	return &dto, nil
+	offerDTO := mapper.ToOfferDTO(offer)
+
+	response := &domain.OfferWithProjectResponse{
+		Offer: &offerDTO,
+	}
+
+	// Include project in response if one was created or linked
+	if projectLinkRes != nil {
+		projectDTO := mapper.ToProjectDTO(projectLinkRes.Project)
+		response.Project = &projectDTO
+		response.ProjectCreated = projectLinkRes.ProjectCreated
+	}
+
+	return response, nil
 }
 
 // GetByID retrieves an offer by ID with items
@@ -615,6 +694,9 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 }
 
 // RejectOffer transitions an offer to lost phase with a reason
+// If the offer is linked to a project in tilbud phase:
+// - If other active offers remain: recalculates project economics
+// - If no other active offers: cancels the project
 func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domain.RejectOfferRequest) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -645,6 +727,34 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
+	// Handle project lifecycle if offer is linked to a project
+	var projectCancelled bool
+	if offer.ProjectID != nil {
+		project, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
+		if err == nil && project.Phase == domain.ProjectPhaseTilbud {
+			// Check if there are other active offers
+			activeCount, err := s.offerRepo.CountActiveOffersByProject(ctx, *offer.ProjectID)
+			if err != nil {
+				s.logger.Warn("failed to count active offers", zap.Error(err))
+			} else if activeCount == 0 {
+				// No more active offers - cancel the project
+				if err := s.projectRepo.CancelProject(ctx, *offer.ProjectID); err != nil {
+					s.logger.Warn("failed to cancel project", zap.Error(err))
+				} else {
+					projectCancelled = true
+					s.logActivityOnTarget(ctx, domain.ActivityTargetProject, *offer.ProjectID,
+						"Project cancelled",
+						fmt.Sprintf("Project cancelled because all offers were lost (last: '%s')", offer.Title))
+				}
+			} else {
+				// Other active offers remain - recalculate economics
+				if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, *offer.ProjectID); err != nil {
+					s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+				}
+			}
+		}
+	}
+
 	// Reload with relations
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -655,6 +765,9 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 	activityBody := fmt.Sprintf("Offer '%s' was rejected (phase: %s -> lost)", offer.Title, oldPhase)
 	if req.Reason != "" {
 		activityBody = fmt.Sprintf("%s. Reason: %s", activityBody, req.Reason)
+	}
+	if projectCancelled {
+		activityBody = fmt.Sprintf("%s. Project was cancelled (no remaining active offers).", activityBody)
 	}
 	s.logActivity(ctx, offer.ID, "Offer rejected", activityBody)
 
@@ -854,6 +967,9 @@ func (s *OfferService) GetProjectOffers(ctx context.Context, projectID uuid.UUID
 }
 
 // ExpireOffer transitions an offer to expired phase
+// If the offer is linked to a project in tilbud phase:
+// - If other active offers remain: recalculates project economics
+// - If no other active offers: cancels the project
 func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -883,6 +999,34 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
+	// Handle project lifecycle if offer is linked to a project
+	var projectCancelled bool
+	if offer.ProjectID != nil {
+		project, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
+		if err == nil && project.Phase == domain.ProjectPhaseTilbud {
+			// Check if there are other active offers
+			activeCount, err := s.offerRepo.CountActiveOffersByProject(ctx, *offer.ProjectID)
+			if err != nil {
+				s.logger.Warn("failed to count active offers", zap.Error(err))
+			} else if activeCount == 0 {
+				// No more active offers - cancel the project
+				if err := s.projectRepo.CancelProject(ctx, *offer.ProjectID); err != nil {
+					s.logger.Warn("failed to cancel project", zap.Error(err))
+				} else {
+					projectCancelled = true
+					s.logActivityOnTarget(ctx, domain.ActivityTargetProject, *offer.ProjectID,
+						"Project cancelled",
+						fmt.Sprintf("Project cancelled because all offers expired (last: '%s')", offer.Title))
+				}
+			} else {
+				// Other active offers remain - recalculate economics
+				if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, *offer.ProjectID); err != nil {
+					s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+				}
+			}
+		}
+	}
+
 	// Reload with relations
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -890,8 +1034,11 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	}
 
 	// Log activity
-	s.logActivity(ctx, offer.ID, "Offer expired",
-		fmt.Sprintf("Offer '%s' was marked as expired (phase: %s -> expired)", offer.Title, oldPhase))
+	activityBody := fmt.Sprintf("Offer '%s' was marked as expired (phase: %s -> expired)", offer.Title, oldPhase)
+	if projectCancelled {
+		activityBody = fmt.Sprintf("%s. Project was cancelled (no remaining active offers).", activityBody)
+	}
+	s.logActivity(ctx, offer.ID, "Offer expired", activityBody)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1075,6 +1222,18 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 // Advance updates the offer phase (legacy method, prefer specific lifecycle methods)
 // When transitioning from draft to any non-draft phase, generates a unique offer number
 func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.AdvanceOfferRequest) (*domain.OfferDTO, error) {
+	resp, err := s.AdvanceWithProjectResponse(ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Offer, nil
+}
+
+// AdvanceWithProjectResponse updates the offer phase and returns the offer and any auto-created project
+// When transitioning from draft to in_progress:
+// - If ProjectID is provided in request, validates and links to that project
+// - If no ProjectID and offer has no project, auto-creates one
+func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.UUID, req *domain.AdvanceOfferRequest) (*domain.OfferWithProjectResponse, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1085,9 +1244,10 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 
 	oldPhase := offer.Phase
 	transitioningFromDraft := s.isDraftPhase(oldPhase) && !s.isDraftPhase(req.Phase)
+	transitioningToInProgress := req.Phase == domain.OfferPhaseInProgress
 
 	// Special validation for draft to in_progress transition
-	if oldPhase == domain.OfferPhaseDraft && req.Phase == domain.OfferPhaseInProgress {
+	if oldPhase == domain.OfferPhaseDraft && transitioningToInProgress {
 		// Must have responsible user OR company with default responsible user
 		hasResponsible := offer.ResponsibleUserID != ""
 		hasCompany := offer.CompanyID != ""
@@ -1119,6 +1279,37 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 		}
 	}
 
+	// Track project creation result
+	var projectLinkRes *projectLinkResult
+
+	// Handle project auto-creation when transitioning to in_progress (or any non-draft phase)
+	// and the offer doesn't already have a project
+	if transitioningFromDraft && !s.isDraftPhase(req.Phase) {
+		// Determine the project ID to use
+		requestedProjectID := req.ProjectID
+		if requestedProjectID == nil && offer.ProjectID != nil {
+			// Offer already has a project, use that
+			requestedProjectID = offer.ProjectID
+		}
+
+		if requestedProjectID != nil {
+			// Validate the requested/existing project
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, requestedProjectID)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// No project - auto-create one
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Link offer to project
+		offer.ProjectID = &projectLinkRes.ProjectID
+	}
+
 	offer.Phase = req.Phase
 
 	// Validate offer number rules after the phase change
@@ -1133,16 +1324,48 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
+	// Recalculate project economics if linked to a tilbud phase project
+	if projectLinkRes != nil && projectLinkRes.Project != nil && projectLinkRes.Project.Phase == domain.ProjectPhaseTilbud {
+		if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, projectLinkRes.ProjectID); err != nil {
+			s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+		}
+	}
+
+	// Reload offer
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after advance", zap.Error(err))
+	}
+
 	// Log activity
 	activityBody := fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase)
 	if transitioningFromDraft && offer.OfferNumber != "" {
 		activityBody = fmt.Sprintf("Offer '%s' advanced from %s to %s with offer number %s",
 			offer.Title, oldPhase, offer.Phase, offer.OfferNumber)
 	}
+	if projectLinkRes != nil && projectLinkRes.ProjectCreated {
+		activityBody = fmt.Sprintf("%s (auto-created project '%s')", activityBody, projectLinkRes.Project.Name)
+	}
 	s.logActivity(ctx, offer.ID, "Offer phase advanced", activityBody)
 
-	dto := mapper.ToOfferDTO(offer)
-	return &dto, nil
+	offerDTO := mapper.ToOfferDTO(offer)
+
+	response := &domain.OfferWithProjectResponse{
+		Offer: &offerDTO,
+	}
+
+	// Include project in response if one was created
+	if projectLinkRes != nil {
+		// Reload project to get latest state
+		project, err := s.projectRepo.GetByID(ctx, projectLinkRes.ProjectID)
+		if err == nil {
+			projectDTO := mapper.ToProjectDTO(project)
+			response.Project = &projectDTO
+		}
+		response.ProjectCreated = projectLinkRes.ProjectCreated
+	}
+
+	return response, nil
 }
 
 // ============================================================================
@@ -1243,6 +1466,108 @@ func (s *OfferService) GetActivities(ctx context.Context, id uuid.UUID, limit in
 // ============================================================================
 // Helper Methods
 // ============================================================================
+
+// projectLinkResult contains the result of ensureProjectForOffer
+type projectLinkResult struct {
+	ProjectID      uuid.UUID
+	Project        *domain.Project
+	ProjectCreated bool
+}
+
+// ensureProjectForOffer ensures an offer has a valid project link when transitioning to a non-draft phase.
+// If projectID is provided, validates it exists and matches customer/company.
+// If projectID is nil, creates a new project automatically.
+// Returns the project ID to link and whether a new project was created.
+func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.Offer, requestedProjectID *uuid.UUID) (*projectLinkResult, error) {
+	// If a project ID is provided, validate and use it
+	if requestedProjectID != nil {
+		project, err := s.projectRepo.GetByID(ctx, *requestedProjectID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrProjectNotFound
+			}
+			return nil, fmt.Errorf("failed to get project: %w", err)
+		}
+
+		// Validate project is not cancelled
+		if project.Phase == domain.ProjectPhaseCancelled {
+			return nil, ErrCannotAddOfferToCancelledProject
+		}
+
+		// Validate customer match
+		if project.CustomerID != offer.CustomerID {
+			return nil, ErrProjectCustomerMismatch
+		}
+
+		// Validate company match
+		if project.CompanyID != offer.CompanyID {
+			return nil, ErrProjectCompanyMismatch
+		}
+
+		return &projectLinkResult{
+			ProjectID:      project.ID,
+			Project:        project,
+			ProjectCreated: false,
+		}, nil
+	}
+
+	// No project ID provided - create one automatically
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		return nil, ErrUnauthorized
+	}
+
+	// Determine manager: use offer's responsible user if set, otherwise fall back to company default or current user
+	managerID := offer.ResponsibleUserID
+	if managerID == "" {
+		// Try to get company default
+		if s.companyService != nil {
+			defaultManager := s.companyService.GetDefaultProjectResponsible(ctx, offer.CompanyID)
+			if defaultManager != nil && *defaultManager != "" {
+				managerID = *defaultManager
+			}
+		}
+	}
+	if managerID == "" {
+		// Fall back to current user
+		managerID = userCtx.UserID.String()
+	}
+
+	// Auto-create project
+	project := &domain.Project{
+		Name:         fmt.Sprintf("[AUTO] %s", offer.Title),
+		CustomerID:   offer.CustomerID,
+		CustomerName: offer.CustomerName,
+		CompanyID:    offer.CompanyID,
+		Status:       domain.ProjectStatusPlanning,
+		Phase:        domain.ProjectPhaseTilbud,
+		StartDate:    time.Now(),
+		Budget:       offer.Value, // Initial budget from offer value
+		ManagerID:    managerID,
+		Description:  offer.Description,
+		// CalculatedOfferValue will be set when economics are synced
+	}
+
+	if err := s.projectRepo.Create(ctx, project); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrProjectCreationFailed, err)
+	}
+
+	s.logger.Info("auto-created project for offer",
+		zap.String("offerID", offer.ID.String()),
+		zap.String("projectID", project.ID.String()),
+		zap.String("projectName", project.Name))
+
+	// Log activity on the new project
+	s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
+		"Project auto-created",
+		fmt.Sprintf("Project '%s' was automatically created for offer '%s'", project.Name, offer.Title))
+
+	return &projectLinkResult{
+		ProjectID:      project.ID,
+		Project:        project,
+		ProjectCreated: true,
+	}, nil
+}
 
 // isClosedPhase returns true if the phase is a terminal state
 func (s *OfferService) isClosedPhase(phase domain.OfferPhase) bool {
@@ -1656,6 +1981,7 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 }
 
 // UnlinkFromProject removes the project link from an offer
+// Note: Non-draft offers cannot be unlinked from their project (per offer-project lifecycle spec)
 func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, offerID)
 	if err != nil {
@@ -1669,14 +1995,27 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 		return nil, ErrOfferAlreadyClosed
 	}
 
+	// Non-draft offers cannot be unlinked from their project
+	if !s.isDraftPhase(offer.Phase) {
+		return nil, ErrCannotUnlinkNonDraftOffer
+	}
+
 	if offer.ProjectID == nil {
 		// Already unlinked, just return the offer
 		dto := mapper.ToOfferDTO(offer)
 		return &dto, nil
 	}
 
+	// Store project ID for economics recalculation
+	oldProjectID := *offer.ProjectID
+
 	if err := s.offerRepo.UnlinkFromProject(ctx, offerID); err != nil {
 		return nil, fmt.Errorf("failed to unlink offer from project: %w", err)
+	}
+
+	// Recalculate project economics after unlinking (in case draft was contributing)
+	if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, oldProjectID); err != nil {
+		s.logger.Warn("failed to recalculate project economics after unlink", zap.Error(err))
 	}
 
 	// Reload and return

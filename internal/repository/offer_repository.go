@@ -234,9 +234,15 @@ func (r *OfferRepository) Search(ctx context.Context, searchQuery string, limit 
 	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
-		Where("LOWER(title) LIKE ?", searchPattern)
+		Where(`LOWER(title) LIKE ? OR
+			LOWER(offer_number) LIKE ? OR
+			LOWER(external_reference) LIKE ? OR
+			LOWER(customer_name) LIKE ? OR
+			LOWER(description) LIKE ? OR
+			LOWER(location) LIKE ?`,
+			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Limit(limit).Find(&offers).Error
+	err := query.Order("created_at DESC").Limit(limit).Find(&offers).Error
 	return offers, err
 }
 
@@ -1028,4 +1034,61 @@ func (r *OfferRepository) CountOffersByProject(ctx context.Context, projectID uu
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Count(&count).Error
 	return count, err
+}
+
+// CountActiveOffersByProject returns the count of active offers (not won/lost/expired) for a project
+func (r *OfferRepository) CountActiveOffersByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("project_id = ?", projectID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		})
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// GetActiveOffersByProject returns all active offers (not won/lost/expired) for a project
+func (r *OfferRepository) GetActiveOffersByProject(ctx context.Context, projectID uuid.UUID) ([]domain.Offer, error) {
+	var offers []domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("project_id = ?", projectID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		})
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Order("value DESC").Find(&offers).Error
+	return offers, err
+}
+
+// GetBestActiveOfferForProject returns the highest value active offer for a project
+// Returns nil if no active offers exist
+func (r *OfferRepository) GetBestActiveOfferForProject(ctx context.Context, projectID uuid.UUID) (*domain.Offer, error) {
+	var offer domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("project_id = ?", projectID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		}).
+		Order("value DESC").
+		Limit(1)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.First(&offer).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No active offers found
+		}
+		return nil, err
+	}
+	return &offer, nil
 }

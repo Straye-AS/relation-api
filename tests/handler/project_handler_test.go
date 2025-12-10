@@ -40,10 +40,31 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 	projectRepo := repository.NewProjectRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	offerRepo := repository.NewOfferRepository(db)
+	offerItemRepo := repository.NewOfferItemRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
+
+	companyService := service.NewCompanyService(logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, logger)
+	offerService := service.NewOfferService(
+		offerRepo,
+		offerItemRepo,
+		customerRepo,
+		projectRepo,
+		budgetItemRepo,
+		fileRepo,
+		activityRepo,
+		companyService,
+		numberSequenceService,
+		logger,
+		db,
+	)
 
-	return handler.NewProjectHandler(projectService, logger)
+	return handler.NewProjectHandler(projectService, offerService, logger)
 }
 
 // createProjectHandlerWithDeps creates a handler with all dependencies for full feature support
@@ -54,7 +75,9 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
+	offerItemRepo := repository.NewOfferItemRepository(db)
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
+	fileRepo := repository.NewFileRepository(db)
 	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	companyService := service.NewCompanyService(logger)
@@ -72,7 +95,21 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 		db,
 	)
 
-	return handler.NewProjectHandler(projectService, logger)
+	offerService := service.NewOfferService(
+		offerRepo,
+		offerItemRepo,
+		customerRepo,
+		projectRepo,
+		budgetItemRepo,
+		fileRepo,
+		activityRepo,
+		companyService,
+		numberSequenceService,
+		logger,
+		db,
+	)
+
+	return handler.NewProjectHandler(projectService, offerService, logger)
 }
 
 func createProjectTestContext() context.Context {

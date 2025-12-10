@@ -128,4 +128,30 @@ var (
 
 	// ErrProjectEconomicsNotEditable is returned when trying to edit economics for a project not in active phase
 	ErrProjectEconomicsNotEditable = errors.New("project economics can only be edited during active phase")
+
+	// Offer-Project lifecycle errors
+
+	// ErrNonDraftOfferRequiresProject is returned when trying to create/update a non-draft offer without a project
+	ErrNonDraftOfferRequiresProject = errors.New("non-draft offers must be linked to a project")
+
+	// ErrCannotUnlinkNonDraftOffer is returned when trying to unlink a non-draft offer from its project
+	ErrCannotUnlinkNonDraftOffer = errors.New("cannot unlink non-draft offer from project")
+
+	// ErrCannotAddOfferToCancelledProject is returned when trying to add an offer to a cancelled project
+	ErrCannotAddOfferToCancelledProject = errors.New("cannot add offer to cancelled project")
+
+	// ErrProjectCustomerMismatch is returned when project and offer have different customers
+	ErrProjectCustomerMismatch = errors.New("project customer does not match offer customer")
+
+	// ErrProjectCompanyMismatch is returned when project and offer have different companies
+	ErrProjectCompanyMismatch = errors.New("project company does not match offer company")
+
+	// ErrCannotChangeOfferCustomerWhenLinked is returned when trying to change customer of a linked offer
+	ErrCannotChangeOfferCustomerWhenLinked = errors.New("cannot change customer of offer linked to project")
+
+	// ErrCannotChangeOfferCompanyWhenLinked is returned when trying to change company of a linked offer
+	ErrCannotChangeOfferCompanyWhenLinked = errors.New("cannot change company of offer linked to project")
+
+	// ErrNoActiveOffersRemaining is returned when no active offers remain after losing an offer
+	ErrNoActiveOffersRemaining = errors.New("no active offers remaining in project")
 )
