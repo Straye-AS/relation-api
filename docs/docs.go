@@ -2555,7 +2555,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns dashboard metrics using a rolling 12-month window. All metrics exclude draft and expired offers.\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers (in_progress, sent)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in 12-month window\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** 12-month window, limit 10 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
+                "description": "Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.\n\n**Time Range Options:**\n- ` + "`" + `rolling12months` + "`" + ` (default): Uses a rolling 12-month window from the current date\n- ` + "`" + `allTime` + "`" + `: Calculates metrics without any date filter\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers (in_progress, sent)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in the time range\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** Limit 5 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
                 "produces": [
                     "application/json"
                 ],
@@ -2563,11 +2563,30 @@ const docTemplate = `{
                     "Dashboard"
                 ],
                 "summary": "Get dashboard metrics",
+                "parameters": [
+                    {
+                        "enum": [
+                            "rolling12months",
+                            "allTime"
+                        ],
+                        "type": "string",
+                        "default": "rolling12months",
+                        "description": "Time range for metrics",
+                        "name": "timeRange",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.DashboardMetrics"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid timeRange value",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -7589,8 +7608,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "country",
-                "name",
-                "orgNumber"
+                "name"
             ],
             "properties": {
                 "address": {
@@ -7616,15 +7634,36 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "county": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
+                    "type": "string",
+                    "maxLength": 50
+                },
                 "email": {
                     "type": "string"
                 },
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
+                },
+                "notes": {
+                    "type": "string"
                 },
                 "orgNumber": {
                     "type": "string",
@@ -7818,6 +7857,10 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
+                },
                 "customerId": {
                     "type": "string"
                 },
@@ -7833,6 +7876,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.CreateOfferItemRequest"
                     }
                 },
+                "location": {
+                    "type": "string",
+                    "maxLength": 200
+                },
                 "notes": {
                     "type": "string"
                 },
@@ -7845,6 +7892,9 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "responsibleUserId": {
+                    "type": "string"
+                },
+                "sentDate": {
                     "type": "string"
                 },
                 "status": {
@@ -7970,8 +8020,17 @@ const docTemplate = `{
                 "country": {
                     "type": "string"
                 },
+                "county": {
+                    "type": "string"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
                     "type": "string"
                 },
                 "email": {
@@ -7983,7 +8042,16 @@ const docTemplate = `{
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string"
+                },
                 "name": {
+                    "type": "string"
+                },
+                "notes": {
                     "type": "string"
                 },
                 "orgNumber": {
@@ -8127,8 +8195,17 @@ const docTemplate = `{
                 "country": {
                     "type": "string"
                 },
+                "county": {
+                    "type": "string"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
                     "type": "string"
                 },
                 "email": {
@@ -8140,7 +8217,16 @@ const docTemplate = `{
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string"
+                },
                 "name": {
+                    "type": "string"
+                },
+                "notes": {
                     "type": "string"
                 },
                 "orgNumber": {
@@ -8200,7 +8286,7 @@ const docTemplate = `{
                     }
                 },
                 "recentOffers": {
-                    "description": "Recent Lists (12-month window, limit 10 each)",
+                    "description": "Recent Lists (limit 5 each)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.OfferDTO"
@@ -8213,8 +8299,16 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.ProjectDTO"
                     }
                 },
+                "timeRange": {
+                    "description": "TimeRange indicates the time range used for the metrics",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.TimeRange"
+                        }
+                    ]
+                },
                 "topCustomers": {
-                    "description": "Top Customers (12-month window, limit 10)",
+                    "description": "Top Customers (limit 5)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.TopCustomerDTO"
@@ -8225,7 +8319,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "totalOfferCount": {
-                    "description": "Offer Metrics (12-month window, excluding drafts and expired)",
+                    "description": "Offer Metrics (excluding drafts and expired)",
                     "type": "integer"
                 },
                 "totalValue": {
@@ -8237,7 +8331,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "winRateMetrics": {
-                    "description": "Win Rate Metrics (12-month window)",
+                    "description": "Win Rate Metrics",
                     "allOf": [
                         {
                             "$ref": "#/definitions/domain.WinRateMetrics"
@@ -8509,6 +8603,9 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "cost": {
+                    "type": "number"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
@@ -8535,6 +8632,17 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.OfferItemDTO"
                     }
                 },
+                "location": {
+                    "type": "string"
+                },
+                "margin": {
+                    "description": "Calculated: Value - Cost",
+                    "type": "number"
+                },
+                "marginPercent": {
+                    "description": "Calculated: (Value - Cost) / Value * 100",
+                    "type": "number"
+                },
                 "notes": {
                     "type": "string"
                 },
@@ -8556,6 +8664,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "responsibleUserName": {
+                    "type": "string"
+                },
+                "sentDate": {
+                    "description": "ISO 8601",
                     "type": "string"
                 },
                 "status": {
@@ -8588,6 +8700,9 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "cost": {
+                    "type": "number"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
@@ -8617,6 +8732,17 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.OfferItemDTO"
                     }
                 },
+                "location": {
+                    "type": "string"
+                },
+                "margin": {
+                    "description": "Calculated: Value - Cost",
+                    "type": "number"
+                },
+                "marginPercent": {
+                    "description": "Calculated: (Value - Cost) / Value * 100",
+                    "type": "number"
+                },
                 "notes": {
                     "type": "string"
                 },
@@ -8638,6 +8764,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "responsibleUserName": {
+                    "type": "string"
+                },
+                "sentDate": {
+                    "description": "ISO 8601",
                     "type": "string"
                 },
                 "status": {
@@ -9196,6 +9326,17 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.TimeRange": {
+            "type": "string",
+            "enum": [
+                "rolling12months",
+                "allTime"
+            ],
+            "x-enum-varnames": [
+                "TimeRangeRolling12Months",
+                "TimeRangeAllTime"
+            ]
+        },
         "domain.TopCustomerDTO": {
             "type": "object",
             "properties": {
@@ -9398,8 +9539,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "country",
-                "name",
-                "orgNumber"
+                "name"
             ],
             "properties": {
                 "address": {
@@ -9425,15 +9565,36 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "county": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
+                    "type": "string",
+                    "maxLength": 50
+                },
                 "email": {
                     "type": "string"
                 },
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
+                },
+                "notes": {
+                    "type": "string"
                 },
                 "orgNumber": {
                     "type": "string",
@@ -9583,11 +9744,19 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
+                },
                 "description": {
                     "type": "string"
                 },
                 "dueDate": {
                     "type": "string"
+                },
+                "location": {
+                    "type": "string",
+                    "maxLength": 200
                 },
                 "notes": {
                     "type": "string"
@@ -9601,6 +9770,9 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "responsibleUserId": {
+                    "type": "string"
+                },
+                "sentDate": {
                     "type": "string"
                 },
                 "status": {

@@ -397,8 +397,9 @@ type DashboardProjectStats struct {
 	TotalInvoiced float64 // Sum of "spent" on all projects in the time window
 }
 
-// GetDashboardProjectStats returns project statistics for the dashboard within a time window
-func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since time.Time) (*DashboardProjectStats, error) {
+// GetDashboardProjectStats returns project statistics for the dashboard
+// If since is nil, no date filter is applied (all time)
+func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since *time.Time) (*DashboardProjectStats, error) {
 	stats := &DashboardProjectStats{}
 
 	// Order reserve: sum of (budget - spent) on active projects
@@ -411,8 +412,10 @@ func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since 
 	}
 
 	// Total invoiced: sum of "spent" on all projects in the time window
-	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("created_at >= ?", since)
+	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{})
+	if since != nil {
+		invoicedQuery = invoicedQuery.Where("created_at >= ?", *since)
+	}
 	invoicedQuery = ApplyCompanyFilter(ctx, invoicedQuery)
 	if err := invoicedQuery.Select("COALESCE(SUM(spent), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate total invoiced: %w", err)
@@ -422,13 +425,15 @@ func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since 
 }
 
 // GetRecentProjectsInWindow returns the most recently created projects within the time window
-func (r *ProjectRepository) GetRecentProjectsInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Project, error) {
+// If since is nil, no date filter is applied (all time)
+func (r *ProjectRepository) GetRecentProjectsInWindow(ctx context.Context, since *time.Time, limit int) ([]domain.Project, error) {
 	var projects []domain.Project
 	query := r.db.WithContext(ctx).
-		Preload("Customer").
-		Where("created_at >= ?", since).
-		Order("created_at DESC").
-		Limit(limit)
+		Preload("Customer")
+	if since != nil {
+		query = query.Where("created_at >= ?", *since)
+	}
+	query = query.Order("created_at DESC").Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&projects).Error
 	return projects, err

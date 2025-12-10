@@ -320,8 +320,9 @@ type TopCustomerWithStats struct {
 }
 
 // GetTopCustomersWithOfferStats returns top customers ranked by offer count within a time window
+// If since is nil, no date filter is applied (all time)
 // Excludes draft and expired offers from the counts
-func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, since time.Time, limit int) ([]TopCustomerWithStats, error) {
+func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, since *time.Time, limit int) ([]TopCustomerWithStats, error) {
 	// Valid phases for counting (excludes draft and expired)
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
@@ -338,10 +339,12 @@ func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, 
 		Table("offers").
 		Select("customers.id as customer_id, customers.name as customer_name, customers.org_number, COUNT(offers.id) as offer_count, COALESCE(SUM(offers.value), 0) as economic_value").
 		Joins("JOIN customers ON customers.id = offers.customer_id").
-		Where("offers.created_at >= ?", since).
 		Where("offers.phase IN ?", validPhases).
-		Where("customers.status != ?", domain.CustomerStatusInactive).
-		Group("customers.id, customers.name, customers.org_number").
+		Where("customers.status != ?", domain.CustomerStatusInactive)
+	if since != nil {
+		query = query.Where("offers.created_at >= ?", *since)
+	}
+	query = query.Group("customers.id, customers.name, customers.org_number").
 		Order("offer_count DESC, economic_value DESC").
 		Limit(limit)
 

@@ -542,9 +542,10 @@ type DashboardWinRateStats struct {
 	EconomicWinRate float64 // won_value / (won_value + lost_value), 0-1 scale
 }
 
-// GetDashboardOfferStats returns offer statistics for the dashboard within a 12-month window
+// GetDashboardOfferStats returns offer statistics for the dashboard
+// If since is nil, no date filter is applied (all time)
 // Excludes drafts and expired offers from all calculations
-func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time.Time) (*DashboardOfferStats, error) {
+func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since *time.Time) (*DashboardOfferStats, error) {
 	stats := &DashboardOfferStats{}
 
 	// Valid phases for counting (excludes draft and expired)
@@ -563,8 +564,10 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time
 
 	// Total offer count (excluding drafts and expired)
 	countQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("created_at >= ?", since).
 		Where("phase IN ?", validPhases)
+	if since != nil {
+		countQuery = countQuery.Where("created_at >= ?", *since)
+	}
 	countQuery = ApplyCompanyFilter(ctx, countQuery)
 	var totalCount int64
 	if err := countQuery.Count(&totalCount).Error; err != nil {
@@ -574,8 +577,10 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time
 
 	// Offer reserve (sum of value for active offers: in_progress, sent)
 	reserveQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("created_at >= ?", since).
 		Where("phase IN ?", activePhases)
+	if since != nil {
+		reserveQuery = reserveQuery.Where("created_at >= ?", *since)
+	}
 	reserveQuery = ApplyCompanyFilter(ctx, reserveQuery)
 	if err := reserveQuery.Select("COALESCE(SUM(value), 0)").Scan(&stats.OfferReserve).Error; err != nil {
 		return nil, fmt.Errorf("failed to sum offer reserve: %w", err)
@@ -583,8 +588,10 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time
 
 	// Weighted offer reserve (sum of value * probability / 100 for active offers)
 	weightedQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("created_at >= ?", since).
 		Where("phase IN ?", activePhases)
+	if since != nil {
+		weightedQuery = weightedQuery.Where("created_at >= ?", *since)
+	}
 	weightedQuery = ApplyCompanyFilter(ctx, weightedQuery)
 	if err := weightedQuery.Select("COALESCE(SUM(value * probability / 100), 0)").Scan(&stats.WeightedOfferReserve).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate weighted reserve: %w", err)
@@ -592,8 +599,10 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time
 
 	// Average probability of active offers
 	avgProbQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("created_at >= ?", since).
 		Where("phase IN ?", activePhases)
+	if since != nil {
+		avgProbQuery = avgProbQuery.Where("created_at >= ?", *since)
+	}
 	avgProbQuery = ApplyCompanyFilter(ctx, avgProbQuery)
 	if err := avgProbQuery.Select("COALESCE(AVG(probability), 0)").Scan(&stats.AverageProbability).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate avg probability: %w", err)
@@ -603,8 +612,9 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since time
 }
 
 // GetDashboardPipelineStats returns pipeline statistics by phase for the dashboard
+// If since is nil, no date filter is applied (all time)
 // Includes only: in_progress, sent, won, lost (excludes draft and expired)
-func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since time.Time) ([]DashboardPipelineStats, error) {
+func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since *time.Time) ([]DashboardPipelineStats, error) {
 	// Valid phases for pipeline (excludes draft and expired)
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
@@ -623,9 +633,11 @@ func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since t
 
 	query := r.db.WithContext(ctx).Model(&domain.Offer{}).
 		Select("phase, COUNT(*) as count, COALESCE(SUM(value), 0) as total_value, COALESCE(SUM(value * probability / 100), 0) as weighted_value").
-		Where("created_at >= ?", since).
-		Where("phase IN ?", validPhases).
-		Group("phase")
+		Where("phase IN ?", validPhases)
+	if since != nil {
+		query = query.Where("created_at >= ?", *since)
+	}
+	query = query.Group("phase")
 	query = ApplyCompanyFilter(ctx, query)
 
 	if err := query.Scan(&results).Error; err != nil {
@@ -646,14 +658,17 @@ func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since t
 	return pipelineStats, nil
 }
 
-// GetDashboardWinRateStats returns win rate statistics for the dashboard within a 12-month window
-func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since time.Time) (*DashboardWinRateStats, error) {
+// GetDashboardWinRateStats returns win rate statistics for the dashboard
+// If since is nil, no date filter is applied (all time)
+func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since *time.Time) (*DashboardWinRateStats, error) {
 	stats := &DashboardWinRateStats{}
 
 	// Get won count and value
 	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("created_at >= ?", since).
 		Where("phase = ?", domain.OfferPhaseWon)
+	if since != nil {
+		wonQuery = wonQuery.Where("created_at >= ?", *since)
+	}
 	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
 
 	var wonResult struct {
@@ -668,8 +683,10 @@ func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since ti
 
 	// Get lost count and value
 	lostQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("created_at >= ?", since).
 		Where("phase = ?", domain.OfferPhaseLost)
+	if since != nil {
+		lostQuery = lostQuery.Where("created_at >= ?", *since)
+	}
 	lostQuery = ApplyCompanyFilter(ctx, lostQuery)
 
 	var lostResult struct {
@@ -698,15 +715,17 @@ func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since ti
 }
 
 // GetRecentOffersInWindow returns the most recent offers created within the time window
+// If since is nil, no date filter is applied (all time)
 // Excludes drafts from the results
-func (r *OfferRepository) GetRecentOffersInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Offer, error) {
+func (r *OfferRepository) GetRecentOffersInWindow(ctx context.Context, since *time.Time, limit int) ([]domain.Offer, error) {
 	var offers []domain.Offer
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
-		Where("created_at >= ?", since).
-		Where("phase != ?", domain.OfferPhaseDraft).
-		Order("created_at DESC").
-		Limit(limit)
+		Where("phase != ?", domain.OfferPhaseDraft)
+	if since != nil {
+		query = query.Where("created_at >= ?", *since)
+	}
+	query = query.Order("created_at DESC").Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&offers).Error
 	return offers, err

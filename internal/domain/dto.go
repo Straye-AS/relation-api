@@ -24,6 +24,12 @@ type CustomerDTO struct {
 	Status        CustomerStatus   `json:"status"`
 	Tier          CustomerTier     `json:"tier"`
 	Industry      CustomerIndustry `json:"industry,omitempty"`
+	Notes         string           `json:"notes,omitempty"`
+	CustomerClass string           `json:"customerClass,omitempty"`
+	CreditLimit   *float64         `json:"creditLimit,omitempty"`
+	IsInternal    bool             `json:"isInternal"`
+	Municipality  string           `json:"municipality,omitempty"`
+	County        string           `json:"county,omitempty"`
 	CreatedAt     string           `json:"createdAt"` // ISO 8601
 	UpdatedAt     string           `json:"updatedAt"` // ISO 8601
 	TotalValue    float64          `json:"totalValue,omitempty"`
@@ -147,6 +153,11 @@ type OfferDTO struct {
 	Description         string         `json:"description,omitempty"`
 	Notes               string         `json:"notes,omitempty"`
 	DueDate             *string        `json:"dueDate,omitempty"` // ISO 8601
+	Cost                float64        `json:"cost"`
+	Margin              float64        `json:"margin"`        // Calculated: Value - Cost
+	MarginPercent       float64        `json:"marginPercent"` // Calculated: (Value - Cost) / Value * 100
+	Location            string         `json:"location,omitempty"`
+	SentDate            *string        `json:"sentDate,omitempty"` // ISO 8601
 }
 
 type OfferItemDTO struct {
@@ -343,6 +354,26 @@ type UnreadCountDTO struct {
 
 // Dashboard DTOs
 
+// TimeRange represents the time range for dashboard metrics
+type TimeRange string
+
+const (
+	// TimeRangeRolling12Months is the default 12-month rolling window
+	TimeRangeRolling12Months TimeRange = "rolling12months"
+	// TimeRangeAllTime calculates metrics without any date filter
+	TimeRangeAllTime TimeRange = "allTime"
+)
+
+// IsValid checks if the TimeRange value is valid
+func (t TimeRange) IsValid() bool {
+	switch t {
+	case TimeRangeRolling12Months, TimeRangeAllTime:
+		return true
+	default:
+		return false
+	}
+}
+
 type DisciplineStats struct {
 	Name         string  `json:"name"`
 	TotalValue   float64 `json:"totalValue"`
@@ -390,10 +421,14 @@ type TopCustomerDTO struct {
 }
 
 // DashboardMetrics contains all metrics for the dashboard
-// All metrics use a rolling 12-month window from the current date
-// Drafts and expired offers are excluded from all calculations
+// By default, metrics use a rolling 12-month window from the current date.
+// When timeRange is "allTime", metrics are calculated without any date filter.
+// Drafts and expired offers are excluded from all calculations.
 type DashboardMetrics struct {
-	// Offer Metrics (12-month window, excluding drafts and expired)
+	// TimeRange indicates the time range used for the metrics
+	TimeRange TimeRange `json:"timeRange"` // "rolling12months" (default) or "allTime"
+
+	// Offer Metrics (excluding drafts and expired)
 	TotalOfferCount      int     `json:"totalOfferCount"`      // Count of offers excluding drafts and expired
 	OfferReserve         float64 `json:"offerReserve"`         // Total value of active offers (in_progress, sent)
 	WeightedOfferReserve float64 `json:"weightedOfferReserve"` // Sum of (value * probability/100) for active offers
@@ -402,22 +437,22 @@ type DashboardMetrics struct {
 	// Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
 	Pipeline []PipelinePhaseData `json:"pipeline"`
 
-	// Win Rate Metrics (12-month window)
+	// Win Rate Metrics
 	WinRateMetrics WinRateMetrics `json:"winRateMetrics"`
 
 	// Order Reserve (from active projects)
 	OrderReserve float64 `json:"orderReserve"` // Sum of (budget - spent) on active projects
 
 	// Financial Summary
-	TotalInvoiced float64 `json:"totalInvoiced"` // Sum of "spent" on all projects in 12-month window
+	TotalInvoiced float64 `json:"totalInvoiced"` // Sum of "spent" on all projects in time range
 	TotalValue    float64 `json:"totalValue"`    // orderReserve + totalInvoiced
 
-	// Recent Lists (12-month window, limit 10 each)
+	// Recent Lists (limit 5 each)
 	RecentOffers     []OfferDTO    `json:"recentOffers"`     // Last created offers (excluding drafts)
 	RecentProjects   []ProjectDTO  `json:"recentProjects"`   // Last created projects
 	RecentActivities []ActivityDTO `json:"recentActivities"` // Last activities
 
-	// Top Customers (12-month window, limit 10)
+	// Top Customers (limit 5)
 	TopCustomers []TopCustomerDTO `json:"topCustomers"` // Ranked by offer count
 }
 
@@ -451,7 +486,7 @@ type APIResponse struct {
 
 type CreateCustomerRequest struct {
 	Name          string           `json:"name" validate:"required,max=200"`
-	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
+	OrgNumber     string           `json:"orgNumber,omitempty" validate:"max=20"`
 	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
 	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
@@ -464,11 +499,17 @@ type CreateCustomerRequest struct {
 	Status        CustomerStatus   `json:"status,omitempty"`
 	Tier          CustomerTier     `json:"tier,omitempty"`
 	Industry      CustomerIndustry `json:"industry,omitempty"`
+	Notes         string           `json:"notes,omitempty"`
+	CustomerClass string           `json:"customerClass,omitempty" validate:"max=50"`
+	CreditLimit   *float64         `json:"creditLimit,omitempty"`
+	IsInternal    bool             `json:"isInternal,omitempty"`
+	Municipality  string           `json:"municipality,omitempty" validate:"max=100"`
+	County        string           `json:"county,omitempty" validate:"max=100"`
 }
 
 type UpdateCustomerRequest struct {
 	Name          string           `json:"name" validate:"required,max=200"`
-	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
+	OrgNumber     string           `json:"orgNumber,omitempty" validate:"max=20"`
 	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
 	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
@@ -481,6 +522,12 @@ type UpdateCustomerRequest struct {
 	Status        CustomerStatus   `json:"status,omitempty"`
 	Tier          CustomerTier     `json:"tier,omitempty"`
 	Industry      CustomerIndustry `json:"industry,omitempty"`
+	Notes         string           `json:"notes,omitempty"`
+	CustomerClass string           `json:"customerClass,omitempty" validate:"max=50"`
+	CreditLimit   *float64         `json:"creditLimit,omitempty"`
+	IsInternal    bool             `json:"isInternal,omitempty"`
+	Municipality  string           `json:"municipality,omitempty" validate:"max=100"`
+	County        string           `json:"county,omitempty" validate:"max=100"`
 }
 
 type CreateContactRequest struct {
@@ -627,6 +674,9 @@ type CreateOfferRequest struct {
 	Description       string                   `json:"description,omitempty"`
 	Notes             string                   `json:"notes,omitempty"`
 	DueDate           *time.Time               `json:"dueDate,omitempty"`
+	Cost              float64                  `json:"cost,omitempty" validate:"gte=0"`
+	Location          string                   `json:"location,omitempty" validate:"max=200"`
+	SentDate          *time.Time               `json:"sentDate,omitempty"`
 }
 
 type UpdateOfferRequest struct {
@@ -638,6 +688,9 @@ type UpdateOfferRequest struct {
 	Description       string      `json:"description,omitempty"`
 	Notes             string      `json:"notes,omitempty"`
 	DueDate           *time.Time  `json:"dueDate,omitempty"`
+	Cost              float64     `json:"cost,omitempty" validate:"gte=0"`
+	Location          string      `json:"location,omitempty" validate:"max=200"`
+	SentDate          *time.Time  `json:"sentDate,omitempty"`
 }
 
 type CreateOfferItemRequest struct {

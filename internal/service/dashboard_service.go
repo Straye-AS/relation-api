@@ -38,14 +38,27 @@ func NewDashboardService(
 	}
 }
 
-// GetMetrics returns dashboard metrics using a rolling 12-month window
+// GetMetrics returns dashboard metrics with configurable time range
+// timeRange can be "rolling12months" (default) or "allTime"
 // All metrics exclude draft and expired offers from calculations
-func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMetrics, error) {
-	// Calculate 12-month window cutoff
-	since := time.Now().AddDate(-1, 0, 0)
+func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.TimeRange) (*domain.DashboardMetrics, error) {
+	// Default to rolling 12 months if not specified or invalid
+	if timeRange == "" {
+		timeRange = domain.TimeRangeRolling12Months
+	}
+
+	// Calculate date filter based on time range
+	var since *time.Time
+	if timeRange == domain.TimeRangeRolling12Months {
+		t := time.Now().AddDate(-1, 0, 0)
+		since = &t
+	}
+	// For allTime, since remains nil (no date filter)
+
 	const recentLimit = 5
 
 	metrics := &domain.DashboardMetrics{
+		TimeRange:        timeRange,
 		Pipeline:         []domain.PipelinePhaseData{},
 		RecentOffers:     []domain.OfferDTO{},
 		RecentProjects:   []domain.ProjectDTO{},
@@ -53,7 +66,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		TopCustomers:     []domain.TopCustomerDTO{},
 	}
 
-	// Get offer statistics (12-month window, excluding drafts and expired)
+	// Get offer statistics (excluding drafts and expired)
 	offerStats, err := s.offerRepo.GetDashboardOfferStats(ctx, since)
 	if err != nil {
 		s.logger.Warn("failed to get dashboard offer stats", zap.Error(err))
@@ -79,7 +92,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		}
 	}
 
-	// Get win rate statistics (12-month window)
+	// Get win rate statistics
 	winRateStats, err := s.offerRepo.GetDashboardWinRateStats(ctx, since)
 	if err != nil {
 		s.logger.Warn("failed to get dashboard win rate stats", zap.Error(err))
@@ -104,7 +117,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		metrics.TotalValue = projectStats.OrderReserve + projectStats.TotalInvoiced
 	}
 
-	// Get recent offers (12-month window, excluding drafts)
+	// Get recent offers (excluding drafts)
 	recentOffers, err := s.offerRepo.GetRecentOffersInWindow(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent offers", zap.Error(err))
@@ -114,7 +127,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		}
 	}
 
-	// Get recent projects (12-month window)
+	// Get recent projects
 	recentProjects, err := s.projectRepo.GetRecentProjectsInWindow(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent projects", zap.Error(err))
@@ -124,7 +137,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		}
 	}
 
-	// Get recent activities (12-month window)
+	// Get recent activities
 	recentActivities, err := s.activityRepo.GetRecentActivitiesInWindow(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent activities", zap.Error(err))
@@ -134,7 +147,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context) (*domain.DashboardMet
 		}
 	}
 
-	// Get top customers (12-month window, ranked by offer count)
+	// Get top customers (ranked by offer count)
 	topCustomers, err := s.customerRepo.GetTopCustomersWithOfferStats(ctx, since, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get top customers with offer stats", zap.Error(err))
