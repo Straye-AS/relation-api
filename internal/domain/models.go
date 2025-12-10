@@ -432,9 +432,8 @@ type Offer struct {
 	Description           string      `gorm:"type:text"`
 	Notes                 string      `gorm:"type:text"`
 	DueDate               *time.Time  `gorm:"type:timestamp;index"`
-	Cost                  float64     `gorm:"type:decimal(15,2);default:0"`                               // Internal cost
-	Price                 float64     `gorm:"type:decimal(15,2);not null;default:0"`                      // Price charged to customer
-	MarginPercent         float64     `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad, auto-calculated
+	Cost          float64 `gorm:"type:decimal(15,2);default:0"`                               // Internal cost
+	MarginPercent float64 `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad: (value - cost) / value * 100, auto-calculated
 	Location              string      `gorm:"type:varchar(200)"`
 	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
 	ExpirationDate        *time.Time  `gorm:"type:timestamp;index;column:expiration_date"` // When the offer expires (default: 60 days after sent_date)
@@ -443,24 +442,24 @@ type Offer struct {
 	Files                 []File      `gorm:"foreignKey:OfferID"`
 }
 
-// CalculateMarginPercent calculates the dekningsgrad based on price and cost.
-// Formula: (price - cost) / price * 100
+// CalculateMarginPercent calculates the dekningsgrad based on value and cost.
+// Formula: (value - cost) / value * 100
 // Edge cases:
-//   - cost=0 and price>0: returns 100%
-//   - price=0: returns 0%
+//   - cost=0 and value>0: returns 100%
+//   - value=0: returns 0%
 //   - both 0: returns 0%
 func (o *Offer) CalculateMarginPercent() float64 {
-	if o.Price > 0 {
-		return ((o.Price - o.Cost) / o.Price) * 100
+	if o.Value > 0 {
+		return ((o.Value - o.Cost) / o.Value) * 100
 	}
 	return 0
 }
 
 // CalculateMarginPercentFromValues is a helper function to calculate margin percent
-// from price and cost values without needing an Offer instance.
-func CalculateMarginPercentFromValues(price, cost float64) float64 {
-	if price > 0 {
-		return ((price - cost) / price) * 100
+// from value and cost without needing an Offer instance.
+func CalculateMarginPercentFromValues(value, cost float64) float64 {
+	if value > 0 {
+		return ((value - cost) / value) * 100
 	}
 	return 0
 }
