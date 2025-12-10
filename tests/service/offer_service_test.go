@@ -2,7 +2,9 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -111,6 +113,13 @@ func (f *offerTestFixtures) createTestOffer(t *testing.T, ctx context.Context, t
 		ResponsibleUserID: "test-user-id",
 		Description:       "Test offer description",
 	}
+
+	// Non-draft offers should have an offer number
+	// Draft offers should NOT have an offer number
+	if phase != domain.OfferPhaseDraft {
+		offer.OfferNumber = fmt.Sprintf("TEST-%s-%d", domain.GetCompanyPrefix(domain.CompanyStalbygg), time.Now().UnixNano())
+	}
+
 	err := f.offerRepo.Create(ctx, offer)
 	require.NoError(t, err)
 	return offer
@@ -809,5 +818,151 @@ func TestOfferService_EdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, "Test Default Project Name", result.Project.Name)
+	})
+}
+
+// ============================================================================
+// Offer Number Business Rules Tests
+// ============================================================================
+
+func TestOfferService_OfferNumberRules(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("draft offer should not have offer number on creation", func(t *testing.T) {
+		customer := fixtures.createTestCustomer(t, ctx, "Customer Draft Number Test")
+
+		req := &domain.CreateOfferRequest{
+			Title:      "Test Draft No Number",
+			CustomerID: customer.ID,
+			Phase:      domain.OfferPhaseDraft,
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseDraft, result.Phase)
+		assert.Empty(t, result.OfferNumber, "draft offer should not have an offer number")
+	})
+
+	t.Run("non-draft offer should get offer number on creation", func(t *testing.T) {
+		customer := fixtures.createTestCustomer(t, ctx, "Customer NonDraft Number Test")
+
+		req := &domain.CreateOfferRequest{
+			Title:             "Test InProgress With Number",
+			CustomerID:        customer.ID,
+			Phase:             domain.OfferPhaseInProgress,
+			ResponsibleUserID: "test-user-id",
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "non-draft offer should have an offer number")
+	})
+
+	t.Run("send offer from draft generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Send Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		result, err := svc.SendOffer(ctx, offer.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseSent, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "sent offer should have an offer number")
+	})
+
+	t.Run("expire offer from draft generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Expire Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		result, err := svc.ExpireOffer(ctx, offer.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseExpired, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "expired offer should have an offer number")
+	})
+
+	t.Run("update draft to non-draft generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		req := &domain.UpdateOfferRequest{
+			Title:             offer.Title,
+			Phase:             domain.OfferPhaseInProgress,
+			ResponsibleUserID: "test-user-id",
+		}
+
+		result, err := svc.Update(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "non-draft offer should have an offer number")
+	})
+
+	t.Run("advance from draft to in_progress generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Advance Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseInProgress,
+		}
+
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "advanced offer should have an offer number")
+	})
+
+	t.Run("advance from draft to sent generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Advance Sent Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseSent,
+		}
+
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseSent, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "advanced offer should have an offer number")
+	})
+
+	t.Run("cannot manually set offer number on draft offer", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Cannot Set Number On Draft", domain.OfferPhaseDraft)
+
+		_, err := svc.UpdateOfferNumber(ctx, offer.ID, "MANUAL-001")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrDraftOfferCannotHaveNumber)
+	})
+
+	t.Run("cannot clear offer number on non-draft offer", func(t *testing.T) {
+		// Create offer in non-draft state (it will get an offer number)
+		offer := fixtures.createTestOffer(t, ctx, "Test Cannot Clear Number", domain.OfferPhaseInProgress)
+
+		_, err := svc.UpdateOfferNumber(ctx, offer.ID, "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrNonDraftOfferMustHaveNumber)
+	})
+
+	t.Run("cloned offer starts as draft without offer number", func(t *testing.T) {
+		// Start with a non-draft offer that has an offer number
+		offer := fixtures.createTestOffer(t, ctx, "Test Clone No Number", domain.OfferPhaseInProgress)
+
+		req := &domain.CloneOfferRequest{
+			IncludeBudget: boolPtr(true),
+		}
+
+		result, err := svc.CloneOffer(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseDraft, result.Phase)
+		assert.Empty(t, result.OfferNumber, "cloned offer should not have an offer number (starts as draft)")
 	})
 }

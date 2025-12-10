@@ -897,6 +897,14 @@ definitions:
         type: string
       offerId:
         type: string
+      phase:
+        allOf:
+        - $ref: '#/definitions/domain.ProjectPhase'
+        enum:
+        - tilbud
+        - active
+        - completed
+        - cancelled
       projectNumber:
         maxLength: 50
         type: string
@@ -1326,6 +1334,19 @@ definitions:
     - LossReasonCompetitor
     - LossReasonRequirements
     - LossReasonOther
+  domain.NextOfferNumberResponse:
+    properties:
+      companyId:
+        allOf:
+        - $ref: '#/definitions/domain.CompanyID'
+        description: The company ID this number is for
+      nextOfferNumber:
+        description: The next offer number that would be assigned, e.g., "TK-2025-001"
+        type: string
+      year:
+        description: The year component of the number
+        type: integer
+    type: object
   domain.NotificationDTO:
     properties:
       createdAt:
@@ -1351,10 +1372,14 @@ definitions:
       companyId:
         $ref: '#/definitions/domain.CompanyID'
       cost:
+        description: Internal cost
         type: number
       createdAt:
         description: ISO 8601
         type: string
+      customerHasWonProject:
+        description: Whether customer has won their project
+        type: boolean
       customerId:
         type: string
       customerName:
@@ -1363,6 +1388,9 @@ definitions:
         type: string
       dueDate:
         description: ISO 8601
+        type: string
+      externalReference:
+        description: External/customer reference number
         type: string
       id:
         type: string
@@ -1373,18 +1401,21 @@ definitions:
       location:
         type: string
       margin:
-        description: 'Calculated: Value - Cost'
+        description: 'Calculated: Price - Cost'
         type: number
       marginPercent:
-        description: 'Calculated: (Value - Cost) / Value * 100'
+        description: 'Dekningsgrad: (Price - Cost) / Price * 100'
         type: number
       notes:
         type: string
       offerNumber:
-        description: Unique per company, e.g., "STB-2024-001"
+        description: Internal number, e.g., "TK-2025-001"
         type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
+      price:
+        description: Price charged to customer
+        type: number
       probability:
         type: integer
       projectId:
@@ -1418,10 +1449,14 @@ definitions:
       companyId:
         $ref: '#/definitions/domain.CompanyID'
       cost:
+        description: Internal cost
         type: number
       createdAt:
         description: ISO 8601
         type: string
+      customerHasWonProject:
+        description: Whether customer has won their project
+        type: boolean
       customerId:
         type: string
       customerName:
@@ -1430,6 +1465,9 @@ definitions:
         type: string
       dueDate:
         description: ISO 8601
+        type: string
+      externalReference:
+        description: External/customer reference number
         type: string
       filesCount:
         type: integer
@@ -1442,18 +1480,21 @@ definitions:
       location:
         type: string
       margin:
-        description: 'Calculated: Value - Cost'
+        description: 'Calculated: Price - Cost'
         type: number
       marginPercent:
-        description: 'Calculated: (Value - Cost) / Value * 100'
+        description: 'Dekningsgrad: (Price - Cost) / Price * 100'
         type: number
       notes:
         type: string
       offerNumber:
-        description: Unique per company, e.g., "STB-2024-001"
+        description: Internal number, e.g., "TK-2025-001"
         type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
+      price:
+        description: Price charged to customer
+        type: number
       probability:
         type: integer
       projectId:
@@ -1641,6 +1682,8 @@ definitions:
     properties:
       budget:
         type: number
+      calculatedOfferValue:
+        type: number
       companyId:
         $ref: '#/definitions/domain.CompanyID'
       completionPercent:
@@ -1667,6 +1710,10 @@ definitions:
         $ref: '#/definitions/domain.ProjectHealth'
       id:
         type: string
+      inheritedOfferNumber:
+        type: string
+      isEconomicsEditable:
+        type: boolean
       managerId:
         type: string
       managerName:
@@ -1675,6 +1722,8 @@ definitions:
         type: string
       offerId:
         type: string
+      phase:
+        $ref: '#/definitions/domain.ProjectPhase'
       projectNumber:
         type: string
       spent:
@@ -1693,6 +1742,12 @@ definitions:
       updatedAt:
         description: ISO 8601
         type: string
+      winningOfferId:
+        description: Phase-related fields for offer folder functionality
+        type: string
+      wonAt:
+        description: ISO 8601
+        type: string
     type: object
   domain.ProjectHealth:
     enum:
@@ -1706,6 +1761,18 @@ definitions:
     - ProjectHealthAtRisk
     - ProjectHealthDelayed
     - ProjectHealthOverBudget
+  domain.ProjectPhase:
+    enum:
+    - tilbud
+    - active
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ProjectPhaseTilbud
+    - ProjectPhaseActive
+    - ProjectPhaseCompleted
+    - ProjectPhaseCancelled
   domain.ProjectStatus:
     enum:
     - planning
@@ -1726,6 +1793,8 @@ definitions:
         type: number
       budgetSummary:
         $ref: '#/definitions/domain.BudgetSummaryDTO'
+      calculatedOfferValue:
+        type: number
       companyId:
         $ref: '#/definitions/domain.CompanyID'
       completionPercent:
@@ -1754,6 +1823,10 @@ definitions:
         $ref: '#/definitions/domain.ProjectHealth'
       id:
         type: string
+      inheritedOfferNumber:
+        type: string
+      isEconomicsEditable:
+        type: boolean
       managerId:
         type: string
       managerName:
@@ -1764,6 +1837,8 @@ definitions:
         $ref: '#/definitions/domain.OfferDTO'
       offerId:
         type: string
+      phase:
+        $ref: '#/definitions/domain.ProjectPhase'
       projectNumber:
         type: string
       recentActivities:
@@ -1784,6 +1859,12 @@ definitions:
           type: string
         type: array
       updatedAt:
+        description: ISO 8601
+        type: string
+      winningOfferId:
+        description: Phase-related fields for offer folder functionality
+        type: string
+      wonAt:
         description: ISO 8601
         type: string
     type: object
@@ -2097,6 +2178,11 @@ definitions:
     required:
     - stage
     type: object
+  domain.UpdateOfferCustomerHasWonProjectRequest:
+    properties:
+      customerHasWonProject:
+        type: boolean
+    type: object
   domain.UpdateOfferCustomerRequest:
     properties:
       customerId:
@@ -2115,6 +2201,20 @@ definitions:
       dueDate:
         description: nullable to allow clearing
         type: string
+    type: object
+  domain.UpdateOfferExternalReferenceRequest:
+    properties:
+      externalReference:
+        maxLength: 100
+        type: string
+    type: object
+  domain.UpdateOfferNumberRequest:
+    properties:
+      offerNumber:
+        maxLength: 50
+        type: string
+    required:
+    - offerNumber
     type: object
   domain.UpdateOfferProbabilityRequest:
     properties:
@@ -2271,6 +2371,28 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  domain.WinOfferRequest:
+    properties:
+      notes:
+        description: Notes is an optional note about why this offer was selected
+        maxLength: 500
+        type: string
+    type: object
+  domain.WinOfferResponse:
+    properties:
+      expiredCount:
+        description: Count of sibling offers that were expired
+        type: integer
+      expiredOffers:
+        description: Sibling offers that were expired
+        items:
+          $ref: '#/definitions/domain.OfferDTO'
+        type: array
+      offer:
+        $ref: '#/definitions/domain.OfferDTO'
+      project:
+        $ref: '#/definitions/domain.ProjectDTO'
     type: object
   domain.WinRateAnalysisDTO:
     properties:
@@ -3809,16 +3931,27 @@ paths:
         in: query
         name: industry
         type: string
-      - description: Sort option
+      - description: Sort field
         enum:
-        - name_asc
-        - name_desc
-        - created_desc
-        - created_asc
-        - city_asc
-        - city_desc
+        - createdAt
+        - updatedAt
+        - name
+        - city
+        - country
+        - status
+        - tier
+        - industry
+        - orgNumber
         in: query
         name: sortBy
+        type: string
+      - default: desc
+        description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
         type: string
       produces:
       - application/json
@@ -5109,6 +5242,28 @@ paths:
         in: query
         name: phase
         type: string
+      - description: Sort field
+        enum:
+        - createdAt
+        - updatedAt
+        - title
+        - value
+        - probability
+        - phase
+        - status
+        - dueDate
+        - customerName
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
+        type: string
       produces:
       - application/json
       responses:
@@ -5651,6 +5806,49 @@ paths:
       summary: Update offer customer
       tags:
       - Offers
+  /offers/{id}/customer-has-won-project:
+    put:
+      consumes:
+      - application/json
+      description: Updates the flag indicating whether the customer has won their
+        project
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Customer has won project data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferCustomerHasWonProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer has won project flag
+      tags:
+      - Offers
   /offers/{id}/description:
     put:
       consumes:
@@ -5769,6 +5967,53 @@ paths:
       summary: Update offer due date
       tags:
       - Offers
+  /offers/{id}/external-reference:
+    put:
+      consumes:
+      - application/json
+      description: Updates the external/customer reference number. Returns 409 if
+        reference already exists for this company.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: External reference data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferExternalReferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: External reference already exists for this company
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update external reference
+      tags:
+      - Offers
   /offers/{id}/files:
     get:
       parameters:
@@ -5841,6 +6086,53 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Add offer item
+      tags:
+      - Offers
+  /offers/{id}/offer-number:
+    put:
+      consumes:
+      - application/json
+      description: Updates the internal offer number (e.g., "TK-2025-001"). Returns
+        409 if number already exists.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Offer number data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferNumberRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Offer number already exists
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer number
       tags:
       - Offers
   /offers/{id}/probability:
@@ -6197,6 +6489,89 @@ paths:
       summary: Update offer value
       tags:
       - Offers
+  /offers/{id}/win:
+    post:
+      consumes:
+      - application/json
+      description: Transitions an offer to won phase within a project context. This
+        also transitions the project from tilbud to active phase, expires sibling
+        offers, and sets the winning offer's number on the project.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Win options
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.WinOfferRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Won offer with project and expired sibling offers
+          schema:
+            $ref: '#/definitions/domain.WinOfferResponse'
+        "400":
+          description: Invalid offer ID, request body, offer not in project, or project
+            not in tilbud phase
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Win an offer within a project
+      tags:
+      - Offers
+  /offers/next-number:
+    get:
+      description: Returns a preview of what the next offer number would be for a
+        company without consuming the sequence. Useful for UI display.
+      parameters:
+      - description: Company ID
+        enum:
+        - gruppen
+        - stalbygg
+        - hybridbygg
+        - industri
+        - tak
+        - montasje
+        in: query
+        name: companyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.NextOfferNumberResponse'
+        "400":
+          description: Invalid or missing company ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get next offer number preview
+      tags:
+      - Offers
   /projects:
     get:
       consumes:
@@ -6228,6 +6603,15 @@ paths:
         in: query
         name: status
         type: string
+      - description: Filter by phase
+        enum:
+        - tilbud
+        - active
+        - completed
+        - cancelled
+        in: query
+        name: phase
+        type: string
       - description: Filter by health
         enum:
         - on_track
@@ -6239,6 +6623,31 @@ paths:
       - description: Filter by manager ID
         in: query
         name: managerId
+        type: string
+      - description: Sort field
+        enum:
+        - createdAt
+        - updatedAt
+        - name
+        - status
+        - phase
+        - health
+        - budget
+        - spent
+        - startDate
+        - endDate
+        - customerName
+        - wonAt
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
         type: string
       produces:
       - application/json
@@ -6587,6 +6996,45 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Inherit budget from offer
+      tags:
+      - Projects
+  /projects/{id}/offers:
+    get:
+      consumes:
+      - application/json
+      description: Get all offers linked to a project (offer folder model)
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.OfferDTO'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get offers for a project
       tags:
       - Projects
   /projects/{id}/status:

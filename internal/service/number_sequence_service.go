@@ -117,3 +117,40 @@ func (s *NumberSequenceService) ValidateOfferNumber(number string) bool {
 	// More thorough validation could be added here
 	return true
 }
+
+// PreviewNextOfferNumber returns what the next offer number would be for a company
+// WITHOUT consuming/incrementing the sequence. This is useful for UI previews.
+// Format: {PREFIX}-{YEAR}-{SEQUENCE} e.g., "ST-2025-001"
+func (s *NumberSequenceService) PreviewNextOfferNumber(ctx context.Context, companyID domain.CompanyID) (string, error) {
+	// Validate company ID
+	if !domain.IsValidCompanyID(string(companyID)) {
+		return "", fmt.Errorf("%w: %s", ErrInvalidCompanyID, companyID)
+	}
+
+	year := time.Now().Year()
+	prefix := domain.GetCompanyPrefix(companyID)
+
+	// Get current sequence without incrementing
+	currentSeq, err := s.repo.GetCurrentSequence(ctx, companyID, year)
+	if err != nil {
+		s.logger.Error("failed to get current sequence",
+			zap.String("companyID", string(companyID)),
+			zap.Int("year", year),
+			zap.Error(err))
+		return "", fmt.Errorf("failed to preview offer number: %w", err)
+	}
+
+	// Next number will be current + 1 (or 1 if no sequence exists)
+	nextSeq := currentSeq + 1
+
+	// Format: PREFIX-YYYY-NNN (zero-padded to 3 digits)
+	number := fmt.Sprintf("%s-%d-%03d", prefix, year, nextSeq)
+
+	s.logger.Debug("previewed next offer number",
+		zap.String("number", number),
+		zap.String("companyID", string(companyID)),
+		zap.Int("year", year),
+		zap.Int("nextSequence", nextSeq))
+
+	return number, nil
+}

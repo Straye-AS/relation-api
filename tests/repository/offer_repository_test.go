@@ -291,7 +291,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	t.Run("filter by status active", func(t *testing.T) {
 		status := domain.OfferStatusActive
 		filters := &repository.OfferFilters{Status: &status}
-		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters)
+		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.DefaultSortConfig())
 		assert.NoError(t, err)
 		assert.GreaterOrEqual(t, total, int64(2))
 
@@ -303,7 +303,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	t.Run("filter by status inactive", func(t *testing.T) {
 		status := domain.OfferStatusInactive
 		filters := &repository.OfferFilters{Status: &status}
-		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters)
+		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.DefaultSortConfig())
 		assert.NoError(t, err)
 		assert.GreaterOrEqual(t, total, int64(1))
 
@@ -315,7 +315,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	t.Run("filter by status archived", func(t *testing.T) {
 		status := domain.OfferStatusArchived
 		filters := &repository.OfferFilters{Status: &status}
-		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters)
+		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.DefaultSortConfig())
 		assert.NoError(t, err)
 		assert.GreaterOrEqual(t, total, int64(1))
 
@@ -328,7 +328,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 		phase := domain.OfferPhaseDraft
 		status := domain.OfferStatusActive
 		filters := &repository.OfferFilters{Phase: &phase, Status: &status}
-		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters)
+		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.DefaultSortConfig())
 		assert.NoError(t, err)
 		assert.GreaterOrEqual(t, total, int64(1))
 
@@ -339,7 +339,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	})
 
 	t.Run("pagination with default for invalid values", func(t *testing.T) {
-		offers, total, err := repo.ListWithFilters(context.Background(), 0, 0, nil)
+		offers, total, err := repo.ListWithFilters(context.Background(), 0, 0, nil, repository.DefaultSortConfig())
 		assert.NoError(t, err)
 		assert.GreaterOrEqual(t, total, int64(4))
 		assert.LessOrEqual(t, len(offers), 20) // Default page size
@@ -352,7 +352,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 		}
 
 		// Request more than max page size
-		offers, _, err := repo.ListWithFilters(context.Background(), 1, 500, nil)
+		offers, _, err := repo.ListWithFilters(context.Background(), 1, 500, nil, repository.DefaultSortConfig())
 		assert.NoError(t, err)
 		assert.LessOrEqual(t, len(offers), 200) // Max page size
 	})

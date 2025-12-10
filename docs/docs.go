@@ -2088,16 +2088,30 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "name_asc",
-                            "name_desc",
-                            "created_desc",
-                            "created_asc",
-                            "city_asc",
-                            "city_desc"
+                            "createdAt",
+                            "updatedAt",
+                            "name",
+                            "city",
+                            "country",
+                            "status",
+                            "tier",
+                            "industry",
+                            "orgNumber"
                         ],
                         "type": "string",
-                        "description": "Sort option",
+                        "description": "Sort field",
                         "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
                         "in": "query"
                     }
                 ],
@@ -4122,6 +4136,34 @@ const docTemplate = `{
                         "description": "Filter by phase",
                         "name": "phase",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "title",
+                            "value",
+                            "probability",
+                            "phase",
+                            "status",
+                            "dueDate",
+                            "customerName"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4168,6 +4210,63 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/next-number": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a preview of what the next offer number would be for a company without consuming the sequence. Useful for UI display.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get next offer number preview",
+                "parameters": [
+                    {
+                        "enum": [
+                            "gruppen",
+                            "stalbygg",
+                            "hybridbygg",
+                            "industri",
+                            "tak",
+                            "montasje"
+                        ],
+                        "type": "string",
+                        "description": "Company ID",
+                        "name": "companyId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.NextOfferNumberResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid or missing company ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -4968,6 +5067,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/customer-has-won-project": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the flag indicating whether the customer has won their project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update customer has won project flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Customer has won project data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferCustomerHasWonProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or offer closed",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/description": {
             "put": {
                 "security": [
@@ -5157,6 +5323,79 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/external-reference": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the external/customer reference number. Returns 409 if reference already exists for this company.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update external reference",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "External reference data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferExternalReferenceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "External reference already exists for this company",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/files": {
             "get": {
                 "security": [
@@ -5276,6 +5515,79 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferItemDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/offer-number": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the internal offer number (e.g., \"TK-2025-001\"). Returns 409 if number already exists.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer number",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Offer number data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferNumberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Offer number already exists",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -5846,6 +6158,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/win": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer to won phase within a project context. This also transitions the project from tilbud to active phase, expires sibling offers, and sets the winning offer's number on the project.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Win an offer within a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Win options",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.WinOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Won offer with project and expired sibling offers",
+                        "schema": {
+                            "$ref": "#/definitions/domain.WinOfferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, offer not in project, or project not in tilbud phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/projects": {
             "get": {
                 "security": [
@@ -5904,6 +6283,18 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
+                            "tilbud",
+                            "active",
+                            "completed",
+                            "cancelled"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
                             "on_track",
                             "at_risk",
                             "over_budget"
@@ -5917,6 +6308,37 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Filter by manager ID",
                         "name": "managerId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "name",
+                            "status",
+                            "phase",
+                            "health",
+                            "budget",
+                            "spent",
+                            "startDate",
+                            "endDate",
+                            "customerName",
+                            "wonAt"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
                         "in": "query"
                     }
                 ],
@@ -6444,6 +6866,68 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Project or offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/offers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all offers linked to a project (offer folder model)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Get offers for a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.OfferDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -7960,6 +8444,19 @@ const docTemplate = `{
                 "offerId": {
                     "type": "string"
                 },
+                "phase": {
+                    "enum": [
+                        "tilbud",
+                        "active",
+                        "completed",
+                        "cancelled"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectPhase"
+                        }
+                    ]
+                },
                 "projectNumber": {
                     "type": "string",
                     "maxLength": 50
@@ -8567,6 +9064,27 @@ const docTemplate = `{
                 "LossReasonOther"
             ]
         },
+        "domain.NextOfferNumberResponse": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "description": "The company ID this number is for",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CompanyID"
+                        }
+                    ]
+                },
+                "nextOfferNumber": {
+                    "description": "The next offer number that would be assigned, e.g., \"TK-2025-001\"",
+                    "type": "string"
+                },
+                "year": {
+                    "description": "The year component of the number",
+                    "type": "integer"
+                }
+            }
+        },
         "domain.NotificationDTO": {
             "type": "object",
             "properties": {
@@ -8604,11 +9122,16 @@ const docTemplate = `{
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "cost": {
+                    "description": "Internal cost",
                     "type": "number"
                 },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "customerHasWonProject": {
+                    "description": "Whether customer has won their project",
+                    "type": "boolean"
                 },
                 "customerId": {
                     "type": "string"
@@ -8621,6 +9144,10 @@ const docTemplate = `{
                 },
                 "dueDate": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "externalReference": {
+                    "description": "External/customer reference number",
                     "type": "string"
                 },
                 "id": {
@@ -8636,22 +9163,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "margin": {
-                    "description": "Calculated: Value - Cost",
+                    "description": "Calculated: Price - Cost",
                     "type": "number"
                 },
                 "marginPercent": {
-                    "description": "Calculated: (Value - Cost) / Value * 100",
+                    "description": "Dekningsgrad: (Price - Cost) / Price * 100",
                     "type": "number"
                 },
                 "notes": {
                     "type": "string"
                 },
                 "offerNumber": {
-                    "description": "Unique per company, e.g., \"STB-2024-001\"",
+                    "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "price": {
+                    "description": "Price charged to customer",
+                    "type": "number"
                 },
                 "probability": {
                     "type": "integer"
@@ -8701,11 +9232,16 @@ const docTemplate = `{
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "cost": {
+                    "description": "Internal cost",
                     "type": "number"
                 },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "customerHasWonProject": {
+                    "description": "Whether customer has won their project",
+                    "type": "boolean"
                 },
                 "customerId": {
                     "type": "string"
@@ -8718,6 +9254,10 @@ const docTemplate = `{
                 },
                 "dueDate": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "externalReference": {
+                    "description": "External/customer reference number",
                     "type": "string"
                 },
                 "filesCount": {
@@ -8736,22 +9276,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "margin": {
-                    "description": "Calculated: Value - Cost",
+                    "description": "Calculated: Price - Cost",
                     "type": "number"
                 },
                 "marginPercent": {
-                    "description": "Calculated: (Value - Cost) / Value * 100",
+                    "description": "Dekningsgrad: (Price - Cost) / Price * 100",
                     "type": "number"
                 },
                 "notes": {
                     "type": "string"
                 },
                 "offerNumber": {
-                    "description": "Unique per company, e.g., \"STB-2024-001\"",
+                    "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "price": {
+                    "description": "Price charged to customer",
+                    "type": "number"
                 },
                 "probability": {
                     "type": "integer"
@@ -9029,6 +9573,9 @@ const docTemplate = `{
                 "budget": {
                     "type": "number"
                 },
+                "calculatedOfferValue": {
+                    "type": "number"
+                },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
@@ -9067,6 +9614,12 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "inheritedOfferNumber": {
+                    "type": "string"
+                },
+                "isEconomicsEditable": {
+                    "type": "boolean"
+                },
                 "managerId": {
                     "type": "string"
                 },
@@ -9078,6 +9631,9 @@ const docTemplate = `{
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.ProjectPhase"
                 },
                 "projectNumber": {
                     "type": "string"
@@ -9104,6 +9660,14 @@ const docTemplate = `{
                 "updatedAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "winningOfferId": {
+                    "description": "Phase-related fields for offer folder functionality",
+                    "type": "string"
+                },
+                "wonAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
                 }
             }
         },
@@ -9120,6 +9684,21 @@ const docTemplate = `{
                 "ProjectHealthAtRisk",
                 "ProjectHealthDelayed",
                 "ProjectHealthOverBudget"
+            ]
+        },
+        "domain.ProjectPhase": {
+            "type": "string",
+            "enum": [
+                "tilbud",
+                "active",
+                "completed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ProjectPhaseTilbud",
+                "ProjectPhaseActive",
+                "ProjectPhaseCompleted",
+                "ProjectPhaseCancelled"
             ]
         },
         "domain.ProjectStatus": {
@@ -9147,6 +9726,9 @@ const docTemplate = `{
                 },
                 "budgetSummary": {
                     "$ref": "#/definitions/domain.BudgetSummaryDTO"
+                },
+                "calculatedOfferValue": {
+                    "type": "number"
                 },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
@@ -9189,6 +9771,12 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "inheritedOfferNumber": {
+                    "type": "string"
+                },
+                "isEconomicsEditable": {
+                    "type": "boolean"
+                },
                 "managerId": {
                     "type": "string"
                 },
@@ -9203,6 +9791,9 @@ const docTemplate = `{
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.ProjectPhase"
                 },
                 "projectNumber": {
                     "type": "string"
@@ -9233,6 +9824,14 @@ const docTemplate = `{
                     }
                 },
                 "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "winningOfferId": {
+                    "description": "Phase-related fields for offer folder functionality",
+                    "type": "string"
+                },
+                "wonAt": {
                     "description": "ISO 8601",
                     "type": "string"
                 }
@@ -9682,6 +10281,14 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferCustomerHasWonProjectRequest": {
+            "type": "object",
+            "properties": {
+                "customerHasWonProject": {
+                    "type": "boolean"
+                }
+            }
+        },
         "domain.UpdateOfferCustomerRequest": {
             "type": "object",
             "required": [
@@ -9708,6 +10315,27 @@ const docTemplate = `{
                 "dueDate": {
                     "description": "nullable to allow clearing",
                     "type": "string"
+                }
+            }
+        },
+        "domain.UpdateOfferExternalReferenceRequest": {
+            "type": "object",
+            "properties": {
+                "externalReference": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "domain.UpdateOfferNumberRequest": {
+            "type": "object",
+            "required": [
+                "offerNumber"
+            ],
+            "properties": {
+                "offerNumber": {
+                    "type": "string",
+                    "maxLength": 50
                 }
             }
         },
@@ -9934,6 +10562,38 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.WinOfferRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "description": "Notes is an optional note about why this offer was selected",
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "domain.WinOfferResponse": {
+            "type": "object",
+            "properties": {
+                "expiredCount": {
+                    "description": "Count of sibling offers that were expired",
+                    "type": "integer"
+                },
+                "expiredOffers": {
+                    "description": "Sibling offers that were expired",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferDTO"
+                    }
+                },
+                "offer": {
+                    "$ref": "#/definitions/domain.OfferDTO"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
                 }
             }
         },
