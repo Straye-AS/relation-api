@@ -155,9 +155,8 @@ type OfferDTO struct {
 	Notes                 string         `json:"notes,omitempty"`
 	DueDate               *string        `json:"dueDate,omitempty"` // ISO 8601
 	Cost                  float64        `json:"cost"`              // Internal cost
-	Price                 float64        `json:"price"`             // Price charged to customer
-	Margin                float64        `json:"margin"`            // Calculated: Price - Cost
-	MarginPercent         float64        `json:"marginPercent"`     // Dekningsgrad: (Price - Cost) / Price * 100
+	Margin                float64        `json:"margin"`            // Calculated: Value - Cost
+	MarginPercent         float64        `json:"marginPercent"`     // Dekningsgrad: (Value - Cost) / Value * 100
 	Location              string         `json:"location,omitempty"`
 	SentDate              *string        `json:"sentDate,omitempty"`       // ISO 8601
 	ExpirationDate        *string        `json:"expirationDate,omitempty"` // ISO 8601 - When offer expires (default 60 days after sent)

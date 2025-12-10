@@ -248,7 +248,6 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		Notes:                 offer.Notes,
 		DueDate:               dueDate,
 		Cost:                  offer.Cost,
-		Price:                 offer.Value, // Price = Value (for backward compatibility)
 		Margin:                margin,
 		MarginPercent:         offer.MarginPercent, // Stored in DB, auto-calculated by trigger
 		Location:              offer.Location,
