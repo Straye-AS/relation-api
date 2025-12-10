@@ -25,6 +25,7 @@ func (r *ContactRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	err := r.db.WithContext(ctx).
 		Preload("Relationships").
 		Preload("PrimaryCustomer").
+		Where("is_active = ?", true).
 		First(&contact, "id = ?", id).Error
 	if err != nil {
 		return nil, err

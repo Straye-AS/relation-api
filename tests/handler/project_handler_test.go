@@ -28,7 +28,7 @@ import (
 var testProjectOfferCounter int64
 
 func setupProjectHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -129,6 +129,7 @@ func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer, nam
 		CustomerName: customer.Name,
 		CompanyID:    domain.CompanyStalbygg,
 		Status:       status,
+		Phase:        domain.ProjectPhaseActive, // Set to active to allow budget updates in tests
 		StartDate:    time.Now(),
 		Budget:       100000,
 		ManagerID:    managerID,

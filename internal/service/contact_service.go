@@ -122,6 +122,9 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 func (s *ContactService) GetByID(ctx context.Context, id uuid.UUID) (*domain.ContactDTO, error) {
 	contact, err := s.contactRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("contact not found: %w", err)
+		}
 		return nil, fmt.Errorf("failed to get contact: %w", err)
 	}
 

@@ -19,7 +19,7 @@ import (
 )
 
 func setupAuditLogTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		// Clean up audit logs
 		db.Exec("DELETE FROM audit_logs WHERE id IS NOT NULL")
