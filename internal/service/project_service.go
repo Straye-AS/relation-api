@@ -1013,3 +1013,365 @@ func (s *ProjectService) logActivityOnTarget(ctx context.Context, targetType dom
 		s.logger.Warn("failed to log activity", zap.Error(err))
 	}
 }
+
+// ============================================================================
+// Individual Property Update Methods
+// ============================================================================
+
+// UpdateName updates only the project name
+func (s *ProjectService) UpdateName(ctx context.Context, id uuid.UUID, name string) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldName := project.Name
+	project.Name = name
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project name: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project name updated", fmt.Sprintf("Project name changed from '%s' to '%s'", oldName, name))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateDescription updates only the project description and summary
+func (s *ProjectService) UpdateDescription(ctx context.Context, id uuid.UUID, summary, description string) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	project.Summary = summary
+	project.Description = description
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project description: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project description updated", "Project description was updated")
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdatePhase updates only the project phase
+func (s *ProjectService) UpdatePhase(ctx context.Context, id uuid.UUID, phase domain.ProjectPhase) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldPhase := project.Phase
+	project.Phase = phase
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project phase: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project phase updated", fmt.Sprintf("Project phase changed from '%s' to '%s'", oldPhase, phase))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateManager updates only the project manager
+func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, managerID string) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldManager := project.ManagerID
+	project.ManagerID = managerID
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project manager: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project manager updated", fmt.Sprintf("Project manager changed from '%s' to '%s'", oldManager, managerID))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateDates updates only the project start and end dates
+func (s *ProjectService) UpdateDates(ctx context.Context, id uuid.UUID, startDate, endDate *time.Time) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	if startDate != nil {
+		project.StartDate = *startDate
+	}
+	// EndDate is a pointer in the model, so we can assign directly
+	project.EndDate = endDate
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project dates: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project dates updated", "Project start/end dates were updated")
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateBudget updates only the project budget (only allowed in active phase)
+func (s *ProjectService) UpdateBudget(ctx context.Context, id uuid.UUID, budget float64) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	// Budget is read-only during tilbud phase
+	if project.Phase == domain.ProjectPhaseTilbud {
+		return nil, ErrProjectEconomicsNotEditable
+	}
+
+	oldBudget := project.Budget
+	project.Budget = budget
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project budget: %w", err)
+	}
+
+	// Recalculate health after budget change
+	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+		s.logger.Warn("failed to recalculate project health", zap.Error(err))
+	}
+
+	// Reload project to get updated health
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	s.logActivity(ctx, project.ID, "Project budget updated", fmt.Sprintf("Project budget changed from %.2f to %.2f", oldBudget, budget))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateSpent updates only the project spent amount (only allowed in active phase)
+func (s *ProjectService) UpdateSpent(ctx context.Context, id uuid.UUID, spent float64) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	// Spent is read-only during tilbud phase
+	if project.Phase == domain.ProjectPhaseTilbud {
+		return nil, ErrProjectEconomicsNotEditable
+	}
+
+	oldSpent := project.Spent
+	project.Spent = spent
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project spent: %w", err)
+	}
+
+	// Recalculate health after spent change
+	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+		s.logger.Warn("failed to recalculate project health", zap.Error(err))
+	}
+
+	// Reload project to get updated health
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	s.logActivity(ctx, project.ID, "Project spent updated", fmt.Sprintf("Project spent changed from %.2f to %.2f", oldSpent, spent))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateTeamMembers updates only the project team members
+func (s *ProjectService) UpdateTeamMembers(ctx context.Context, id uuid.UUID, teamMembers []string) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	project.TeamMembers = teamMembers
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project team members: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Team members updated", fmt.Sprintf("Project team members updated (%d members)", len(teamMembers)))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateHealth updates only the project health
+func (s *ProjectService) UpdateHealth(ctx context.Context, id uuid.UUID, health domain.ProjectHealth) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldHealth := "unknown"
+	if project.Health != nil {
+		oldHealth = string(*project.Health)
+	}
+	project.Health = &health
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project health: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project health updated", fmt.Sprintf("Project health changed from '%s' to '%s'", oldHealth, health))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateEstimatedCompletionDate updates only the estimated completion date
+func (s *ProjectService) UpdateEstimatedCompletionDate(ctx context.Context, id uuid.UUID, estimatedDate *time.Time) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	project.EstimatedCompletionDate = estimatedDate
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update estimated completion date: %w", err)
+	}
+
+	activityMsg := "Estimated completion date cleared"
+	if estimatedDate != nil {
+		activityMsg = fmt.Sprintf("Estimated completion date set to %s", estimatedDate.Format("2006-01-02"))
+	}
+	s.logActivity(ctx, project.ID, "Estimated completion date updated", activityMsg)
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateProjectNumber updates only the project number
+func (s *ProjectService) UpdateProjectNumber(ctx context.Context, id uuid.UUID, projectNumber string) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldNumber := project.ProjectNumber
+	project.ProjectNumber = projectNumber
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project number: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project number updated", fmt.Sprintf("Project number changed from '%s' to '%s'", oldNumber, projectNumber))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}
+
+// UpdateCompanyID updates only the project company assignment
+func (s *ProjectService) UpdateCompanyID(ctx context.Context, id uuid.UUID, companyID domain.CompanyID) (*domain.ProjectDTO, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	oldCompany := project.CompanyID
+	project.CompanyID = companyID
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project company: %w", err)
+	}
+
+	s.logActivity(ctx, project.ID, "Project company updated", fmt.Sprintf("Project company changed from '%s' to '%s'", oldCompany, companyID))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, nil
+}

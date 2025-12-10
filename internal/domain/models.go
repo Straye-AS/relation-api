@@ -432,8 +432,8 @@ type Offer struct {
 	Description           string      `gorm:"type:text"`
 	Notes                 string      `gorm:"type:text"`
 	DueDate               *time.Time  `gorm:"type:timestamp;index"`
-	Cost          float64 `gorm:"type:decimal(15,2);default:0"`                               // Internal cost
-	MarginPercent float64 `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad: (value - cost) / value * 100, auto-calculated
+	Cost                  float64     `gorm:"type:decimal(15,2);default:0"`                               // Internal cost
+	MarginPercent         float64     `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad: (value - cost) / value * 100, auto-calculated
 	Location              string      `gorm:"type:varchar(200)"`
 	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
 	ExpirationDate        *time.Time  `gorm:"type:timestamp;index;column:expiration_date"` // When the offer expires (default: 60 days after sent_date)

@@ -220,6 +220,20 @@ func (rt *Router) Setup() http.Handler {
 				r.Delete("/{id}", rt.customerHandler.Delete)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Post("/{id}/contacts", rt.customerHandler.CreateContact)
+
+				// Individual property update endpoints
+				r.Put("/{id}/status", rt.customerHandler.UpdateStatus)
+				r.Put("/{id}/tier", rt.customerHandler.UpdateTier)
+				r.Put("/{id}/industry", rt.customerHandler.UpdateIndustry)
+				r.Put("/{id}/notes", rt.customerHandler.UpdateNotes)
+				r.Put("/{id}/company", rt.customerHandler.UpdateCompany)
+				r.Put("/{id}/customer-class", rt.customerHandler.UpdateCustomerClass)
+				r.Put("/{id}/credit-limit", rt.customerHandler.UpdateCreditLimit)
+				r.Put("/{id}/is-internal", rt.customerHandler.UpdateIsInternal)
+				r.Put("/{id}/address", rt.customerHandler.UpdateAddress)
+				r.Put("/{id}/contact-info", rt.customerHandler.UpdateContactInfo)
+				r.Put("/{id}/postal-code", rt.customerHandler.UpdatePostalCode)
+				r.Put("/{id}/city", rt.customerHandler.UpdateCity)
 			})
 
 			// Contacts
@@ -246,6 +260,21 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Get("/{id}/offers", rt.projectHandler.GetProjectOffers) // List offers in project (offer folder model)
+
+				// Individual property update endpoints
+				r.Put("/{id}/name", rt.projectHandler.UpdateName)
+				r.Put("/{id}/description", rt.projectHandler.UpdateDescription)
+				r.Put("/{id}/phase", rt.projectHandler.UpdatePhase)
+				r.Put("/{id}/manager", rt.projectHandler.UpdateManager)
+				r.Put("/{id}/dates", rt.projectHandler.UpdateDates)
+				r.Put("/{id}/budget", rt.projectHandler.UpdateBudget)
+				r.Put("/{id}/spent", rt.projectHandler.UpdateSpent)
+				r.Put("/{id}/team-members", rt.projectHandler.UpdateTeamMembers)
+				r.Put("/{id}/health", rt.projectHandler.UpdateHealthEndpoint)
+				r.Put("/{id}/completion", rt.projectHandler.UpdateCompletionPercent)
+				r.Put("/{id}/estimated-completion-date", rt.projectHandler.UpdateEstimatedCompletionDate)
+				r.Put("/{id}/project-number", rt.projectHandler.UpdateProjectNumber)
+				r.Put("/{id}/company", rt.projectHandler.UpdateCompany)
 			})
 
 			// Inquiries (draft offers)

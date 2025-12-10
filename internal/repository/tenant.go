@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"github.com/straye-as/relation-api/internal/auth"
 	"gorm.io/gorm"
@@ -9,6 +10,53 @@ import (
 
 // MaxPageSize is the maximum allowed page size for paginated queries
 const MaxPageSize = 200
+
+// SortOrder represents the sort direction
+type SortOrder string
+
+const (
+	SortOrderAsc  SortOrder = "asc"
+	SortOrderDesc SortOrder = "desc"
+)
+
+// SortConfig holds sorting configuration for list queries
+type SortConfig struct {
+	Field string    // The field to sort by (API field name)
+	Order SortOrder // asc or desc
+}
+
+// DefaultSortConfig returns a default sort configuration (created_at DESC)
+func DefaultSortConfig() SortConfig {
+	return SortConfig{
+		Field: "createdAt",
+		Order: SortOrderDesc,
+	}
+}
+
+// ParseSortOrder parses a string into SortOrder, defaulting to desc
+func ParseSortOrder(s string) SortOrder {
+	if strings.ToLower(s) == "asc" {
+		return SortOrderAsc
+	}
+	return SortOrderDesc
+}
+
+// BuildOrderClause builds the SQL ORDER BY clause from field mapping and sort config
+// fieldMap maps API field names to database column names
+// Returns the default sort if field is not in whitelist
+func BuildOrderClause(config SortConfig, fieldMap map[string]string, defaultColumn string) string {
+	column, ok := fieldMap[config.Field]
+	if !ok {
+		column = defaultColumn
+	}
+
+	order := "DESC"
+	if config.Order == SortOrderAsc {
+		order = "ASC"
+	}
+
+	return column + " " + order
+}
 
 // ApplyCompanyFilter applies the multi-tenant company filter to a GORM query
 // This should be called on queries that need to be filtered by company_id

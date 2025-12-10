@@ -1280,3 +1280,143 @@ type NextOfferNumberResponse struct {
 	CompanyID       CompanyID `json:"companyId"`       // The company ID this number is for
 	Year            int       `json:"year"`            // The year component of the number
 }
+
+// ============================================================================
+// Customer Property Update Request DTOs
+// ============================================================================
+
+// UpdateCustomerStatusRequest for updating customer status
+type UpdateCustomerStatusRequest struct {
+	Status CustomerStatus `json:"status" validate:"required,oneof=active inactive lead churned"`
+}
+
+// UpdateCustomerTierRequest for updating customer tier
+type UpdateCustomerTierRequest struct {
+	Tier CustomerTier `json:"tier" validate:"required,oneof=bronze silver gold platinum"`
+}
+
+// UpdateCustomerIndustryRequest for updating customer industry
+type UpdateCustomerIndustryRequest struct {
+	Industry CustomerIndustry `json:"industry" validate:"omitempty,oneof=construction manufacturing retail logistics agriculture energy public_sector real_estate other"`
+}
+
+// UpdateCustomerNotesRequest for updating customer notes
+type UpdateCustomerNotesRequest struct {
+	Notes string `json:"notes"`
+}
+
+// UpdateCustomerCompanyRequest for assigning customer to a company
+type UpdateCustomerCompanyRequest struct {
+	CompanyID *CompanyID `json:"companyId"` // nullable to allow unassignment
+}
+
+// UpdateCustomerClassRequest for updating customer class
+type UpdateCustomerClassRequest struct {
+	CustomerClass string `json:"customerClass" validate:"max=50"`
+}
+
+// UpdateCustomerCreditLimitRequest for updating customer credit limit
+type UpdateCustomerCreditLimitRequest struct {
+	CreditLimit *float64 `json:"creditLimit"` // nullable to allow clearing
+}
+
+// UpdateCustomerIsInternalRequest for updating customer internal flag
+type UpdateCustomerIsInternalRequest struct {
+	IsInternal bool `json:"isInternal"`
+}
+
+// UpdateCustomerAddressRequest for updating customer address fields
+type UpdateCustomerAddressRequest struct {
+	Address    string `json:"address" validate:"max=500"`
+	City       string `json:"city" validate:"max=100"`
+	PostalCode string `json:"postalCode" validate:"max=20"`
+	Country    string `json:"country" validate:"max=100"`
+}
+
+// UpdateCustomerPostalCodeRequest for updating customer postal code only
+type UpdateCustomerPostalCodeRequest struct {
+	PostalCode string `json:"postalCode" validate:"max=20"`
+}
+
+// UpdateCustomerCityRequest for updating customer city only
+type UpdateCustomerCityRequest struct {
+	City string `json:"city" validate:"max=100"`
+}
+
+// UpdateCustomerContactInfoRequest for updating customer contact information
+type UpdateCustomerContactInfoRequest struct {
+	ContactPerson string `json:"contactPerson" validate:"max=200"`
+	ContactEmail  string `json:"contactEmail" validate:"omitempty,email"`
+	ContactPhone  string `json:"contactPhone" validate:"max=50"`
+}
+
+// ============================================================================
+// Project Property Update Request DTOs
+// ============================================================================
+
+// UpdateProjectNameRequest for updating project name
+type UpdateProjectNameRequest struct {
+	Name string `json:"name" validate:"required,min=1,max=200"`
+}
+
+// UpdateProjectDescriptionRequest for updating project description and summary
+type UpdateProjectDescriptionRequest struct {
+	Summary     string `json:"summary" validate:"max=500"`
+	Description string `json:"description"`
+}
+
+// UpdateProjectPhaseRequest for updating project phase
+type UpdateProjectPhaseRequest struct {
+	Phase ProjectPhase `json:"phase" validate:"required,oneof=tilbud active completed cancelled"`
+}
+
+// UpdateProjectManagerRequest for updating project manager
+type UpdateProjectManagerRequest struct {
+	ManagerID string `json:"managerId" validate:"max=100"`
+}
+
+// UpdateProjectDatesRequest for updating project start and end dates
+type UpdateProjectDatesRequest struct {
+	StartDate *time.Time `json:"startDate"`
+	EndDate   *time.Time `json:"endDate"`
+}
+
+// UpdateProjectBudgetRequest for updating project budget (only in active phase)
+type UpdateProjectBudgetRequest struct {
+	Budget float64 `json:"budget" validate:"min=0"`
+}
+
+// UpdateProjectSpentRequest for updating project spent amount (only in active phase)
+type UpdateProjectSpentRequest struct {
+	Spent float64 `json:"spent" validate:"min=0"`
+}
+
+// UpdateProjectTeamMembersRequest for updating project team members
+type UpdateProjectTeamMembersRequest struct {
+	TeamMembers []string `json:"teamMembers"`
+}
+
+// UpdateProjectHealthRequest for updating project health
+type UpdateProjectHealthRequest struct {
+	Health ProjectHealth `json:"health" validate:"required,oneof=on_track at_risk over_budget"`
+}
+
+// UpdateProjectCompletionPercentRequest for updating project completion percentage
+type UpdateProjectCompletionPercentRequest struct {
+	CompletionPercent float64 `json:"completionPercent" validate:"min=0,max=100"`
+}
+
+// UpdateProjectEstimatedCompletionDateRequest for updating estimated completion date
+type UpdateProjectEstimatedCompletionDateRequest struct {
+	EstimatedCompletionDate *time.Time `json:"estimatedCompletionDate"`
+}
+
+// UpdateProjectNumberRequest for updating project number
+type UpdateProjectNumberRequest struct {
+	ProjectNumber string `json:"projectNumber" validate:"max=50"`
+}
+
+// UpdateProjectCompanyRequest for updating project company assignment
+type UpdateProjectCompanyRequest struct {
+	CompanyID CompanyID `json:"companyId" validate:"omitempty,oneof=gruppen stalbygg hybridbygg industri tak montasje"`
+}

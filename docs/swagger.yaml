@@ -193,6 +193,10 @@ definitions:
     properties:
       phase:
         $ref: '#/definitions/domain.OfferPhase'
+      projectId:
+        description: Link to existing project (auto-created if not provided and advancing
+          to in_progress)
+        type: string
     required:
     - phase
     type: object
@@ -837,6 +841,9 @@ definitions:
         type: string
       dueDate:
         type: string
+      expirationDate:
+        description: Optional, defaults to 60 days after sent date
+        type: string
       items:
         items:
           $ref: '#/definitions/domain.CreateOfferItemRequest'
@@ -852,6 +859,10 @@ definitions:
         maximum: 100
         minimum: 0
         type: integer
+      projectId:
+        description: Link to existing project (auto-created if not provided and phase
+          != draft)
+        type: string
       responsibleUserId:
         type: string
       sentDate:
@@ -1389,6 +1400,9 @@ definitions:
       dueDate:
         description: ISO 8601
         type: string
+      expirationDate:
+        description: ISO 8601 - When offer expires (default 60 days after sent)
+        type: string
       externalReference:
         description: External/customer reference number
         type: string
@@ -1401,10 +1415,10 @@ definitions:
       location:
         type: string
       margin:
-        description: 'Calculated: Price - Cost'
+        description: 'Calculated: Value - Cost'
         type: number
       marginPercent:
-        description: 'Dekningsgrad: (Price - Cost) / Price * 100'
+        description: 'Dekningsgrad: (Value - Cost) / Value * 100'
         type: number
       notes:
         type: string
@@ -1413,9 +1427,6 @@ definitions:
         type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
-      price:
-        description: Price charged to customer
-        type: number
       probability:
         type: integer
       projectId:
@@ -1466,6 +1477,9 @@ definitions:
       dueDate:
         description: ISO 8601
         type: string
+      expirationDate:
+        description: ISO 8601 - When offer expires (default 60 days after sent)
+        type: string
       externalReference:
         description: External/customer reference number
         type: string
@@ -1480,10 +1494,10 @@ definitions:
       location:
         type: string
       margin:
-        description: 'Calculated: Price - Cost'
+        description: 'Calculated: Value - Cost'
         type: number
       marginPercent:
-        description: 'Dekningsgrad: (Price - Cost) / Price * 100'
+        description: 'Dekningsgrad: (Value - Cost) / Value * 100'
         type: number
       notes:
         type: string
@@ -1492,9 +1506,6 @@ definitions:
         type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
-      price:
-        description: Price charged to customer
-        type: number
       probability:
         type: integer
       projectId:
@@ -2074,6 +2085,89 @@ definitions:
     - firstName
     - lastName
     type: object
+  domain.UpdateCustomerAddressRequest:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      city:
+        maxLength: 100
+        type: string
+      country:
+        maxLength: 100
+        type: string
+      postalCode:
+        maxLength: 20
+        type: string
+    type: object
+  domain.UpdateCustomerCityRequest:
+    properties:
+      city:
+        maxLength: 100
+        type: string
+    type: object
+  domain.UpdateCustomerClassRequest:
+    properties:
+      customerClass:
+        maxLength: 50
+        type: string
+    type: object
+  domain.UpdateCustomerCompanyRequest:
+    properties:
+      companyId:
+        allOf:
+        - $ref: '#/definitions/domain.CompanyID'
+        description: nullable to allow unassignment
+    type: object
+  domain.UpdateCustomerContactInfoRequest:
+    properties:
+      contactEmail:
+        type: string
+      contactPerson:
+        maxLength: 200
+        type: string
+      contactPhone:
+        maxLength: 50
+        type: string
+    type: object
+  domain.UpdateCustomerCreditLimitRequest:
+    properties:
+      creditLimit:
+        description: nullable to allow clearing
+        type: number
+    type: object
+  domain.UpdateCustomerIndustryRequest:
+    properties:
+      industry:
+        allOf:
+        - $ref: '#/definitions/domain.CustomerIndustry'
+        enum:
+        - construction
+        - manufacturing
+        - retail
+        - logistics
+        - agriculture
+        - energy
+        - public_sector
+        - real_estate
+        - other
+    type: object
+  domain.UpdateCustomerIsInternalRequest:
+    properties:
+      isInternal:
+        type: boolean
+    type: object
+  domain.UpdateCustomerNotesRequest:
+    properties:
+      notes:
+        type: string
+    type: object
+  domain.UpdateCustomerPostalCodeRequest:
+    properties:
+      postalCode:
+        maxLength: 20
+        type: string
+    type: object
   domain.UpdateCustomerRequest:
     properties:
       address:
@@ -2131,6 +2225,32 @@ definitions:
     required:
     - country
     - name
+    type: object
+  domain.UpdateCustomerStatusRequest:
+    properties:
+      status:
+        allOf:
+        - $ref: '#/definitions/domain.CustomerStatus'
+        enum:
+        - active
+        - inactive
+        - lead
+        - churned
+    required:
+    - status
+    type: object
+  domain.UpdateCustomerTierRequest:
+    properties:
+      tier:
+        allOf:
+        - $ref: '#/definitions/domain.CustomerTier'
+        enum:
+        - bronze
+        - silver
+        - gold
+        - platinum
+    required:
+    - tier
     type: object
   domain.UpdateDealRequest:
     properties:
@@ -2202,6 +2322,12 @@ definitions:
         description: nullable to allow clearing
         type: string
     type: object
+  domain.UpdateOfferExpirationDateRequest:
+    properties:
+      expirationDate:
+        description: nullable to allow clearing (though not recommended)
+        type: string
+    type: object
   domain.UpdateOfferExternalReferenceRequest:
     properties:
       externalReference:
@@ -2240,6 +2366,9 @@ definitions:
       description:
         type: string
       dueDate:
+        type: string
+      expirationDate:
+        description: Optional, defaults to 60 days after sent date
         type: string
       location:
         maxLength: 200
@@ -2290,6 +2419,98 @@ definitions:
         type: number
     required:
     - value
+    type: object
+  domain.UpdateProjectBudgetRequest:
+    properties:
+      budget:
+        minimum: 0
+        type: number
+    type: object
+  domain.UpdateProjectCompanyRequest:
+    properties:
+      companyId:
+        allOf:
+        - $ref: '#/definitions/domain.CompanyID'
+        enum:
+        - gruppen
+        - stalbygg
+        - hybridbygg
+        - industri
+        - tak
+        - montasje
+    type: object
+  domain.UpdateProjectCompletionPercentRequest:
+    properties:
+      completionPercent:
+        maximum: 100
+        minimum: 0
+        type: number
+    type: object
+  domain.UpdateProjectDatesRequest:
+    properties:
+      endDate:
+        type: string
+      startDate:
+        type: string
+    type: object
+  domain.UpdateProjectDescriptionRequest:
+    properties:
+      description:
+        type: string
+      summary:
+        maxLength: 500
+        type: string
+    type: object
+  domain.UpdateProjectEstimatedCompletionDateRequest:
+    properties:
+      estimatedCompletionDate:
+        type: string
+    type: object
+  domain.UpdateProjectHealthRequest:
+    properties:
+      health:
+        allOf:
+        - $ref: '#/definitions/domain.ProjectHealth'
+        enum:
+        - on_track
+        - at_risk
+        - over_budget
+    required:
+    - health
+    type: object
+  domain.UpdateProjectManagerRequest:
+    properties:
+      managerId:
+        maxLength: 100
+        type: string
+    type: object
+  domain.UpdateProjectNameRequest:
+    properties:
+      name:
+        maxLength: 200
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  domain.UpdateProjectNumberRequest:
+    properties:
+      projectNumber:
+        maxLength: 50
+        type: string
+    type: object
+  domain.UpdateProjectPhaseRequest:
+    properties:
+      phase:
+        allOf:
+        - $ref: '#/definitions/domain.ProjectPhase'
+        enum:
+        - tilbud
+        - active
+        - completed
+        - cancelled
+    required:
+    - phase
     type: object
   domain.UpdateProjectRequest:
     properties:
@@ -2342,6 +2563,12 @@ definitions:
     - startDate
     - status
     type: object
+  domain.UpdateProjectSpentRequest:
+    properties:
+      spent:
+        minimum: 0
+        type: number
+    type: object
   domain.UpdateProjectStatusRequest:
     properties:
       completionPercent:
@@ -2354,6 +2581,13 @@ definitions:
         $ref: '#/definitions/domain.ProjectStatus'
     required:
     - status
+    type: object
+  domain.UpdateProjectTeamMembersRequest:
+    properties:
+      teamMembers:
+        items:
+          type: string
+        type: array
     type: object
   domain.UserDTO:
     properties:
@@ -4156,6 +4390,194 @@ paths:
       summary: Update customer
       tags:
       - Customers
+  /customers/{id}/address:
+    put:
+      consumes:
+      - application/json
+      description: Update the address fields of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Address data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerAddressRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer address
+      tags:
+      - Customers
+  /customers/{id}/city:
+    put:
+      consumes:
+      - application/json
+      description: Update only the city of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: City data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerCityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer city
+      tags:
+      - Customers
+  /customers/{id}/company:
+    put:
+      consumes:
+      - application/json
+      description: Assign or unassign a customer to/from a company
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Company data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer company assignment
+      tags:
+      - Customers
+  /customers/{id}/contact-info:
+    put:
+      consumes:
+      - application/json
+      description: Update the contact person, email, and phone of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Contact info data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerContactInfoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer contact information
+      tags:
+      - Customers
   /customers/{id}/contacts:
     get:
       consumes:
@@ -4239,6 +4661,382 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Create contact for customer
+      tags:
+      - Customers
+  /customers/{id}/credit-limit:
+    put:
+      consumes:
+      - application/json
+      description: Update only the credit limit of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Credit limit data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerCreditLimitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer credit limit
+      tags:
+      - Customers
+  /customers/{id}/customer-class:
+    put:
+      consumes:
+      - application/json
+      description: Update only the customer class
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Customer class data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerClassRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer class
+      tags:
+      - Customers
+  /customers/{id}/industry:
+    put:
+      consumes:
+      - application/json
+      description: Update only the industry of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Industry data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerIndustryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer industry
+      tags:
+      - Customers
+  /customers/{id}/is-internal:
+    put:
+      consumes:
+      - application/json
+      description: Update the internal flag of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Internal flag data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerIsInternalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer internal flag
+      tags:
+      - Customers
+  /customers/{id}/notes:
+    put:
+      consumes:
+      - application/json
+      description: Update only the notes of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Notes data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerNotesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer notes
+      tags:
+      - Customers
+  /customers/{id}/postal-code:
+    put:
+      consumes:
+      - application/json
+      description: Update only the postal code of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Postal code data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerPostalCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer postal code
+      tags:
+      - Customers
+  /customers/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update only the status of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer status
+      tags:
+      - Customers
+  /customers/{id}/tier:
+    put:
+      consumes:
+      - application/json
+      description: Update only the tier of a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tier data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateCustomerTierRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update customer tier
       tags:
       - Customers
   /dashboard/metrics:
@@ -5967,6 +6765,49 @@ paths:
       summary: Update offer due date
       tags:
       - Offers
+  /offers/{id}/expiration-date:
+    put:
+      consumes:
+      - application/json
+      description: Updates the expiration date of a sent offer. Used to extend the
+        validity period for the customer to accept.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Expiration date data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferExpirationDateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID, offer not sent, or invalid date
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer expiration date
+      tags:
+      - Offers
   /offers/{id}/external-reference:
     put:
       consumes:
@@ -6946,6 +7787,362 @@ paths:
       summary: Get project budget
       tags:
       - Projects
+    put:
+      consumes:
+      - application/json
+      description: Update only the budget of a project (only allowed in active phase)
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Budget data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectBudgetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Cannot edit budget in tilbud phase
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project budget
+      tags:
+      - Projects
+  /projects/{id}/company:
+    put:
+      consumes:
+      - application/json
+      description: Update the company assignment of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Company data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project company
+      tags:
+      - Projects
+  /projects/{id}/completion:
+    put:
+      consumes:
+      - application/json
+      description: Update the completion percentage of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Completion percent data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectCompletionPercentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project completion percentage
+      tags:
+      - Projects
+  /projects/{id}/dates:
+    put:
+      consumes:
+      - application/json
+      description: Update the start and end dates of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Dates data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectDatesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project dates
+      tags:
+      - Projects
+  /projects/{id}/description:
+    put:
+      consumes:
+      - application/json
+      description: Update the summary and description of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Description data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectDescriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project description
+      tags:
+      - Projects
+  /projects/{id}/estimated-completion-date:
+    put:
+      consumes:
+      - application/json
+      description: Update the estimated completion date of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Estimated completion date data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectEstimatedCompletionDateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project estimated completion date
+      tags:
+      - Projects
+  /projects/{id}/health:
+    put:
+      consumes:
+      - application/json
+      description: Update only the health status of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Health data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectHealthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project health
+      tags:
+      - Projects
   /projects/{id}/inherit-budget:
     post:
       consumes:
@@ -6998,6 +8195,108 @@ paths:
       summary: Inherit budget from offer
       tags:
       - Projects
+  /projects/{id}/manager:
+    put:
+      consumes:
+      - application/json
+      description: Update only the manager of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Manager data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectManagerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project manager
+      tags:
+      - Projects
+  /projects/{id}/name:
+    put:
+      consumes:
+      - application/json
+      description: Update only the name of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Name data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectNameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project name
+      tags:
+      - Projects
   /projects/{id}/offers:
     get:
       consumes:
@@ -7035,6 +8334,160 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Get offers for a project
+      tags:
+      - Projects
+  /projects/{id}/phase:
+    put:
+      consumes:
+      - application/json
+      description: Update only the phase of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Phase data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectPhaseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project phase
+      tags:
+      - Projects
+  /projects/{id}/project-number:
+    put:
+      consumes:
+      - application/json
+      description: Update the project number of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Project number data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectNumberRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project number
+      tags:
+      - Projects
+  /projects/{id}/spent:
+    put:
+      consumes:
+      - application/json
+      description: Update only the spent amount of a project (only allowed in active
+        phase)
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Spent data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectSpentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Cannot edit spent in tilbud phase
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project spent amount
       tags:
       - Projects
   /projects/{id}/status:
@@ -7087,6 +8540,57 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update project status
+      tags:
+      - Projects
+  /projects/{id}/team-members:
+    put:
+      consumes:
+      - application/json
+      description: Update the team members of a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Team members data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateProjectTeamMembersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ProjectDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update project team members
       tags:
       - Projects
   /search:

@@ -27,10 +27,23 @@ DELETE FROM user_permissions;
 DELETE FROM user_roles;
 DELETE FROM users;
 DELETE FROM customers;
--- Note: Do NOT delete from companies or budget_dimension_categories (seeded by migrations)
+DELETE FROM companies;
+-- Note: Do NOT delete from budget_dimension_categories (seeded by migrations)
 
 -- ============================================================================
--- PART 2: USERS (12 Norwegian users across all Straye companies)
+-- PART 2: COMPANIES (Straye Group companies)
+-- ============================================================================
+
+INSERT INTO companies (id, name, short_name, org_number, color, is_active, created_at, updated_at) VALUES
+('gruppen', 'Straye Gruppen AS', 'Gruppen', '999000001', '#1a1a2e', true, NOW(), NOW()),
+('stalbygg', 'Straye Stalbygg AS', 'Stalbygg', '999000002', '#e94560', true, NOW(), NOW()),
+('hybridbygg', 'Straye Hybridbygg AS', 'Hybridbygg', '999000003', '#0f3460', true, NOW(), NOW()),
+('industri', 'Straye Industri AS', 'Industri', '999000004', '#16213e', true, NOW(), NOW()),
+('tak', 'Straye Tak AS', 'Tak', '999000005', '#533483', true, NOW(), NOW()),
+('montasje', 'Straye Montasje AS', 'Montasje', '999000006', '#e07c24', true, NOW(), NOW());
+
+-- ============================================================================
+-- PART 3: USERS (12 Norwegian users across all Straye companies)
 -- Users table: id is VARCHAR(100), name is single field
 -- ============================================================================
 
