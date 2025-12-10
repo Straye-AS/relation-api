@@ -25,6 +25,12 @@ func ToCustomerDTO(customer *domain.Customer, totalValue float64, activeOffers i
 		Status:        customer.Status,
 		Tier:          customer.Tier,
 		Industry:      customer.Industry,
+		Notes:         customer.Notes,
+		CustomerClass: customer.CustomerClass,
+		CreditLimit:   customer.CreditLimit,
+		IsInternal:    customer.IsInternal,
+		Municipality:  customer.Municipality,
+		County:        customer.County,
 		CreatedAt:     customer.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:     customer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 		TotalValue:    totalValue,
@@ -141,29 +147,40 @@ func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHis
 
 // ToProjectDTO converts Project to ProjectDTO
 func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
+	// Set default phase for backwards compatibility if not set
+	phase := project.Phase
+	if phase == "" {
+		phase = domain.ProjectPhaseTilbud
+	}
+
 	dto := domain.ProjectDTO{
-		ID:                project.ID,
-		Name:              project.Name,
-		ProjectNumber:     project.ProjectNumber,
-		Summary:           project.Summary,
-		Description:       project.Description,
-		CustomerID:        project.CustomerID,
-		CustomerName:      project.CustomerName,
-		CompanyID:         project.CompanyID,
-		Status:            project.Status,
-		StartDate:         project.StartDate.Format("2006-01-02T15:04:05Z"),
-		Budget:            project.Budget,
-		Spent:             project.Spent,
-		ManagerID:         project.ManagerID,
-		ManagerName:       project.ManagerName,
-		TeamMembers:       project.TeamMembers,
-		CreatedAt:         project.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:         project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		OfferID:           project.OfferID,
-		DealID:            project.DealID,
-		HasDetailedBudget: project.HasDetailedBudget,
-		Health:            project.Health,
-		CompletionPercent: project.CompletionPercent,
+		ID:                   project.ID,
+		Name:                 project.Name,
+		ProjectNumber:        project.ProjectNumber,
+		Summary:              project.Summary,
+		Description:          project.Description,
+		CustomerID:           project.CustomerID,
+		CustomerName:         project.CustomerName,
+		CompanyID:            project.CompanyID,
+		Status:               project.Status,
+		Phase:                phase,
+		StartDate:            project.StartDate.Format("2006-01-02T15:04:05Z"),
+		Budget:               project.Budget,
+		Spent:                project.Spent,
+		ManagerID:            project.ManagerID,
+		ManagerName:          project.ManagerName,
+		TeamMembers:          project.TeamMembers,
+		CreatedAt:            project.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:            project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		OfferID:              project.OfferID,
+		DealID:               project.DealID,
+		HasDetailedBudget:    project.HasDetailedBudget,
+		Health:               project.Health,
+		CompletionPercent:    project.CompletionPercent,
+		WinningOfferID:       project.WinningOfferID,
+		InheritedOfferNumber: project.InheritedOfferNumber,
+		CalculatedOfferValue: project.CalculatedOfferValue,
+		IsEconomicsEditable:  phase.IsEditablePhase(),
 	}
 
 	if project.EndDate != nil {
@@ -172,6 +189,10 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 
 	if project.EstimatedCompletionDate != nil {
 		dto.EstimatedCompletionDate = project.EstimatedCompletionDate.Format("2006-01-02")
+	}
+
+	if project.WonAt != nil {
+		dto.WonAt = project.WonAt.Format("2006-01-02T15:04:05Z")
 	}
 
 	return dto
@@ -190,26 +211,43 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		dueDate = &formatted
 	}
 
+	var sentDate *string
+	if offer.SentDate != nil {
+		formatted := offer.SentDate.Format("2006-01-02T15:04:05Z")
+		sentDate = &formatted
+	}
+
+	// Calculate margin (Price - Cost), margin_percent is stored in DB
+	margin := offer.Price - offer.Cost
+
 	return domain.OfferDTO{
-		ID:                  offer.ID,
-		Title:               offer.Title,
-		OfferNumber:         offer.OfferNumber,
-		CustomerID:          offer.CustomerID,
-		CustomerName:        offer.CustomerName,
-		ProjectID:           offer.ProjectID,
-		CompanyID:           offer.CompanyID,
-		Phase:               offer.Phase,
-		Probability:         offer.Probability,
-		Value:               offer.Value,
-		Status:              offer.Status,
-		CreatedAt:           offer.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:           offer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		ResponsibleUserID:   offer.ResponsibleUserID,
-		ResponsibleUserName: offer.ResponsibleUserName,
-		Items:               items,
-		Description:         offer.Description,
-		Notes:               offer.Notes,
-		DueDate:             dueDate,
+		ID:                    offer.ID,
+		Title:                 offer.Title,
+		OfferNumber:           offer.OfferNumber,
+		ExternalReference:     offer.ExternalReference,
+		CustomerID:            offer.CustomerID,
+		CustomerName:          offer.CustomerName,
+		ProjectID:             offer.ProjectID,
+		CompanyID:             offer.CompanyID,
+		Phase:                 offer.Phase,
+		Probability:           offer.Probability,
+		Value:                 offer.Value,
+		Status:                offer.Status,
+		CreatedAt:             offer.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:             offer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		ResponsibleUserID:     offer.ResponsibleUserID,
+		ResponsibleUserName:   offer.ResponsibleUserName,
+		Items:                 items,
+		Description:           offer.Description,
+		Notes:                 offer.Notes,
+		DueDate:               dueDate,
+		Cost:                  offer.Cost,
+		Price:                 offer.Price,
+		Margin:                margin,
+		MarginPercent:         offer.MarginPercent, // Stored in DB, auto-calculated by trigger
+		Location:              offer.Location,
+		SentDate:              sentDate,
+		CustomerHasWonProject: offer.CustomerHasWonProject,
 	}
 }
 

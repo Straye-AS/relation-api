@@ -16,12 +16,14 @@ import (
 
 type ProjectHandler struct {
 	projectService *service.ProjectService
+	offerService   *service.OfferService
 	logger         *zap.Logger
 }
 
-func NewProjectHandler(projectService *service.ProjectService, logger *zap.Logger) *ProjectHandler {
+func NewProjectHandler(projectService *service.ProjectService, offerService *service.OfferService, logger *zap.Logger) *ProjectHandler {
 	return &ProjectHandler{
 		projectService: projectService,
+		offerService:   offerService,
 		logger:         logger,
 	}
 }
@@ -36,8 +38,11 @@ func NewProjectHandler(projectService *service.ProjectService, logger *zap.Logge
 // @Param pageSize query int false "Items per page (max 200)" default(20)
 // @Param customerId query string false "Filter by customer ID" format(uuid)
 // @Param status query string false "Filter by status" Enums(planning, active, on_hold, completed, cancelled)
+// @Param phase query string false "Filter by phase" Enums(tilbud, active, completed, cancelled)
 // @Param health query string false "Filter by health" Enums(on_track, at_risk, over_budget)
 // @Param managerId query string false "Filter by manager ID"
+// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, status, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
+// @Param sortOrder query string false "Sort order" Enums(asc, desc) default(desc)
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.ProjectDTO}
 // @Failure 400 {object} domain.APIError
 // @Failure 401 {object} domain.APIError
@@ -74,6 +79,12 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.Status = &st
 	}
 
+	// Parse phase filter
+	if p := r.URL.Query().Get("phase"); p != "" {
+		ph := domain.ProjectPhase(p)
+		filters.Phase = &ph
+	}
+
 	// Parse health filter
 	if healthStr := r.URL.Query().Get("health"); healthStr != "" {
 		health := domain.ProjectHealth(healthStr)
@@ -85,7 +96,16 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.ManagerID = &mid
 	}
 
-	result, err := h.projectService.ListWithFilters(r.Context(), page, pageSize, filters)
+	// Parse sort configuration
+	sort := repository.DefaultSortConfig()
+	if sortBy := r.URL.Query().Get("sortBy"); sortBy != "" {
+		sort.Field = sortBy
+	}
+	if sortOrder := r.URL.Query().Get("sortOrder"); sortOrder != "" {
+		sort.Order = repository.ParseSortOrder(sortOrder)
+	}
+
+	result, err := h.projectService.ListWithSort(r.Context(), page, pageSize, filters, sort)
 	if err != nil {
 		h.logger.Error("failed to list projects", zap.Error(err))
 		respondWithError(w, http.StatusInternalServerError, "Failed to list projects")
@@ -424,10 +444,42 @@ func (h *ProjectHandler) handleProjectError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, service.ErrInvalidCompletionPercent):
 		respondWithError(w, http.StatusBadRequest, "Completion percent must be between 0 and 100")
+	case errors.Is(err, service.ErrProjectEconomicsNotEditable):
+		respondWithError(w, http.StatusBadRequest, "Project economics can only be edited during active phase")
 	case errors.Is(err, service.ErrUnauthorized):
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
 	default:
 		h.logger.Error("project handler error", zap.Error(err))
 		respondWithError(w, http.StatusInternalServerError, "Internal server error")
 	}
+}
+
+// GetProjectOffers godoc
+// @Summary Get offers for a project
+// @Description Get all offers linked to a project (offer folder model)
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Param id path string true "Project ID" format(uuid)
+// @Success 200 {array} domain.OfferDTO
+// @Failure 400 {object} domain.APIError
+// @Failure 404 {object} domain.APIError "Project not found"
+// @Failure 500 {object} domain.APIError
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /projects/{id}/offers [get]
+func (h *ProjectHandler) GetProjectOffers(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
+		return
+	}
+
+	offers, err := h.offerService.GetProjectOffers(r.Context(), id)
+	if err != nil {
+		h.handleProjectError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offers)
 }

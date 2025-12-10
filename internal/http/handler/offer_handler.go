@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
+	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -33,6 +34,8 @@ func NewOfferHandler(offerService *service.OfferService, logger *zap.Logger) *Of
 // @Param customerId query string false "Filter by customer ID"
 // @Param projectId query string false "Filter by project ID"
 // @Param phase query string false "Filter by phase"
+// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, title, value, probability, phase, status, dueDate, customerName)
+// @Param sortOrder query string false "Sort order" Enums(asc, desc) default(desc)
 // @Success 200 {object} domain.PaginatedResponse
 // @Security BearerAuth
 // @Security ApiKeyAuth
@@ -68,7 +71,16 @@ func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 		phase = &ph
 	}
 
-	result, err := h.offerService.List(r.Context(), page, pageSize, customerID, projectID, phase)
+	// Parse sort configuration
+	sort := repository.DefaultSortConfig()
+	if sortBy := r.URL.Query().Get("sortBy"); sortBy != "" {
+		sort.Field = sortBy
+	}
+	if sortOrder := r.URL.Query().Get("sortOrder"); sortOrder != "" {
+		sort.Order = repository.ParseSortOrder(sortOrder)
+	}
+
+	result, err := h.offerService.ListWithSort(r.Context(), page, pageSize, customerID, projectID, phase, sort)
 	if err != nil {
 		h.logger.Error("failed to list offers", zap.Error(err))
 		respondWithError(w, http.StatusInternalServerError, "Failed to list offers")
@@ -478,6 +490,49 @@ func (h *OfferHandler) Reject(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, offer)
 }
 
+// Win godoc
+// @Summary Win an offer within a project
+// @Description Transitions an offer to won phase within a project context. This also transitions the project from tilbud to active phase, expires sibling offers, and sets the winning offer's number on the project.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.WinOfferRequest true "Win options"
+// @Success 200 {object} domain.WinOfferResponse "Won offer with project and expired sibling offers"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, offer not in project, or project not in tilbud phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/win [post]
+func (h *OfferHandler) Win(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID")
+		return
+	}
+
+	var req domain.WinOfferRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Empty body is allowed
+		req = domain.WinOfferRequest{}
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	response, err := h.offerService.WinOffer(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to win offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, response)
+}
+
 // Clone godoc
 // @Summary Clone offer
 // @Description Creates a copy of an existing offer. The cloned offer starts in draft phase.
@@ -621,6 +676,12 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Offer must be in sent phase to accept or reject")
 	case errors.Is(err, service.ErrOfferAlreadyClosed):
 		respondWithError(w, http.StatusBadRequest, "Offer is already in a closed state (won/lost/expired)")
+	case errors.Is(err, service.ErrOfferAlreadyWon):
+		respondWithError(w, http.StatusBadRequest, "Offer is already won")
+	case errors.Is(err, service.ErrOfferNotInProject):
+		respondWithError(w, http.StatusBadRequest, "Offer must be linked to a project to be won through this endpoint")
+	case errors.Is(err, service.ErrProjectNotInTilbudPhase):
+		respondWithError(w, http.StatusBadRequest, "Project must be in tilbud phase to win an offer")
 	case errors.Is(err, service.ErrOfferCannotClone):
 		respondWithError(w, http.StatusBadRequest, "Cannot clone this offer")
 	case errors.Is(err, service.ErrProjectCreationFailed):
@@ -631,6 +692,10 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Project not found")
 	case errors.Is(err, service.ErrUnauthorized):
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+	case errors.Is(err, service.ErrOfferNumberConflict):
+		respondWithError(w, http.StatusConflict, "Offer number already exists")
+	case errors.Is(err, service.ErrExternalReferenceConflict):
+		respondWithError(w, http.StatusConflict, "External reference already exists for this company")
 	default:
 		respondWithError(w, http.StatusInternalServerError, "Internal server error")
 	}
@@ -1007,4 +1072,174 @@ func (h *OfferHandler) UnlinkFromProject(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondJSON(w, http.StatusOK, offer)
+}
+
+// UpdateCustomerHasWonProject godoc
+// @Summary Update customer has won project flag
+// @Description Updates the flag indicating whether the customer has won their project
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferCustomerHasWonProjectRequest true "Customer has won project data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID or offer closed"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/customer-has-won-project [put]
+func (h *OfferHandler) UpdateCustomerHasWonProject(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferCustomerHasWonProjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	offer, err := h.offerService.UpdateCustomerHasWonProject(r.Context(), id, req.CustomerHasWonProject)
+	if err != nil {
+		h.logger.Error("failed to update customer has won project", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// UpdateOfferNumber godoc
+// @Summary Update offer number
+// @Description Updates the internal offer number (e.g., "TK-2025-001"). Returns 409 if number already exists.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferNumberRequest true "Offer number data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID or request"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 409 {object} domain.ErrorResponse "Offer number already exists"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/offer-number [put]
+func (h *OfferHandler) UpdateOfferNumber(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferNumberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateOfferNumber(r.Context(), id, req.OfferNumber)
+	if err != nil {
+		h.logger.Error("failed to update offer number", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// UpdateExternalReference godoc
+// @Summary Update external reference
+// @Description Updates the external/customer reference number. Returns 409 if reference already exists for this company.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferExternalReferenceRequest true "External reference data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID or request"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 409 {object} domain.ErrorResponse "External reference already exists for this company"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/external-reference [put]
+func (h *OfferHandler) UpdateExternalReference(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferExternalReferenceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateExternalReference(r.Context(), id, req.ExternalReference)
+	if err != nil {
+		h.logger.Error("failed to update external reference", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// GetNextNumber godoc
+// @Summary Get next offer number preview
+// @Description Returns a preview of what the next offer number would be for a company without consuming the sequence. Useful for UI display.
+// @Tags Offers
+// @Produce json
+// @Param companyId query string true "Company ID" Enums(gruppen, stalbygg, hybridbygg, industri, tak, montasje)
+// @Success 200 {object} domain.NextOfferNumberResponse
+// @Failure 400 {object} domain.ErrorResponse "Invalid or missing company ID"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/next-number [get]
+func (h *OfferHandler) GetNextNumber(w http.ResponseWriter, r *http.Request) {
+	companyIDStr := r.URL.Query().Get("companyId")
+	if companyIDStr == "" {
+		respondWithError(w, http.StatusBadRequest, "companyId query parameter is required")
+		return
+	}
+
+	if !domain.IsValidCompanyID(companyIDStr) {
+		respondWithError(w, http.StatusBadRequest, "Invalid companyId: must be one of gruppen, stalbygg, hybridbygg, industri, tak, montasje")
+		return
+	}
+
+	companyID := domain.CompanyID(companyIDStr)
+
+	result, err := h.offerService.GetNextOfferNumber(r.Context(), companyID)
+	if err != nil {
+		h.logger.Error("failed to get next offer number",
+			zap.Error(err),
+			zap.String("company_id", companyIDStr))
+
+		if errors.Is(err, service.ErrInvalidCompanyID) {
+			respondWithError(w, http.StatusBadRequest, "Invalid company ID")
+			return
+		}
+
+		respondWithError(w, http.StatusInternalServerError, "Failed to get next offer number")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
 }

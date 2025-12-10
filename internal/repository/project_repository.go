@@ -16,8 +16,26 @@ import (
 type ProjectFilters struct {
 	CustomerID *uuid.UUID
 	Status     *domain.ProjectStatus
+	Phase      *domain.ProjectPhase
 	Health     *domain.ProjectHealth
 	ManagerID  *string
+}
+
+// projectSortableFields maps API field names to database column names for projects
+// Only fields in this map can be used for sorting (whitelist approach)
+var projectSortableFields = map[string]string{
+	"createdAt":    "created_at",
+	"updatedAt":    "updated_at",
+	"name":         "name",
+	"status":       "status",
+	"phase":        "phase",
+	"health":       "health",
+	"budget":       "budget",
+	"spent":        "spent",
+	"startDate":    "start_date",
+	"endDate":      "end_date",
+	"customerName": "customer_name",
+	"wonAt":        "won_at",
 }
 
 // ProjectBudgetMetrics holds calculated budget metrics for a project
@@ -67,11 +85,11 @@ func (r *ProjectRepository) List(ctx context.Context, page, pageSize int, custom
 		CustomerID: customerID,
 		Status:     status,
 	}
-	return r.ListWithFilters(ctx, page, pageSize, filters)
+	return r.ListWithFilters(ctx, page, pageSize, filters, DefaultSortConfig())
 }
 
-// ListWithFilters returns a paginated list of projects with filter options including health and managerID
-func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *ProjectFilters) ([]domain.Project, int64, error) {
+// ListWithFilters returns a paginated list of projects with filter and sort options
+func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *ProjectFilters, sort SortConfig) ([]domain.Project, int64, error) {
 	var projects []domain.Project
 	var total int64
 
@@ -101,6 +119,10 @@ func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize 
 			query = query.Where("status = ?", *filters.Status)
 		}
 
+		if filters.Phase != nil {
+			query = query.Where("phase = ?", *filters.Phase)
+		}
+
 		if filters.Health != nil {
 			query = query.Where("health = ?", *filters.Health)
 		}
@@ -114,8 +136,11 @@ func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize 
 		return nil, 0, err
 	}
 
+	// Build order clause from sort config
+	orderClause := BuildOrderClause(sort, projectSortableFields, "created_at")
+
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&projects).Error
+	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&projects).Error
 
 	return projects, total, err
 }
@@ -437,4 +462,118 @@ func (r *ProjectRepository) GetRecentProjectsInWindow(ctx context.Context, since
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&projects).Error
 	return projects, err
+}
+
+// ============================================================================
+// Phase Management Methods
+// ============================================================================
+
+// UpdatePhase updates the project phase and related fields
+func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID, phase domain.ProjectPhase) error {
+	updates := map[string]interface{}{
+		"phase": phase,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project phase: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// SetWinningOffer sets the winning offer for a project and transitions it to active phase
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, calculatedValue float64, wonAt time.Time) error {
+	updates := map[string]interface{}{
+		"phase":                  domain.ProjectPhaseActive,
+		"winning_offer_id":       offerID,
+		"inherited_offer_number": inheritedOfferNumber,
+		"calculated_offer_value": calculatedValue,
+		"budget":                 calculatedValue, // Set initial budget from winning offer
+		"won_at":                 wonAt,
+		"status":                 domain.ProjectStatusActive, // Also update status to active
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to set winning offer: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// UpdateCalculatedOfferValue updates the calculated offer value for projects in tilbud phase
+// This should be called when offers in a project are modified to keep the value in sync
+func (r *ProjectRepository) UpdateCalculatedOfferValue(ctx context.Context, projectID uuid.UUID, value float64) error {
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ? AND phase = ?", projectID, domain.ProjectPhaseTilbud)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(map[string]interface{}{
+		"calculated_offer_value": value,
+		"budget":                 value, // Keep budget in sync during tilbud phase
+	})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update calculated offer value: %w", result.Error)
+	}
+
+	// Note: not checking RowsAffected because project might not be in tilbud phase
+	return nil
+}
+
+// GetByPhase returns all projects in a specific phase
+func (r *ProjectRepository) GetByPhase(ctx context.Context, phase domain.ProjectPhase) ([]domain.Project, error) {
+	var projects []domain.Project
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("phase = ?", phase)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Order("created_at DESC").Find(&projects).Error
+	return projects, err
+}
+
+// CountByPhase returns the count of projects grouped by phase
+func (r *ProjectRepository) CountByPhase(ctx context.Context) (map[domain.ProjectPhase]int64, error) {
+	type phaseCount struct {
+		Phase domain.ProjectPhase
+		Count int64
+	}
+
+	var results []phaseCount
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Select("phase, COUNT(*) as count").
+		Group("phase")
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Scan(&results).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to count projects by phase: %w", err)
+	}
+
+	counts := make(map[domain.ProjectPhase]int64)
+	for _, r := range results {
+		counts[r.Phase] = r.Count
+	}
+
+	return counts, nil
 }

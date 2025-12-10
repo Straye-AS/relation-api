@@ -135,7 +135,18 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		Description:         req.Description,
 		Notes:               req.Notes,
 		DueDate:             req.DueDate,
+		Cost:                req.Cost,
+		Location:            req.Location,
+		SentDate:            req.SentDate,
 		Items:               items,
+	}
+
+	// Generate offer number only for non-draft offers
+	// Draft offers should NOT have offer numbers - they get one when transitioning out of draft
+	if !s.isDraftPhase(phase) {
+		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.offerRepo.Create(ctx, offer); err != nil {
@@ -260,6 +271,11 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 		return nil, ErrOfferAlreadyClosed
 	}
 
+	// Track if we're transitioning from draft to non-draft
+	wasInDraft := s.isDraftPhase(offer.Phase)
+	willBeInDraft := s.isDraftPhase(req.Phase)
+	transitioningFromDraft := wasInDraft && !willBeInDraft
+
 	offer.Title = req.Title
 	offer.Phase = req.Phase
 	offer.Probability = req.Probability
@@ -268,9 +284,31 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	offer.Description = req.Description
 	offer.Notes = req.Notes
 	offer.DueDate = req.DueDate
+	offer.Cost = req.Cost
+	offer.Location = req.Location
+	offer.SentDate = req.SentDate
 
 	// Recalculate value from items
 	offer.Value = mapper.CalculateOfferValue(offer.Items)
+
+	// Handle offer number generation when transitioning from draft to non-draft
+	if transitioningFromDraft {
+		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
+			return nil, err
+		}
+	}
+
+	// Validate offer number rules:
+	// - Draft offers should NOT have an offer number
+	// - Non-draft offers MUST have an offer number
+	if willBeInDraft && offer.OfferNumber != "" {
+		// This shouldn't normally happen, but if someone tries to update to draft with a number, reject it
+		return nil, ErrDraftOfferCannotHaveNumber
+	}
+	if !willBeInDraft && offer.OfferNumber == "" {
+		// Non-draft offer without number - this is a data integrity issue
+		return nil, ErrNonDraftOfferMustHaveNumber
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
@@ -311,8 +349,13 @@ func (s *OfferService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// List returns a paginated list of offers
+// List returns a paginated list of offers with default sorting
 func (s *OfferService) List(ctx context.Context, page, pageSize int, customerID, projectID *uuid.UUID, phase *domain.OfferPhase) (*domain.PaginatedResponse, error) {
+	return s.ListWithSort(ctx, page, pageSize, customerID, projectID, phase, repository.DefaultSortConfig())
+}
+
+// ListWithSort returns a paginated list of offers with custom sorting
+func (s *OfferService) ListWithSort(ctx context.Context, page, pageSize int, customerID, projectID *uuid.UUID, phase *domain.OfferPhase, sort repository.SortConfig) (*domain.PaginatedResponse, error) {
 	// Clamp page size
 	if pageSize < 1 {
 		pageSize = 20
@@ -324,7 +367,13 @@ func (s *OfferService) List(ctx context.Context, page, pageSize int, customerID,
 		page = 1
 	}
 
-	offers, total, err := s.offerRepo.List(ctx, page, pageSize, customerID, projectID, phase)
+	filters := &repository.OfferFilters{
+		CustomerID: customerID,
+		ProjectID:  projectID,
+		Phase:      phase,
+	}
+
+	offers, total, err := s.offerRepo.ListWithFilters(ctx, page, pageSize, filters, sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list offers: %w", err)
 	}
@@ -364,6 +413,14 @@ func (s *OfferService) SendOffer(ctx context.Context, id uuid.UUID) (*domain.Off
 	}
 
 	oldPhase := offer.Phase
+
+	// Generate offer number if transitioning from draft (sent is non-draft)
+	if s.isDraftPhase(oldPhase) {
+		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
+			return nil, err
+		}
+	}
+
 	offer.Phase = domain.OfferPhaseSent
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
@@ -559,6 +616,197 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 	return &dto, nil
 }
 
+// WinOffer wins an offer within a project context (offer folder model)
+// This transitions the offer to won, the project to active phase,
+// and expires all sibling offers in the same project
+func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.WinOfferRequest) (*domain.WinOfferResponse, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Validate offer has a project linked
+	if offer.ProjectID == nil {
+		return nil, ErrOfferNotInProject
+	}
+
+	// Validate offer is not already in a terminal phase
+	if offer.Phase == domain.OfferPhaseWon {
+		return nil, ErrOfferAlreadyWon
+	}
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	// Get the project and verify it's in tilbud phase
+	project, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if project.Phase != domain.ProjectPhaseTilbud {
+		return nil, ErrProjectNotInTilbudPhase
+	}
+
+	// Generate offer number if transitioning from draft
+	if s.isDraftPhase(offer.Phase) {
+		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
+			return nil, err
+		}
+	}
+
+	// Store the original offer number for the project
+	originalOfferNumber := offer.OfferNumber
+	wonAt := time.Now()
+
+	// Use transaction for atomicity
+	var expiredOfferIDs []uuid.UUID
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// 1. Mark the winning offer as won
+		offer.Phase = domain.OfferPhaseWon
+		if err := tx.Save(offer).Error; err != nil {
+			return fmt.Errorf("failed to update winning offer: %w", err)
+		}
+
+		// 2. Update the winning offer's number with "_P" suffix
+		if originalOfferNumber != "" {
+			newOfferNumber := originalOfferNumber + "_P"
+			if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
+				s.logger.Warn("failed to update offer number with suffix", zap.Error(err))
+			}
+		}
+
+		// 3. Expire sibling offers
+		expiredIDs, err := s.offerRepo.ExpireSiblingOffers(ctx, *offer.ProjectID, id)
+		if err != nil {
+			return fmt.Errorf("failed to expire sibling offers: %w", err)
+		}
+		expiredOfferIDs = expiredIDs
+
+		// 4. Update the project to active phase with winning offer details
+		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, wonAt); err != nil {
+			return fmt.Errorf("failed to update project with winning offer: %w", err)
+		}
+
+		// 5. Clone budget items from offer to project if they exist
+		if s.budgetItemRepo != nil {
+			items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, id)
+			if err == nil && len(items) > 0 {
+				for _, item := range items {
+					cloned := domain.BudgetItem{
+						ParentType:     domain.BudgetParentProject,
+						ParentID:       project.ID,
+						Name:           item.Name,
+						ExpectedCost:   item.ExpectedCost,
+						ExpectedMargin: item.ExpectedMargin,
+						Quantity:       item.Quantity,
+						PricePerItem:   item.PricePerItem,
+						Description:    item.Description,
+						DisplayOrder:   item.DisplayOrder,
+					}
+					if err := tx.Create(&cloned).Error; err != nil {
+						s.logger.Warn("failed to clone budget item",
+							zap.Error(err),
+							zap.String("item_id", item.ID.String()))
+					}
+				}
+				// Mark project as having detailed budget
+				if err := tx.Model(&domain.Project{}).Where("id = ?", project.ID).
+					Update("has_detailed_budget", true).Error; err != nil {
+					s.logger.Warn("failed to update project HasDetailedBudget flag", zap.Error(err))
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Reload offer and project
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after win", zap.Error(err))
+	}
+
+	project, err = s.projectRepo.GetByID(ctx, *offer.ProjectID)
+	if err != nil {
+		s.logger.Warn("failed to reload project after win", zap.Error(err))
+	}
+
+	// Get expired offers for response
+	var expiredOfferDTOs []domain.OfferDTO
+	if len(expiredOfferIDs) > 0 {
+		expiredOffers, err := s.offerRepo.GetExpiredSiblingOffers(ctx, *offer.ProjectID, id)
+		if err == nil {
+			expiredOfferDTOs = make([]domain.OfferDTO, len(expiredOffers))
+			for i, o := range expiredOffers {
+				expiredOfferDTOs[i] = mapper.ToOfferDTO(&o)
+			}
+		}
+	}
+
+	// Log activities
+	activityBody := fmt.Sprintf("Offer '%s' was won, transitioning project '%s' to active phase", offer.Title, project.Name)
+	if req.Notes != "" {
+		activityBody = fmt.Sprintf("%s. Notes: %s", activityBody, req.Notes)
+	}
+	s.logActivity(ctx, offer.ID, "Offer won", activityBody)
+
+	if len(expiredOfferIDs) > 0 {
+		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
+			"Project activated",
+			fmt.Sprintf("Project activated with winning offer '%s'. %d sibling offer(s) were expired.",
+				offer.Title, len(expiredOfferIDs)))
+	} else {
+		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
+			"Project activated",
+			fmt.Sprintf("Project activated with winning offer '%s'.", offer.Title))
+	}
+
+	offerDTO := mapper.ToOfferDTO(offer)
+	projectDTO := mapper.ToProjectDTO(project)
+
+	return &domain.WinOfferResponse{
+		Offer:         &offerDTO,
+		Project:       &projectDTO,
+		ExpiredOffers: expiredOfferDTOs,
+		ExpiredCount:  len(expiredOfferIDs),
+	}, nil
+}
+
+// GetProjectOffers returns all offers linked to a project
+func (s *OfferService) GetProjectOffers(ctx context.Context, projectID uuid.UUID) ([]domain.OfferDTO, error) {
+	// Verify project exists
+	_, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	offers, err := s.offerRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project offers: %w", err)
+	}
+
+	dtos := make([]domain.OfferDTO, len(offers))
+	for i, offer := range offers {
+		dtos[i] = mapper.ToOfferDTO(&offer)
+	}
+
+	return dtos, nil
+}
+
 // ExpireOffer transitions an offer to expired phase
 func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
@@ -575,6 +823,14 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	}
 
 	oldPhase := offer.Phase
+
+	// Generate offer number if transitioning from draft (expired is non-draft)
+	if s.isDraftPhase(oldPhase) {
+		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
+			return nil, err
+		}
+	}
+
 	offer.Phase = domain.OfferPhaseExpired
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
@@ -771,7 +1027,7 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 // ============================================================================
 
 // Advance updates the offer phase (legacy method, prefer specific lifecycle methods)
-// When transitioning from draft to in_progress, generates a unique offer number
+// When transitioning from draft to any non-draft phase, generates a unique offer number
 func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.AdvanceOfferRequest) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -782,8 +1038,9 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 	}
 
 	oldPhase := offer.Phase
+	transitioningFromDraft := s.isDraftPhase(oldPhase) && !s.isDraftPhase(req.Phase)
 
-	// Validate phase transition from draft to in_progress
+	// Special validation for draft to in_progress transition
 	if oldPhase == domain.OfferPhaseDraft && req.Phase == domain.OfferPhaseInProgress {
 		// Must have responsible user OR company with default responsible user
 		hasResponsible := offer.ResponsibleUserID != ""
@@ -807,35 +1064,24 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 				return nil, ErrOfferMissingResponsible
 			}
 		}
+	}
 
-		// Validate company ID for offer number generation
-		if !domain.IsValidCompanyID(string(offer.CompanyID)) {
-			return nil, ErrInvalidCompanyID
-		}
-
-		// Generate offer number only if not already set (immutability check)
-		if offer.OfferNumber == "" {
-			if s.numberSeqService == nil {
-				s.logger.Error("number sequence service not available",
-					zap.String("offerID", id.String()))
-				return nil, fmt.Errorf("%w: number sequence service not configured", ErrOfferNumberGenerationFailed)
-			}
-			offerNumber, err := s.numberSeqService.GenerateOfferNumber(ctx, offer.CompanyID)
-			if err != nil {
-				s.logger.Error("failed to generate offer number",
-					zap.Error(err),
-					zap.String("offerID", id.String()),
-					zap.String("companyID", string(offer.CompanyID)))
-				return nil, fmt.Errorf("%w: %v", ErrOfferNumberGenerationFailed, err)
-			}
-			offer.OfferNumber = offerNumber
-			s.logger.Info("generated offer number",
-				zap.String("offerID", id.String()),
-				zap.String("offerNumber", offerNumber))
+	// Generate offer number when transitioning from draft to ANY non-draft phase
+	if transitioningFromDraft {
+		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
+			return nil, err
 		}
 	}
 
 	offer.Phase = req.Phase
+
+	// Validate offer number rules after the phase change
+	if s.isDraftPhase(req.Phase) && offer.OfferNumber != "" {
+		return nil, ErrDraftOfferCannotHaveNumber
+	}
+	if !s.isDraftPhase(req.Phase) && offer.OfferNumber == "" {
+		return nil, ErrNonDraftOfferMustHaveNumber
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
@@ -843,13 +1089,9 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 
 	// Log activity
 	activityBody := fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase)
-	if oldPhase == domain.OfferPhaseDraft && req.Phase == domain.OfferPhaseInProgress {
-		if offer.OfferNumber != "" {
-			activityBody = fmt.Sprintf("Offer '%s' advanced to in progress with offer number %s (responsible: %s)",
-				offer.Title, offer.OfferNumber, offer.ResponsibleUserID)
-		} else {
-			activityBody = fmt.Sprintf("Offer '%s' advanced to in progress (responsible: %s)", offer.Title, offer.ResponsibleUserID)
-		}
+	if transitioningFromDraft && offer.OfferNumber != "" {
+		activityBody = fmt.Sprintf("Offer '%s' advanced from %s to %s with offer number %s",
+			offer.Title, oldPhase, offer.Phase, offer.OfferNumber)
 	}
 	s.logActivity(ctx, offer.ID, "Offer phase advanced", activityBody)
 
@@ -961,6 +1203,49 @@ func (s *OfferService) isClosedPhase(phase domain.OfferPhase) bool {
 	return phase == domain.OfferPhaseWon ||
 		phase == domain.OfferPhaseLost ||
 		phase == domain.OfferPhaseExpired
+}
+
+// isDraftPhase returns true if the phase is draft
+func (s *OfferService) isDraftPhase(phase domain.OfferPhase) bool {
+	return phase == domain.OfferPhaseDraft
+}
+
+// generateOfferNumberIfNeeded generates an offer number for the offer if it doesn't have one.
+// This should be called when transitioning from draft to any other phase.
+// Returns an error if the offer number generation fails.
+func (s *OfferService) generateOfferNumberIfNeeded(ctx context.Context, offer *domain.Offer) error {
+	// Only generate if not already set
+	if offer.OfferNumber != "" {
+		return nil
+	}
+
+	// Validate company ID for offer number generation
+	if !domain.IsValidCompanyID(string(offer.CompanyID)) {
+		return ErrInvalidCompanyID
+	}
+
+	// Check if number sequence service is available
+	if s.numberSeqService == nil {
+		s.logger.Error("number sequence service not available",
+			zap.String("offerID", offer.ID.String()))
+		return fmt.Errorf("%w: number sequence service not configured", ErrOfferNumberGenerationFailed)
+	}
+
+	offerNumber, err := s.numberSeqService.GenerateOfferNumber(ctx, offer.CompanyID)
+	if err != nil {
+		s.logger.Error("failed to generate offer number",
+			zap.Error(err),
+			zap.String("offerID", offer.ID.String()),
+			zap.String("companyID", string(offer.CompanyID)))
+		return fmt.Errorf("%w: %v", ErrOfferNumberGenerationFailed, err)
+	}
+
+	offer.OfferNumber = offerNumber
+	s.logger.Info("generated offer number",
+		zap.String("offerID", offer.ID.String()),
+		zap.String("offerNumber", offerNumber))
+
+	return nil
 }
 
 // logActivity creates an activity log entry for an offer
@@ -1305,4 +1590,143 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
+}
+
+// UpdateCustomerHasWonProject updates the customer has won project flag on an offer
+func (s *OfferService) UpdateCustomerHasWonProject(ctx context.Context, offerID uuid.UUID, customerHasWonProject bool) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	offer.CustomerHasWonProject = customerHasWonProject
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	// Log activity
+	var activityBody string
+	if customerHasWonProject {
+		activityBody = "Customer marked as having won their project"
+	} else {
+		activityBody = "Customer marked as not having won their project"
+	}
+	s.logActivity(ctx, offerID, "Customer project status updated", activityBody)
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateOfferNumber updates the internal offer number with conflict checking
+func (s *OfferService) UpdateOfferNumber(ctx context.Context, offerID uuid.UUID, offerNumber string) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Draft offers cannot have offer numbers
+	if s.isDraftPhase(offer.Phase) {
+		return nil, ErrDraftOfferCannotHaveNumber
+	}
+
+	// Non-draft offers cannot have empty offer numbers
+	if offerNumber == "" {
+		return nil, ErrNonDraftOfferMustHaveNumber
+	}
+
+	// Check if the new offer number already exists (excluding this offer)
+	exists, err := s.offerRepo.OfferNumberExists(ctx, offerNumber, offerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check offer number: %w", err)
+	}
+	if exists {
+		return nil, ErrOfferNumberConflict
+	}
+
+	oldNumber := offer.OfferNumber
+	offer.OfferNumber = offerNumber
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	s.logActivity(ctx, offerID, "Offer number updated",
+		fmt.Sprintf("Changed from '%s' to '%s'", oldNumber, offerNumber))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateExternalReference updates the external reference field on an offer
+func (s *OfferService) UpdateExternalReference(ctx context.Context, offerID uuid.UUID, externalReference string) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Check if the new external reference already exists within the company (excluding this offer)
+	if externalReference != "" {
+		exists, err := s.offerRepo.ExternalReferenceExists(ctx, externalReference, offer.CompanyID, offerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check external reference: %w", err)
+		}
+		if exists {
+			return nil, ErrExternalReferenceConflict
+		}
+	}
+
+	oldRef := offer.ExternalReference
+	offer.ExternalReference = externalReference
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	var activityBody string
+	if externalReference == "" {
+		activityBody = fmt.Sprintf("Removed external reference '%s'", oldRef)
+	} else if oldRef == "" {
+		activityBody = fmt.Sprintf("Set external reference to '%s'", externalReference)
+	} else {
+		activityBody = fmt.Sprintf("Changed external reference from '%s' to '%s'", oldRef, externalReference)
+	}
+	s.logActivity(ctx, offerID, "External reference updated", activityBody)
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// GetNextOfferNumber returns a preview of what the next offer number would be for a company
+// WITHOUT consuming/incrementing the sequence. This is useful for UI display purposes.
+func (s *OfferService) GetNextOfferNumber(ctx context.Context, companyID domain.CompanyID) (*domain.NextOfferNumberResponse, error) {
+	// Validate company ID
+	if !domain.IsValidCompanyID(string(companyID)) {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidCompanyID, companyID)
+	}
+
+	// Get the preview of the next offer number
+	nextNumber, err := s.numberSeqService.PreviewNextOfferNumber(ctx, companyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to preview next offer number: %w", err)
+	}
+
+	return &domain.NextOfferNumberResponse{
+		NextOfferNumber: nextNumber,
+		CompanyID:       companyID,
+		Year:            time.Now().Year(),
+	}, nil
 }

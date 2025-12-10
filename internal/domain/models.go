@@ -104,6 +104,12 @@ type Customer struct {
 	Status        CustomerStatus   `gorm:"type:varchar(50);not null;default:'active';index"`
 	Tier          CustomerTier     `gorm:"type:varchar(50);not null;default:'bronze';index"`
 	Industry      CustomerIndustry `gorm:"type:varchar(50);index"`
+	Notes         string           `gorm:"type:text"`
+	CustomerClass string           `gorm:"type:varchar(50);column:customer_class"`
+	CreditLimit   *float64         `gorm:"type:decimal(15,2);column:credit_limit"`
+	IsInternal    bool             `gorm:"type:boolean;not null;default:false;column:is_internal"`
+	Municipality  string           `gorm:"type:varchar(100)"`
+	County        string           `gorm:"type:varchar(100)"`
 	CompanyID     *CompanyID       `gorm:"type:varchar(50);column:company_id;index"`
 	Company       *Company         `gorm:"foreignKey:CompanyID"`
 	Contacts      []Contact        `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
@@ -271,6 +277,34 @@ const (
 	ProjectHealthOverBudget ProjectHealth = "over_budget"
 )
 
+// ProjectPhase represents the lifecycle phase of a project
+// - tilbud: Offer/bidding phase (default). Economics mirror highest offer value (read-only)
+// - active: Project is active. Economics are fully editable
+// - completed: Project is finished
+// - cancelled: Project was cancelled
+type ProjectPhase string
+
+const (
+	ProjectPhaseTilbud    ProjectPhase = "tilbud"
+	ProjectPhaseActive    ProjectPhase = "active"
+	ProjectPhaseCompleted ProjectPhase = "completed"
+	ProjectPhaseCancelled ProjectPhase = "cancelled"
+)
+
+// IsValid checks if the ProjectPhase is a valid enum value
+func (p ProjectPhase) IsValid() bool {
+	switch p {
+	case ProjectPhaseTilbud, ProjectPhaseActive, ProjectPhaseCompleted, ProjectPhaseCancelled:
+		return true
+	}
+	return false
+}
+
+// IsEditablePhase returns true if economic values can be edited in this phase
+func (p ProjectPhase) IsEditablePhase() bool {
+	return p == ProjectPhaseActive
+}
+
 // Project represents work being performed for a customer
 type Project struct {
 	BaseModel
@@ -283,6 +317,7 @@ type Project struct {
 	CustomerName            string         `gorm:"type:varchar(200)"`
 	CompanyID               CompanyID      `gorm:"type:varchar(50);not null;index"`
 	Status                  ProjectStatus  `gorm:"type:varchar(50);not null;index"`
+	Phase                   ProjectPhase   `gorm:"type:project_phase;not null;default:'tilbud';index"`
 	StartDate               time.Time      `gorm:"type:date;not null"`
 	EndDate                 *time.Time     `gorm:"type:date"`
 	Budget                  float64        `gorm:"type:decimal(15,2);not null;default:0"`
@@ -298,6 +333,12 @@ type Project struct {
 	Health                  *ProjectHealth `gorm:"type:project_health;default:'on_track'"`
 	CompletionPercent       *float64       `gorm:"type:decimal(5,2);default:0;column:completion_percent"`
 	EstimatedCompletionDate *time.Time     `gorm:"type:date;column:estimated_completion_date"`
+	// Phase-related fields for offer folder functionality
+	WinningOfferID       *uuid.UUID `gorm:"type:uuid;index;column:winning_offer_id"`
+	WinningOffer         *Offer     `gorm:"foreignKey:WinningOfferID"`
+	InheritedOfferNumber string     `gorm:"type:varchar(50);column:inherited_offer_number"`
+	CalculatedOfferValue float64    `gorm:"type:decimal(15,2);default:0;column:calculated_offer_value"`
+	WonAt                *time.Time `gorm:"column:won_at"`
 }
 
 // ERPSource represents the source ERP system for cost data
@@ -373,25 +414,54 @@ const (
 // Offer represents a sales proposal
 type Offer struct {
 	BaseModel
-	Title               string      `gorm:"type:varchar(200);not null;index"`
-	OfferNumber         string      `gorm:"type:varchar(50);column:offer_number;index"` // Unique per company, e.g., "STB-2024-001"
-	CustomerID          uuid.UUID   `gorm:"type:uuid;not null;index"`
-	Customer            *Customer   `gorm:"foreignKey:CustomerID"`
-	CustomerName        string      `gorm:"type:varchar(200)"`
-	ProjectID           *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project
-	Project             *Project    `gorm:"foreignKey:ProjectID"`
-	CompanyID           CompanyID   `gorm:"type:varchar(50);not null;index"`
-	Phase               OfferPhase  `gorm:"type:varchar(50);not null;index"`
-	Probability         int         `gorm:"type:int;not null;default:0"`
-	Value               float64     `gorm:"type:decimal(15,2);not null;default:0"`
-	Status              OfferStatus `gorm:"type:varchar(50);not null;index"`
-	ResponsibleUserID   string      `gorm:"type:varchar(100);index"` // Optional for inquiries (draft phase)
-	ResponsibleUserName string      `gorm:"type:varchar(200)"`
-	Description         string      `gorm:"type:text"`
-	Notes               string      `gorm:"type:text"`
-	DueDate             *time.Time  `gorm:"type:timestamp;index"`
-	Items               []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
-	Files               []File      `gorm:"foreignKey:OfferID"`
+	Title                 string      `gorm:"type:varchar(200);not null;index"`
+	OfferNumber           string      `gorm:"type:varchar(50);column:offer_number;index"`  // Internal number, e.g., "TK-2025-001"
+	ExternalReference     string      `gorm:"type:varchar(100);column:external_reference"` // External/customer reference number
+	CustomerID            uuid.UUID   `gorm:"type:uuid;not null;index"`
+	Customer              *Customer   `gorm:"foreignKey:CustomerID"`
+	CustomerName          string      `gorm:"type:varchar(200)"`
+	ProjectID             *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project
+	Project               *Project    `gorm:"foreignKey:ProjectID"`
+	CompanyID             CompanyID   `gorm:"type:varchar(50);not null;index"`
+	Phase                 OfferPhase  `gorm:"type:varchar(50);not null;index"`
+	Probability           int         `gorm:"type:int;not null;default:0"`
+	Value                 float64     `gorm:"type:decimal(15,2);not null;default:0"`
+	Status                OfferStatus `gorm:"type:varchar(50);not null;index"`
+	ResponsibleUserID     string      `gorm:"type:varchar(100);index"` // Optional for inquiries (draft phase)
+	ResponsibleUserName   string      `gorm:"type:varchar(200)"`
+	Description           string      `gorm:"type:text"`
+	Notes                 string      `gorm:"type:text"`
+	DueDate               *time.Time  `gorm:"type:timestamp;index"`
+	Cost                  float64     `gorm:"type:decimal(15,2);default:0"`                               // Internal cost
+	Price                 float64     `gorm:"type:decimal(15,2);not null;default:0"`                      // Price charged to customer
+	MarginPercent         float64     `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad, auto-calculated
+	Location              string      `gorm:"type:varchar(200)"`
+	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
+	CustomerHasWonProject bool        `gorm:"not null;default:false;column:customer_has_won_project"`
+	Items                 []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
+	Files                 []File      `gorm:"foreignKey:OfferID"`
+}
+
+// CalculateMarginPercent calculates the dekningsgrad based on price and cost.
+// Formula: (price - cost) / price * 100
+// Edge cases:
+//   - cost=0 and price>0: returns 100%
+//   - price=0: returns 0%
+//   - both 0: returns 0%
+func (o *Offer) CalculateMarginPercent() float64 {
+	if o.Price > 0 {
+		return ((o.Price - o.Cost) / o.Price) * 100
+	}
+	return 0
+}
+
+// CalculateMarginPercentFromValues is a helper function to calculate margin percent
+// from price and cost values without needing an Offer instance.
+func CalculateMarginPercentFromValues(price, cost float64) float64 {
+	if price > 0 {
+		return ((price - cost) / price) * 100
+	}
+	return 0
 }
 
 // NumberSequence tracks the last used sequence number per company per year

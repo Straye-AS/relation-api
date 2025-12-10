@@ -20,6 +20,20 @@ type OfferFilters struct {
 	Status     *domain.OfferStatus
 }
 
+// offerSortableFields maps API field names to database column names for offers
+// Only fields in this map can be used for sorting (whitelist approach)
+var offerSortableFields = map[string]string{
+	"createdAt":    "created_at",
+	"updatedAt":    "updated_at",
+	"title":        "title",
+	"value":        "value",
+	"probability":  "probability",
+	"phase":        "phase",
+	"status":       "status",
+	"dueDate":      "due_date",
+	"customerName": "customer_name",
+}
+
 type OfferRepository struct {
 	db *gorm.DB
 }
@@ -116,11 +130,11 @@ func (r *OfferRepository) List(ctx context.Context, page, pageSize int, customer
 		ProjectID:  projectID,
 		Phase:      phase,
 	}
-	return r.ListWithFilters(ctx, page, pageSize, filters)
+	return r.ListWithFilters(ctx, page, pageSize, filters, DefaultSortConfig())
 }
 
-// ListWithFilters returns a paginated list of offers with filter options including status
-func (r *OfferRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *OfferFilters) ([]domain.Offer, int64, error) {
+// ListWithFilters returns a paginated list of offers with filter and sort options
+func (r *OfferRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *OfferFilters, sort SortConfig) ([]domain.Offer, int64, error) {
 	var offers []domain.Offer
 	var total int64
 
@@ -163,8 +177,11 @@ func (r *OfferRepository) ListWithFilters(ctx context.Context, page, pageSize in
 		return nil, 0, err
 	}
 
+	// Build order clause from sort config
+	orderClause := BuildOrderClause(sort, offerSortableFields, "created_at")
+
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&offers).Error
+	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&offers).Error
 
 	return offers, total, err
 }
@@ -872,4 +889,143 @@ func (r *OfferRepository) LinkToProject(ctx context.Context, offerID uuid.UUID, 
 // UnlinkFromProject removes the project link from an offer
 func (r *OfferRepository) UnlinkFromProject(ctx context.Context, offerID uuid.UUID) error {
 	return r.UpdateField(ctx, offerID, "project_id", nil)
+}
+
+// OfferNumberExists checks if an offer number already exists, excluding the given offer ID
+func (r *OfferRepository) OfferNumberExists(ctx context.Context, offerNumber string, excludeOfferID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("offer_number = ? AND id != ?", offerNumber, excludeOfferID).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check offer number existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// SetExternalReference sets the external reference for an offer
+func (r *OfferRepository) SetExternalReference(ctx context.Context, id uuid.UUID, externalReference string) error {
+	return r.UpdateField(ctx, id, "external_reference", externalReference)
+}
+
+// ExternalReferenceExists checks if an external reference already exists within a company, excluding the given offer ID
+func (r *OfferRepository) ExternalReferenceExists(ctx context.Context, externalReference string, companyID domain.CompanyID, excludeOfferID uuid.UUID) (bool, error) {
+	if externalReference == "" {
+		return false, nil // Empty references are allowed to not be unique
+	}
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("external_reference = ? AND company_id = ? AND id != ?", externalReference, companyID, excludeOfferID).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check external reference existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ============================================================================
+// Project-Offer Relationship Methods (Offer Folder Model)
+// ============================================================================
+
+// ListByProject returns all offers linked to a specific project
+func (r *OfferRepository) ListByProject(ctx context.Context, projectID uuid.UUID) ([]domain.Offer, error) {
+	var offers []domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Preload("Items").
+		Where("project_id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Order("created_at DESC").Find(&offers).Error
+	return offers, err
+}
+
+// GetHighestOfferValueForProject returns the highest offer value among all offers in a project
+// Only considers offers that are not in terminal states (won, lost, expired)
+func (r *OfferRepository) GetHighestOfferValueForProject(ctx context.Context, projectID uuid.UUID) (float64, error) {
+	var maxValue float64
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Select("COALESCE(MAX(value), 0)").
+		Where("project_id = ?", projectID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		})
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Scan(&maxValue).Error
+	return maxValue, err
+}
+
+// ExpireSiblingOffers marks all other offers in the same project as expired
+// This is called when one offer is won - the others become expired (NOT lost)
+// Returns the IDs of the expired offers
+func (r *OfferRepository) ExpireSiblingOffers(ctx context.Context, projectID uuid.UUID, winningOfferID uuid.UUID) ([]uuid.UUID, error) {
+	// First get the IDs of offers that will be expired
+	var offerIDs []uuid.UUID
+	err := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Select("id").
+		Where("project_id = ?", projectID).
+		Where("id != ?", winningOfferID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		}).
+		Pluck("id", &offerIDs).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sibling offer IDs: %w", err)
+	}
+
+	if len(offerIDs) == 0 {
+		return nil, nil
+	}
+
+	// Update the phase to expired for sibling offers
+	result := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id IN ?", offerIDs).
+		Update("phase", domain.OfferPhaseExpired)
+
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to expire sibling offers: %w", result.Error)
+	}
+
+	return offerIDs, nil
+}
+
+// GetExpiredSiblingOffers returns offers that were expired by selecting another offer
+func (r *OfferRepository) GetExpiredSiblingOffers(ctx context.Context, projectID uuid.UUID, winningOfferID uuid.UUID) ([]domain.Offer, error) {
+	var offers []domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("project_id = ?", projectID).
+		Where("id != ?", winningOfferID).
+		Where("phase = ?", domain.OfferPhaseExpired)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&offers).Error
+	return offers, err
+}
+
+// SetOfferNumberWithSuffix updates an offer's number by adding a suffix
+// This is used when an offer wins to mark it with "_P" suffix
+func (r *OfferRepository) SetOfferNumberWithSuffix(ctx context.Context, id uuid.UUID, suffix string) error {
+	return r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id).
+		Update("offer_number", gorm.Expr("offer_number || ?", suffix)).Error
+}
+
+// CountOffersByProject returns the count of offers for a project
+func (r *OfferRepository) CountOffersByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("project_id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Count(&count).Error
+	return count, err
 }

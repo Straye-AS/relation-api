@@ -149,7 +149,7 @@ func run() error {
 	// Initialize handlers
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
 	contactHandler := handler.NewContactHandler(contactService, log)
-	projectHandler := handler.NewProjectHandler(projectService, log)
+	projectHandler := handler.NewProjectHandler(projectService, offerService, log)
 	offerHandler := handler.NewOfferHandler(offerService, log)
 	inquiryHandler := handler.NewInquiryHandler(inquiryService, log)
 	dealHandler := handler.NewDealHandler(dealService, log)

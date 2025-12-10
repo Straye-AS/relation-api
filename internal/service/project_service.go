@@ -133,6 +133,12 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		}
 	}
 
+	// Set default phase if not provided
+	phase := req.Phase
+	if phase == "" {
+		phase = domain.ProjectPhaseTilbud
+	}
+
 	project := &domain.Project{
 		CustomerID:              req.CustomerID,
 		CustomerName:            customer.Name,
@@ -143,6 +149,7 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		Budget:                  req.Budget,
 		Spent:                   req.Spent,
 		Status:                  req.Status,
+		Phase:                   phase,
 		StartDate:               req.StartDate,
 		EndDate:                 req.EndDate,
 		CompanyID:               req.CompanyID,
@@ -154,6 +161,7 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		Health:                  health,
 		CompletionPercent:       req.CompletionPercent,
 		EstimatedCompletionDate: req.EstimatedCompletionDate,
+		CalculatedOfferValue:    req.Budget, // Initialize with budget
 	}
 
 	if err := s.projectRepo.Create(ctx, project); err != nil {
@@ -319,6 +327,14 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 		return nil, err
 	}
 
+	// Validate economics changes during tilbud phase
+	// During tilbud phase, Budget and Spent are read-only (they mirror offer values)
+	if project.Phase == domain.ProjectPhaseTilbud {
+		if req.Budget != project.Budget || req.Spent != project.Spent {
+			return nil, ErrProjectEconomicsNotEditable
+		}
+	}
+
 	// Track changes for activity logging
 	changes := s.trackChanges(project, req)
 
@@ -327,8 +343,13 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	project.ProjectNumber = req.ProjectNumber
 	project.Summary = req.Summary
 	project.Description = req.Description
-	project.Budget = req.Budget
-	project.Spent = req.Spent
+
+	// Only update economic fields if project is in editable phase
+	if project.Phase.IsEditablePhase() {
+		project.Budget = req.Budget
+		project.Spent = req.Spent
+	}
+
 	project.Status = req.Status
 	project.StartDate = req.StartDate
 	project.EndDate = req.EndDate
@@ -413,41 +434,22 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// List returns a paginated list of projects with optional filters
+// List returns a paginated list of projects with optional filters and default sorting
 func (s *ProjectService) List(ctx context.Context, page, pageSize int, customerID *uuid.UUID, status *domain.ProjectStatus) (*domain.PaginatedResponse, error) {
-	// Clamp page size
-	if pageSize < 1 {
-		pageSize = 20
+	filters := &repository.ProjectFilters{
+		CustomerID: customerID,
+		Status:     status,
 	}
-	if pageSize > 200 {
-		pageSize = 200
-	}
-	if page < 1 {
-		page = 1
-	}
-
-	projects, total, err := s.projectRepo.List(ctx, page, pageSize, customerID, status)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list projects: %w", err)
-	}
-
-	dtos := make([]domain.ProjectDTO, len(projects))
-	for i, project := range projects {
-		dtos[i] = mapper.ToProjectDTO(&project)
-	}
-
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return &domain.PaginatedResponse{
-		Data:       dtos,
-		Total:      total,
-		Page:       page,
-		PageSize:   pageSize,
-		TotalPages: totalPages,
-	}, nil
+	return s.ListWithSort(ctx, page, pageSize, filters, repository.DefaultSortConfig())
 }
 
-// ListWithFilters returns a paginated list of projects with filter options
+// ListWithFilters returns a paginated list of projects with filter options and default sorting
 func (s *ProjectService) ListWithFilters(ctx context.Context, page, pageSize int, filters *repository.ProjectFilters) (*domain.PaginatedResponse, error) {
+	return s.ListWithSort(ctx, page, pageSize, filters, repository.DefaultSortConfig())
+}
+
+// ListWithSort returns a paginated list of projects with filter and sort options
+func (s *ProjectService) ListWithSort(ctx context.Context, page, pageSize int, filters *repository.ProjectFilters, sort repository.SortConfig) (*domain.PaginatedResponse, error) {
 	// Clamp page size
 	if pageSize < 1 {
 		pageSize = 20
@@ -459,7 +461,7 @@ func (s *ProjectService) ListWithFilters(ctx context.Context, page, pageSize int
 		page = 1
 	}
 
-	projects, total, err := s.projectRepo.ListWithFilters(ctx, page, pageSize, filters)
+	projects, total, err := s.projectRepo.ListWithFilters(ctx, page, pageSize, filters, sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}

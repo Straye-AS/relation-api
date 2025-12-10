@@ -245,6 +245,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/inherit-budget", rt.projectHandler.InheritBudget)
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
+				r.Get("/{id}/offers", rt.projectHandler.GetProjectOffers) // List offers in project (offer folder model)
 			})
 
 			// Inquiries (draft offers)
@@ -260,6 +261,7 @@ func (rt *Router) Setup() http.Handler {
 			r.Route("/offers", func(r chi.Router) {
 				r.Get("/", rt.offerHandler.List)
 				r.Post("/", rt.offerHandler.Create)
+				r.Get("/next-number", rt.offerHandler.GetNextNumber) // Must be before /{id} to avoid path conflict
 				r.Get("/{id}", rt.offerHandler.GetByID)
 				r.Put("/{id}", rt.offerHandler.Update)
 				r.Delete("/{id}", rt.offerHandler.Delete)
@@ -269,6 +271,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/send", rt.offerHandler.Send)
 				r.Post("/{id}/accept", rt.offerHandler.Accept)
 				r.Post("/{id}/reject", rt.offerHandler.Reject)
+				r.Post("/{id}/win", rt.offerHandler.Win) // Win offer within project (offer folder model)
 				r.Post("/{id}/clone", rt.offerHandler.Clone)
 
 				// Individual property update endpoints
@@ -281,6 +284,9 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/description", rt.offerHandler.UpdateDescription)
 				r.Put("/{id}/project", rt.offerHandler.LinkToProject)
 				r.Delete("/{id}/project", rt.offerHandler.UnlinkFromProject)
+				r.Put("/{id}/customer-has-won-project", rt.offerHandler.UpdateCustomerHasWonProject)
+				r.Put("/{id}/offer-number", rt.offerHandler.UpdateOfferNumber)
+				r.Put("/{id}/external-reference", rt.offerHandler.UpdateExternalReference)
 
 				// Sub-resources
 				r.Get("/{id}/items", rt.offerHandler.GetItems)
