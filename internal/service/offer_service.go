@@ -121,6 +121,22 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		}
 	}
 
+	// Validate expiration date if provided
+	if req.ExpirationDate != nil && req.SentDate != nil {
+		if req.ExpirationDate.Before(*req.SentDate) {
+			return nil, ErrExpirationDateBeforeSentDate
+		}
+	}
+
+	// Calculate expiration date: use provided value, or default to 60 days after sent date if sent
+	var expirationDate *time.Time
+	if req.ExpirationDate != nil {
+		expirationDate = req.ExpirationDate
+	} else if req.SentDate != nil {
+		expDate := req.SentDate.AddDate(0, 0, 60)
+		expirationDate = &expDate
+	}
+
 	offer := &domain.Offer{
 		Title:               req.Title,
 		CustomerID:          req.CustomerID,
@@ -138,6 +154,7 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 		Cost:                req.Cost,
 		Location:            req.Location,
 		SentDate:            req.SentDate,
+		ExpirationDate:      expirationDate,
 		Items:               items,
 	}
 
@@ -288,6 +305,23 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	offer.Location = req.Location
 	offer.SentDate = req.SentDate
 
+	// Handle expiration date: validate and set
+	sentDate := req.SentDate
+	if sentDate == nil {
+		sentDate = offer.SentDate // Use existing sent date if not being updated
+	}
+	if req.ExpirationDate != nil {
+		// Validate expiration date is not before sent date
+		if sentDate != nil && req.ExpirationDate.Before(*sentDate) {
+			return nil, ErrExpirationDateBeforeSentDate
+		}
+		offer.ExpirationDate = req.ExpirationDate
+	} else if sentDate != nil && offer.ExpirationDate == nil {
+		// Default to 60 days after sent date if not set
+		expDate := sentDate.AddDate(0, 0, 60)
+		offer.ExpirationDate = &expDate
+	}
+
 	// Recalculate value from items
 	offer.Value = mapper.CalculateOfferValue(offer.Items)
 
@@ -422,6 +456,18 @@ func (s *OfferService) SendOffer(ctx context.Context, id uuid.UUID) (*domain.Off
 	}
 
 	offer.Phase = domain.OfferPhaseSent
+
+	// Set sent date if not already set
+	if offer.SentDate == nil {
+		now := time.Now()
+		offer.SentDate = &now
+	}
+
+	// Set expiration date to 60 days after sent date if not already set
+	if offer.ExpirationDate == nil {
+		expirationDate := offer.SentDate.AddDate(0, 0, 60)
+		offer.ExpirationDate = &expirationDate
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer phase: %w", err)
@@ -1481,6 +1527,59 @@ func (s *OfferService) UpdateDueDate(ctx context.Context, id uuid.UUID, dueDate 
 	}
 	s.logActivity(ctx, id, "Offer due date updated",
 		fmt.Sprintf("Due date set to %s", dueDateStr))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateExpirationDate updates only the expiration date field of an offer
+// If expirationDate is nil, defaults to 60 days after sent date
+func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, expirationDate *time.Time) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Only sent offers should have expiration dates
+	if offer.Phase != domain.OfferPhaseSent {
+		return nil, fmt.Errorf("only sent offers can have expiration dates")
+	}
+
+	// Determine the expiration date to set
+	var finalExpirationDate *time.Time
+	if expirationDate != nil {
+		// Validate expiration date is not before sent date
+		if offer.SentDate != nil && expirationDate.Before(*offer.SentDate) {
+			return nil, ErrExpirationDateBeforeSentDate
+		}
+		finalExpirationDate = expirationDate
+	} else {
+		// Default to 60 days after sent date
+		if offer.SentDate != nil {
+			expDate := offer.SentDate.AddDate(0, 0, 60)
+			finalExpirationDate = &expDate
+		}
+	}
+
+	if err := s.offerRepo.UpdateField(ctx, id, "expiration_date", finalExpirationDate); err != nil {
+		return nil, fmt.Errorf("failed to update expiration date: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	expirationDateStr := "60 days from sent date (default)"
+	if expirationDate != nil {
+		expirationDateStr = expirationDate.Format("2006-01-02")
+	}
+	s.logActivity(ctx, id, "Offer expiration date updated",
+		fmt.Sprintf("Expiration date set to %s", expirationDateStr))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil

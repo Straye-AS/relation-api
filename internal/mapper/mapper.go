@@ -217,6 +217,12 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		sentDate = &formatted
 	}
 
+	var expirationDate *string
+	if offer.ExpirationDate != nil {
+		formatted := offer.ExpirationDate.Format("2006-01-02T15:04:05Z")
+		expirationDate = &formatted
+	}
+
 	// Calculate margin (Price - Cost), margin_percent is stored in DB
 	margin := offer.Price - offer.Cost
 
@@ -247,6 +253,7 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		MarginPercent:         offer.MarginPercent, // Stored in DB, auto-calculated by trigger
 		Location:              offer.Location,
 		SentDate:              sentDate,
+		ExpirationDate:        expirationDate,
 		CustomerHasWonProject: offer.CustomerHasWonProject,
 	}
 }

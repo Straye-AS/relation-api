@@ -281,6 +281,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/customer", rt.offerHandler.UpdateCustomer)
 				r.Put("/{id}/value", rt.offerHandler.UpdateValue)
 				r.Put("/{id}/due-date", rt.offerHandler.UpdateDueDate)
+				r.Put("/{id}/expiration-date", rt.offerHandler.UpdateExpirationDate)
 				r.Put("/{id}/description", rt.offerHandler.UpdateDescription)
 				r.Put("/{id}/project", rt.offerHandler.LinkToProject)
 				r.Delete("/{id}/project", rt.offerHandler.UnlinkFromProject)

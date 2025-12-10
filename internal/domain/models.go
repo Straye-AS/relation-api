@@ -437,6 +437,7 @@ type Offer struct {
 	MarginPercent         float64     `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad, auto-calculated
 	Location              string      `gorm:"type:varchar(200)"`
 	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
+	ExpirationDate        *time.Time  `gorm:"type:timestamp;index;column:expiration_date"` // When the offer expires (default: 60 days after sent_date)
 	CustomerHasWonProject bool        `gorm:"not null;default:false;column:customer_has_won_project"`
 	Items                 []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
 	Files                 []File      `gorm:"foreignKey:OfferID"`

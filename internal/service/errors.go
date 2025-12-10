@@ -112,6 +112,9 @@ var (
 	// ErrNonDraftOfferMustHaveNumber is returned when a non-draft offer is missing an offer number
 	ErrNonDraftOfferMustHaveNumber = errors.New("non-draft offers must have an offer number")
 
+	// ErrExpirationDateBeforeSentDate is returned when the expiration date is before the sent date
+	ErrExpirationDateBeforeSentDate = errors.New("expiration date cannot be before sent date")
+
 	// Project Phase errors
 
 	// ErrOfferNotInProject is returned when trying to win an offer that is not linked to a project

@@ -958,6 +958,44 @@ func (h *OfferHandler) UpdateDueDate(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, offer)
 }
 
+// UpdateExpirationDate godoc
+// @Summary Update offer expiration date
+// @Description Updates the expiration date of a sent offer. Used to extend the validity period for the customer to accept.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferExpirationDateRequest true "Expiration date data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID, offer not sent, or invalid date"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/expiration-date [put]
+func (h *OfferHandler) UpdateExpirationDate(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferExpirationDateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	offer, err := h.offerService.UpdateExpirationDate(r.Context(), id, req.ExpirationDate)
+	if err != nil {
+		h.logger.Error("failed to update offer expiration date", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
 // UpdateDescription godoc
 // @Summary Update offer description
 // @Description Updates only the description field of an offer

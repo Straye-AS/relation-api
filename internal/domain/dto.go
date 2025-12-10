@@ -159,8 +159,9 @@ type OfferDTO struct {
 	Margin                float64        `json:"margin"`            // Calculated: Price - Cost
 	MarginPercent         float64        `json:"marginPercent"`     // Dekningsgrad: (Price - Cost) / Price * 100
 	Location              string         `json:"location,omitempty"`
-	SentDate              *string        `json:"sentDate,omitempty"`    // ISO 8601
-	CustomerHasWonProject bool           `json:"customerHasWonProject"` // Whether customer has won their project
+	SentDate              *string        `json:"sentDate,omitempty"`       // ISO 8601
+	ExpirationDate        *string        `json:"expirationDate,omitempty"` // ISO 8601 - When offer expires (default 60 days after sent)
+	CustomerHasWonProject bool           `json:"customerHasWonProject"`    // Whether customer has won their project
 }
 
 type OfferItemDTO struct {
@@ -688,6 +689,7 @@ type CreateOfferRequest struct {
 	Cost              float64                  `json:"cost,omitempty" validate:"gte=0"`
 	Location          string                   `json:"location,omitempty" validate:"max=200"`
 	SentDate          *time.Time               `json:"sentDate,omitempty"`
+	ExpirationDate    *time.Time               `json:"expirationDate,omitempty"` // Optional, defaults to 60 days after sent date
 }
 
 type UpdateOfferRequest struct {
@@ -702,6 +704,7 @@ type UpdateOfferRequest struct {
 	Cost              float64     `json:"cost,omitempty" validate:"gte=0"`
 	Location          string      `json:"location,omitempty" validate:"max=200"`
 	SentDate          *time.Time  `json:"sentDate,omitempty"`
+	ExpirationDate    *time.Time  `json:"expirationDate,omitempty"` // Optional, defaults to 60 days after sent date
 }
 
 type CreateOfferItemRequest struct {
@@ -1230,6 +1233,11 @@ type UpdateOfferValueRequest struct {
 // UpdateOfferDueDateRequest for updating offer due date
 type UpdateOfferDueDateRequest struct {
 	DueDate *time.Time `json:"dueDate"` // nullable to allow clearing
+}
+
+// UpdateOfferExpirationDateRequest for updating/extending offer expiration date
+type UpdateOfferExpirationDateRequest struct {
+	ExpirationDate *time.Time `json:"expirationDate"` // nullable to allow clearing (though not recommended)
 }
 
 // UpdateOfferDescriptionRequest for updating offer description
