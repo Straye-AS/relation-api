@@ -681,3 +681,111 @@ func TestOfferRepository_Search(t *testing.T) {
 		assert.LessOrEqual(t, len(offers), 2)
 	})
 }
+
+// createOfferTestProject creates a test project and returns it
+func createOfferTestProject(t *testing.T, db *gorm.DB, name string, customerID uuid.UUID, customerName string) *domain.Project {
+	project := &domain.Project{
+		Name:         name,
+		CustomerID:   customerID,
+		CustomerName: customerName,
+		CompanyID:    domain.CompanyStalbygg,
+		Status:       domain.ProjectStatusPlanning,
+		Phase:        domain.ProjectPhaseTilbud,
+		ManagerID:    "test-manager",
+	}
+	err := db.Create(project).Error
+	require.NoError(t, err)
+	return project
+}
+
+// createOfferWithProject creates a test offer linked to a project
+func createOfferWithProject(t *testing.T, db *gorm.DB, title string, phase domain.OfferPhase, customerID uuid.UUID, customerName string, projectID uuid.UUID, value float64) *domain.Offer {
+	offer := &domain.Offer{
+		Title:             title,
+		CustomerID:        customerID,
+		CustomerName:      customerName,
+		ProjectID:         &projectID,
+		CompanyID:         domain.CompanyStalbygg,
+		Phase:             phase,
+		Status:            domain.OfferStatusActive,
+		Value:             value,
+		ResponsibleUserID: "test-user",
+	}
+	err := db.Create(offer).Error
+	require.NoError(t, err)
+	return offer
+}
+
+func TestOfferRepository_GetDistinctCustomerIDsForActiveOffers(t *testing.T) {
+	db := setupOfferTestDB(t)
+	repo := repository.NewOfferRepository(db)
+
+	// Clean up test projects after
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM projects WHERE name LIKE 'Test%'")
+	})
+
+	t.Run("returns single customer when all offers to same customer", func(t *testing.T) {
+		customer := testutil.CreateTestCustomer(t, db, "Test Customer Single")
+		project := createOfferTestProject(t, db, "Test Project Single", customer.ID, customer.Name)
+
+		// Create two offers to the same customer
+		createOfferWithProject(t, db, "Test Offer Single 1", domain.OfferPhaseInProgress, customer.ID, customer.Name, project.ID, 10000)
+		createOfferWithProject(t, db, "Test Offer Single 2", domain.OfferPhaseSent, customer.ID, customer.Name, project.ID, 20000)
+
+		customerIDs, err := repo.GetDistinctCustomerIDsForActiveOffers(context.Background(), project.ID)
+		assert.NoError(t, err)
+		assert.Len(t, customerIDs, 1)
+		assert.Equal(t, customer.ID, customerIDs[0])
+	})
+
+	t.Run("returns multiple customers when offers to different customers", func(t *testing.T) {
+		customer1 := testutil.CreateTestCustomer(t, db, "Test Customer Multi 1")
+		customer2 := testutil.CreateTestCustomer(t, db, "Test Customer Multi 2")
+		project := createOfferTestProject(t, db, "Test Project Multi", customer1.ID, customer1.Name)
+
+		// Create offers to different customers
+		createOfferWithProject(t, db, "Test Offer Multi 1", domain.OfferPhaseInProgress, customer1.ID, customer1.Name, project.ID, 10000)
+		createOfferWithProject(t, db, "Test Offer Multi 2", domain.OfferPhaseSent, customer2.ID, customer2.Name, project.ID, 20000)
+
+		customerIDs, err := repo.GetDistinctCustomerIDsForActiveOffers(context.Background(), project.ID)
+		assert.NoError(t, err)
+		assert.Len(t, customerIDs, 2)
+	})
+
+	t.Run("excludes won/lost/expired offers", func(t *testing.T) {
+		customer1 := testutil.CreateTestCustomer(t, db, "Test Customer Exclude 1")
+		customer2 := testutil.CreateTestCustomer(t, db, "Test Customer Exclude 2")
+		project := createOfferTestProject(t, db, "Test Project Exclude", customer1.ID, customer1.Name)
+
+		// Create one active offer and one lost offer to different customers
+		createOfferWithProject(t, db, "Test Offer Exclude Active", domain.OfferPhaseInProgress, customer1.ID, customer1.Name, project.ID, 10000)
+		createOfferWithProject(t, db, "Test Offer Exclude Lost", domain.OfferPhaseLost, customer2.ID, customer2.Name, project.ID, 20000)
+
+		customerIDs, err := repo.GetDistinctCustomerIDsForActiveOffers(context.Background(), project.ID)
+		assert.NoError(t, err)
+		assert.Len(t, customerIDs, 1)
+		assert.Equal(t, customer1.ID, customerIDs[0])
+	})
+
+	t.Run("returns empty when no active offers", func(t *testing.T) {
+		customer := testutil.CreateTestCustomer(t, db, "Test Customer Empty")
+		project := createOfferTestProject(t, db, "Test Project Empty", customer.ID, customer.Name)
+
+		// Create only a lost offer
+		createOfferWithProject(t, db, "Test Offer Empty Lost", domain.OfferPhaseLost, customer.ID, customer.Name, project.ID, 10000)
+
+		customerIDs, err := repo.GetDistinctCustomerIDsForActiveOffers(context.Background(), project.ID)
+		assert.NoError(t, err)
+		assert.Len(t, customerIDs, 0)
+	})
+
+	t.Run("returns empty for project with no offers", func(t *testing.T) {
+		customer := testutil.CreateTestCustomer(t, db, "Test Customer No Offers")
+		project := createOfferTestProject(t, db, "Test Project No Offers", customer.ID, customer.Name)
+
+		customerIDs, err := repo.GetDistinctCustomerIDsForActiveOffers(context.Background(), project.ID)
+		assert.NoError(t, err)
+		assert.Len(t, customerIDs, 0)
+	})
+}

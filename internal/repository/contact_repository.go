@@ -87,7 +87,8 @@ func (r *ContactRepository) Update(ctx context.Context, contact *domain.Contact)
 }
 
 func (r *ContactRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.Contact{}, "id = ?", id).Error
+	// Soft delete by setting IsActive to false
+	return r.db.WithContext(ctx).Model(&domain.Contact{}).Where("id = ?", id).Update("is_active", false).Error
 }
 
 // GetByEmail finds a contact by email address
@@ -109,8 +110,8 @@ func (r *ContactRepository) Search(ctx context.Context, query string, limit int)
 
 	err := r.db.WithContext(ctx).
 		Where("is_active = ?", true).
-		Where("first_name ILIKE ? OR last_name ILIKE ? OR email ILIKE ?",
-			searchPattern, searchPattern, searchPattern).
+		Where("first_name ILIKE ? OR last_name ILIKE ? OR email ILIKE ? OR (first_name || ' ' || last_name) ILIKE ?",
+			searchPattern, searchPattern, searchPattern, searchPattern).
 		Order("last_name, first_name").
 		Limit(limit).
 		Find(&contacts).Error
@@ -139,10 +140,11 @@ func (r *ContactRepository) GetRelationships(ctx context.Context, contactID uuid
 }
 
 func (r *ContactRepository) SetPrimaryRelationship(ctx context.Context, contactID uuid.UUID, entityType domain.ContactEntityType, entityID uuid.UUID) error {
-	// First, unset any existing primary for this contact-entity type combination
+	// First, unset any existing primary for ALL contacts linked to this entity
+	// This ensures only one contact can be primary for any given entity
 	if err := r.db.WithContext(ctx).
 		Model(&domain.ContactRelationship{}).
-		Where("contact_id = ? AND entity_type = ?", contactID, entityType).
+		Where("entity_type = ? AND entity_id = ?", entityType, entityID).
 		Update("is_primary", false).Error; err != nil {
 		return err
 	}
@@ -238,7 +240,7 @@ func (r *ContactRepository) ListWithFilters(ctx context.Context, page, pageSize 
 // GetRelationshipByID returns a relationship by its ID
 func (r *ContactRepository) GetRelationshipByID(ctx context.Context, relationshipID uuid.UUID) (*domain.ContactRelationship, error) {
 	var rel domain.ContactRelationship
-	err := r.db.WithContext(ctx).First(&rel, "id = ?", relationshipID).Error
+	err := r.db.WithContext(ctx).Preload("Contact").First(&rel, "id = ?", relationshipID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +249,14 @@ func (r *ContactRepository) GetRelationshipByID(ctx context.Context, relationshi
 
 // RemoveRelationshipByID removes a relationship by its ID
 func (r *ContactRepository) RemoveRelationshipByID(ctx context.Context, relationshipID uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.ContactRelationship{}, "id = ?", relationshipID).Error
+	result := r.db.WithContext(ctx).Delete(&domain.ContactRelationship{}, "id = ?", relationshipID)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // CheckRelationshipExists checks if a relationship already exists

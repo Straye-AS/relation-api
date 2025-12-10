@@ -1092,3 +1092,24 @@ func (r *OfferRepository) GetBestActiveOfferForProject(ctx context.Context, proj
 	}
 	return &offer, nil
 }
+
+// GetDistinctCustomerIDsForActiveOffers returns the distinct customer IDs from active offers
+// (in_progress or sent phase) for a project. Used to determine if project customer can be inferred.
+// Returns empty slice if no active offers exist.
+func (r *OfferRepository) GetDistinctCustomerIDsForActiveOffers(ctx context.Context, projectID uuid.UUID) ([]uuid.UUID, error) {
+	var customerIDs []uuid.UUID
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Select("DISTINCT customer_id").
+		Where("project_id = ?", projectID).
+		Where("phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseInProgress,
+			domain.OfferPhaseSent,
+		})
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Pluck("customer_id", &customerIDs).Error
+	if err != nil {
+		return nil, err
+	}
+	return customerIDs, nil
+}

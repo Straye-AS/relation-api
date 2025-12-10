@@ -23,7 +23,8 @@ import (
 )
 
 func setupCustomerHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	// Use clean DB to ensure test isolation for handler tests
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -159,7 +160,7 @@ func TestCustomerHandler_List(t *testing.T) {
 	})
 
 	t.Run("list with sort by name asc", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/customers?sortBy=name_asc", nil)
+		req := httptest.NewRequest(http.MethodGet, "/customers?sortBy=name&sortOrder=asc", nil)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
@@ -562,7 +563,7 @@ func TestCustomerHandler_ListContacts(t *testing.T) {
 	// Create a test customer
 	customer := testutil.CreateTestCustomer(t, db, "Customer With Contacts")
 
-	// Create some contacts for the customer
+	// Create some contacts and link them to the customer via ContactRelationship
 	contacts := []domain.Contact{
 		{
 			FirstName:         "John",
@@ -579,8 +580,20 @@ func TestCustomerHandler_ListContacts(t *testing.T) {
 			IsActive:          true,
 		},
 	}
-	for _, c := range contacts {
-		err := db.Create(&c).Error
+	for i := range contacts {
+		err := db.Create(&contacts[i]).Error
+		require.NoError(t, err)
+
+		// Create a ContactRelationship to link the contact to the customer
+		// The ListByCustomer endpoint uses ContactRelationship, not PrimaryCustomerID
+		rel := domain.ContactRelationship{
+			ContactID:  contacts[i].ID,
+			EntityType: domain.ContactEntityCustomer,
+			EntityID:   customer.ID,
+			Role:       "Contact",
+			IsPrimary:  i == 0, // First contact is primary
+		}
+		err = db.Create(&rel).Error
 		require.NoError(t, err)
 	}
 

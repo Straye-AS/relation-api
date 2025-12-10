@@ -647,3 +647,27 @@ func (r *ProjectRepository) RecalculateBestOfferEconomics(ctx context.Context, p
 
 	return nil
 }
+
+// UpdateCustomerFromOffers updates the project's customer based on active offers.
+// If all active offers (in_progress/sent) are to the same customer, set that customer.
+// If active offers are to different customers, set CustomerID to NULL.
+// This should only be called for projects in the tilbud phase.
+func (r *ProjectRepository) UpdateCustomerFromOffers(ctx context.Context, projectID uuid.UUID, customerID *uuid.UUID, customerName string) error {
+	updates := map[string]interface{}{
+		"customer_id":   customerID,
+		"customer_name": customerName,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID).
+		Where("phase = ?", domain.ProjectPhaseTilbud) // Only update tilbud phase projects
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project customer: %w", result.Error)
+	}
+
+	return nil
+}

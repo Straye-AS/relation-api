@@ -159,6 +159,9 @@ func (s *DealService) Create(ctx context.Context, req *domain.CreateDealRequest)
 func (s *DealService) GetByID(ctx context.Context, id uuid.UUID) (*domain.DealDTO, error) {
 	deal, err := s.dealRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, fmt.Errorf("failed to get deal: %w", err)
 	}
 

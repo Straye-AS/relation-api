@@ -38,6 +38,15 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+// SetupCleanTestDB creates a connection to the test PostgreSQL database
+// and cleans all test data before returning, ensuring test isolation.
+// Use this when a test needs a completely clean database state.
+func SetupCleanTestDB(t *testing.T) *gorm.DB {
+	db := SetupTestDB(t)
+	CleanupTestData(t, db)
+	return db
+}
+
 // CleanupTestData cleans up test data from all tables
 // This should be called after tests to ensure a clean state
 func CleanupTestData(t *testing.T, db *gorm.DB) {

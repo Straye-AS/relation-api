@@ -211,10 +211,14 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 			return nil, fmt.Errorf("failed to link offer to project: %w", err)
 		}
 
-		// Update project economics (CalculatedOfferValue)
+		// Update project economics (CalculatedOfferValue) and customer
 		if projectLinkRes.Project != nil && projectLinkRes.Project.Phase == domain.ProjectPhaseTilbud {
 			if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, projectLinkRes.ProjectID); err != nil {
 				s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+			}
+			// Recalculate project customer based on active offers
+			if err := s.recalculateProjectCustomer(ctx, projectLinkRes.ProjectID); err != nil {
+				s.logger.Warn("failed to recalculate project customer", zap.Error(err))
 			}
 		}
 	} else {
@@ -747,9 +751,13 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 						fmt.Sprintf("Project cancelled because all offers were lost (last: '%s')", offer.Title))
 				}
 			} else {
-				// Other active offers remain - recalculate economics
+				// Other active offers remain - recalculate economics and customer
 				if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, *offer.ProjectID); err != nil {
 					s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+				}
+				// Recalculate project customer based on remaining active offers
+				if err := s.recalculateProjectCustomer(ctx, *offer.ProjectID); err != nil {
+					s.logger.Warn("failed to recalculate project customer", zap.Error(err))
 				}
 			}
 		}
@@ -1019,9 +1027,13 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 						fmt.Sprintf("Project cancelled because all offers expired (last: '%s')", offer.Title))
 				}
 			} else {
-				// Other active offers remain - recalculate economics
+				// Other active offers remain - recalculate economics and customer
 				if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, *offer.ProjectID); err != nil {
 					s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+				}
+				// Recalculate project customer based on remaining active offers
+				if err := s.recalculateProjectCustomer(ctx, *offer.ProjectID); err != nil {
+					s.logger.Warn("failed to recalculate project customer", zap.Error(err))
 				}
 			}
 		}
@@ -1324,10 +1336,14 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
-	// Recalculate project economics if linked to a tilbud phase project
+	// Recalculate project economics and customer if linked to a tilbud phase project
 	if projectLinkRes != nil && projectLinkRes.Project != nil && projectLinkRes.Project.Phase == domain.ProjectPhaseTilbud {
 		if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, projectLinkRes.ProjectID); err != nil {
 			s.logger.Warn("failed to recalculate project economics", zap.Error(err))
+		}
+		// Recalculate project customer based on active offers
+		if err := s.recalculateProjectCustomer(ctx, projectLinkRes.ProjectID); err != nil {
+			s.logger.Warn("failed to recalculate project customer", zap.Error(err))
 		}
 	}
 
@@ -1494,14 +1510,29 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 			return nil, ErrCannotAddOfferToCancelledProject
 		}
 
-		// Validate customer match
-		if project.CustomerID != offer.CustomerID {
-			return nil, ErrProjectCustomerMismatch
-		}
-
-		// Validate company match
+		// Validate company match (always required)
 		if project.CompanyID != offer.CompanyID {
 			return nil, ErrProjectCompanyMismatch
+		}
+
+		// Note: Customer match is NOT validated during tilbud phase
+		// Multiple offers to different customers can be linked to the same project
+		// The project's customer will be recalculated based on active offers
+
+		// Log when linking offer with different customer for audit purposes
+		if project.CustomerID != offer.CustomerID {
+			s.logger.Info("linking offer to project with different customer",
+				zap.String("offerID", offer.ID.String()),
+				zap.String("offerCustomerID", offer.CustomerID.String()),
+				zap.String("offerCustomerName", offer.CustomerName),
+				zap.String("projectID", project.ID.String()),
+				zap.String("projectCustomerID", func() string {
+					if project.CustomerID != uuid.Nil {
+						return project.CustomerID.String()
+					}
+					return "nil"
+				}()),
+				zap.String("projectCustomerName", project.CustomerName))
 		}
 
 		return &projectLinkResult{
@@ -1567,6 +1598,71 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		Project:        project,
 		ProjectCreated: true,
 	}, nil
+}
+
+// recalculateProjectCustomer updates the project's customer based on active offers.
+// If all active offers (in_progress/sent) are to the same customer, set that customer.
+// If active offers are to different customers (or none), set CustomerID to NULL.
+// This should only be called for projects in the tilbud phase.
+func (s *OfferService) recalculateProjectCustomer(ctx context.Context, projectID uuid.UUID) error {
+	// Get the project to verify it's in tilbud phase
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Only recalculate for tilbud phase projects
+	if project.Phase != domain.ProjectPhaseTilbud {
+		return nil
+	}
+
+	// Get distinct customer IDs from active offers
+	customerIDs, err := s.offerRepo.GetDistinctCustomerIDsForActiveOffers(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to get distinct customers: %w", err)
+	}
+
+	var newCustomerID *uuid.UUID
+	var newCustomerName string
+
+	if len(customerIDs) == 1 {
+		// All active offers are to the same customer - use that customer
+		// Get customer to verify it exists and get the name
+		customer, err := s.customerRepo.GetByID(ctx, customerIDs[0])
+		if err != nil {
+			// Customer lookup failed - log warning but still proceed
+			// The customer ID is from an existing offer, so it should be valid
+			s.logger.Warn("failed to get customer for project update, proceeding with ID only",
+				zap.String("customerID", customerIDs[0].String()),
+				zap.Error(err))
+			newCustomerID = &customerIDs[0]
+			newCustomerName = "" // Will be empty but ID is set
+		} else {
+			newCustomerID = &customerIDs[0]
+			newCustomerName = customer.Name
+		}
+
+		s.logger.Info("setting project customer from single active offer",
+			zap.String("projectID", projectID.String()),
+			zap.String("customerID", customerIDs[0].String()),
+			zap.String("customerName", newCustomerName))
+	} else if len(customerIDs) > 1 {
+		// Multiple different customers - cannot infer, set to NULL
+		s.logger.Info("clearing project customer due to multiple active offers with different customers",
+			zap.String("projectID", projectID.String()),
+			zap.Int("distinctCustomers", len(customerIDs)))
+	} else {
+		// No active offers - clear customer
+		s.logger.Info("clearing project customer due to no active offers",
+			zap.String("projectID", projectID.String()))
+	}
+
+	// Update the project's customer
+	if err := s.projectRepo.UpdateCustomerFromOffers(ctx, projectID, newCustomerID, newCustomerName); err != nil {
+		return fmt.Errorf("failed to update project customer: %w", err)
+	}
+
+	return nil
 }
 
 // isClosedPhase returns true if the phase is a terminal state
