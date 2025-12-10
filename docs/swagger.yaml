@@ -671,12 +671,27 @@ definitions:
       country:
         maxLength: 100
         type: string
+      county:
+        maxLength: 100
+        type: string
+      creditLimit:
+        type: number
+      customerClass:
+        maxLength: 50
+        type: string
       email:
         type: string
       industry:
         $ref: '#/definitions/domain.CustomerIndustry'
+      isInternal:
+        type: boolean
+      municipality:
+        maxLength: 100
+        type: string
       name:
         maxLength: 200
+        type: string
+      notes:
         type: string
       orgNumber:
         maxLength: 20
@@ -694,7 +709,6 @@ definitions:
     required:
     - country
     - name
-    - orgNumber
     type: object
   domain.CreateDealRequest:
     properties:
@@ -814,6 +828,9 @@ definitions:
     properties:
       companyId:
         $ref: '#/definitions/domain.CompanyID'
+      cost:
+        minimum: 0
+        type: number
       customerId:
         type: string
       description:
@@ -824,6 +841,9 @@ definitions:
         items:
           $ref: '#/definitions/domain.CreateOfferItemRequest'
         type: array
+      location:
+        maxLength: 200
+        type: string
       notes:
         type: string
       phase:
@@ -833,6 +853,8 @@ definitions:
         minimum: 0
         type: integer
       responsibleUserId:
+        type: string
+      sentDate:
         type: string
       status:
         $ref: '#/definitions/domain.OfferStatus'
@@ -922,8 +944,14 @@ definitions:
         type: string
       country:
         type: string
+      county:
+        type: string
       createdAt:
         description: ISO 8601
+        type: string
+      creditLimit:
+        type: number
+      customerClass:
         type: string
       email:
         type: string
@@ -931,7 +959,13 @@ definitions:
         type: string
       industry:
         $ref: '#/definitions/domain.CustomerIndustry'
+      isInternal:
+        type: boolean
+      municipality:
+        type: string
       name:
+        type: string
+      notes:
         type: string
       orgNumber:
         type: string
@@ -1036,8 +1070,14 @@ definitions:
         type: array
       country:
         type: string
+      county:
+        type: string
       createdAt:
         description: ISO 8601
+        type: string
+      creditLimit:
+        type: number
+      customerClass:
         type: string
       email:
         type: string
@@ -1045,7 +1085,13 @@ definitions:
         type: string
       industry:
         $ref: '#/definitions/domain.CustomerIndustry'
+      isInternal:
+        type: boolean
+      municipality:
+        type: string
       name:
+        type: string
+      notes:
         type: string
       orgNumber:
         type: string
@@ -1088,7 +1134,7 @@ definitions:
           $ref: '#/definitions/domain.ActivityDTO'
         type: array
       recentOffers:
-        description: Recent Lists (12-month window, limit 10 each)
+        description: Recent Lists (limit 5 each)
         items:
           $ref: '#/definitions/domain.OfferDTO'
         type: array
@@ -1097,8 +1143,12 @@ definitions:
         items:
           $ref: '#/definitions/domain.ProjectDTO'
         type: array
+      timeRange:
+        allOf:
+        - $ref: '#/definitions/domain.TimeRange'
+        description: TimeRange indicates the time range used for the metrics
       topCustomers:
-        description: Top Customers (12-month window, limit 10)
+        description: Top Customers (limit 5)
         items:
           $ref: '#/definitions/domain.TopCustomerDTO'
         type: array
@@ -1106,7 +1156,7 @@ definitions:
         description: Financial Summary
         type: number
       totalOfferCount:
-        description: Offer Metrics (12-month window, excluding drafts and expired)
+        description: Offer Metrics (excluding drafts and expired)
         type: integer
       totalValue:
         description: orderReserve + totalInvoiced
@@ -1117,7 +1167,7 @@ definitions:
       winRateMetrics:
         allOf:
         - $ref: '#/definitions/domain.WinRateMetrics'
-        description: Win Rate Metrics (12-month window)
+        description: Win Rate Metrics
     type: object
   domain.DealDTO:
     properties:
@@ -1300,6 +1350,8 @@ definitions:
     properties:
       companyId:
         $ref: '#/definitions/domain.CompanyID'
+      cost:
+        type: number
       createdAt:
         description: ISO 8601
         type: string
@@ -1318,6 +1370,14 @@ definitions:
         items:
           $ref: '#/definitions/domain.OfferItemDTO'
         type: array
+      location:
+        type: string
+      margin:
+        description: 'Calculated: Value - Cost'
+        type: number
+      marginPercent:
+        description: 'Calculated: (Value - Cost) / Value * 100'
+        type: number
       notes:
         type: string
       offerNumber:
@@ -1333,6 +1393,9 @@ definitions:
       responsibleUserId:
         type: string
       responsibleUserName:
+        type: string
+      sentDate:
+        description: ISO 8601
         type: string
       status:
         $ref: '#/definitions/domain.OfferStatus'
@@ -1354,6 +1417,8 @@ definitions:
         $ref: '#/definitions/domain.BudgetSummaryDTO'
       companyId:
         $ref: '#/definitions/domain.CompanyID'
+      cost:
+        type: number
       createdAt:
         description: ISO 8601
         type: string
@@ -1374,6 +1439,14 @@ definitions:
         items:
           $ref: '#/definitions/domain.OfferItemDTO'
         type: array
+      location:
+        type: string
+      margin:
+        description: 'Calculated: Value - Cost'
+        type: number
+      marginPercent:
+        description: 'Calculated: (Value - Cost) / Value * 100'
+        type: number
       notes:
         type: string
       offerNumber:
@@ -1389,6 +1462,9 @@ definitions:
       responsibleUserId:
         type: string
       responsibleUserName:
+        type: string
+      sentDate:
+        description: ISO 8601
         type: string
       status:
         $ref: '#/definitions/domain.OfferStatus'
@@ -1769,6 +1845,14 @@ definitions:
       weightedValue:
         type: number
     type: object
+  domain.TimeRange:
+    enum:
+    - rolling12months
+    - allTime
+    type: string
+    x-enum-varnames:
+    - TimeRangeRolling12Months
+    - TimeRangeAllTime
   domain.TopCustomerDTO:
     properties:
       economicValue:
@@ -1928,12 +2012,27 @@ definitions:
       country:
         maxLength: 100
         type: string
+      county:
+        maxLength: 100
+        type: string
+      creditLimit:
+        type: number
+      customerClass:
+        maxLength: 50
+        type: string
       email:
         type: string
       industry:
         $ref: '#/definitions/domain.CustomerIndustry'
+      isInternal:
+        type: boolean
+      municipality:
+        maxLength: 100
+        type: string
       name:
         maxLength: 200
+        type: string
+      notes:
         type: string
       orgNumber:
         maxLength: 20
@@ -1951,7 +2050,6 @@ definitions:
     required:
     - country
     - name
-    - orgNumber
     type: object
   domain.UpdateDealRequest:
     properties:
@@ -2036,9 +2134,15 @@ definitions:
     type: object
   domain.UpdateOfferRequest:
     properties:
+      cost:
+        minimum: 0
+        type: number
       description:
         type: string
       dueDate:
+        type: string
+      location:
+        maxLength: 200
         type: string
       notes:
         type: string
@@ -2049,6 +2153,8 @@ definitions:
         minimum: 0
         type: integer
       responsibleUserId:
+        type: string
+      sentDate:
         type: string
       status:
         $ref: '#/definitions/domain.OfferStatus'
@@ -4005,7 +4111,11 @@ paths:
   /dashboard/metrics:
     get:
       description: |-
-        Returns dashboard metrics using a rolling 12-month window. All metrics exclude draft and expired offers.
+        Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.
+
+        **Time Range Options:**
+        - `rolling12months` (default): Uses a rolling 12-month window from the current date
+        - `allTime`: Calculates metrics without any date filter
 
         **Offer Metrics:**
         - `totalOfferCount`: Count of offers excluding drafts and expired
@@ -4025,11 +4135,20 @@ paths:
         **Order Reserve:** Sum of (budget - spent) on active projects
 
         **Financial Summary:**
-        - `totalInvoiced`: Sum of spent on all projects in 12-month window
+        - `totalInvoiced`: Sum of spent on all projects in the time range
         - `totalValue`: orderReserve + totalInvoiced
 
-        **Recent Lists:** 12-month window, limit 10 each
+        **Recent Lists:** Limit 5 each
         **Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue
+      parameters:
+      - default: rolling12months
+        description: Time range for metrics
+        enum:
+        - rolling12months
+        - allTime
+        in: query
+        name: timeRange
+        type: string
       produces:
       - application/json
       responses:
@@ -4037,6 +4156,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/domain.DashboardMetrics'
+        "400":
+          description: Invalid timeRange value
+          schema:
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
