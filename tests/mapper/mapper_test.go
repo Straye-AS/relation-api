@@ -81,27 +81,35 @@ func TestToContactDTO(t *testing.T) {
 
 func TestToProjectBudgetDTO(t *testing.T) {
 	project := &domain.Project{
-		Budget: 100000,
-		Spent:  25000,
+		Value:         100000,
+		Cost:          60000,
+		MarginPercent: 40.0,
+		Spent:         25000,
 	}
 
 	dto := mapper.ToProjectBudgetDTO(project)
 
-	assert.Equal(t, 100000.0, dto.Budget)
+	assert.Equal(t, 100000.0, dto.Value)
+	assert.Equal(t, 60000.0, dto.Cost)
+	assert.Equal(t, 40.0, dto.MarginPercent)
 	assert.Equal(t, 25000.0, dto.Spent)
-	assert.Equal(t, 75000.0, dto.Remaining)
-	assert.Equal(t, 25.0, dto.PercentUsed)
+	assert.Equal(t, 75000.0, dto.Remaining)        // Value - Spent = 100000 - 25000
+	assert.InDelta(t, 25.0, dto.PercentUsed, 0.01) // Spent/Value * 100 = 25000/100000 * 100
 }
 
 func TestToProjectBudgetDTO_ZeroBudget(t *testing.T) {
 	project := &domain.Project{
-		Budget: 0,
-		Spent:  0,
+		Value:         0,
+		Cost:          0,
+		MarginPercent: 0,
+		Spent:         0,
 	}
 
 	dto := mapper.ToProjectBudgetDTO(project)
 
-	assert.Equal(t, 0.0, dto.Budget)
+	assert.Equal(t, 0.0, dto.Value)
+	assert.Equal(t, 0.0, dto.Cost)
+	assert.Equal(t, 0.0, dto.MarginPercent)
 	assert.Equal(t, 0.0, dto.Spent)
 	assert.Equal(t, 0.0, dto.Remaining)
 	assert.Equal(t, 0.0, dto.PercentUsed)

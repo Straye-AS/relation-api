@@ -254,7 +254,7 @@ func TestOfferService_AcceptOffer(t *testing.T) {
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, domain.OfferPhaseWon, result.Offer.Phase)
 		assert.Equal(t, "New Project from Offer", result.Project.Name)
-		assert.Equal(t, offer.Value, result.Project.Budget)
+		assert.Equal(t, offer.Value, result.Project.Value)
 	})
 
 	t.Run("accept offer with project creation clones budget items", func(t *testing.T) {

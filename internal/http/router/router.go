@@ -220,6 +220,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Delete("/{id}", rt.customerHandler.Delete)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Post("/{id}/contacts", rt.customerHandler.CreateContact)
+				r.Get("/{id}/offers", rt.customerHandler.ListOffers)
+				r.Get("/{id}/projects", rt.customerHandler.ListProjects)
 
 				// Individual property update endpoints
 				r.Put("/{id}/status", rt.customerHandler.UpdateStatus)

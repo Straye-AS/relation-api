@@ -40,10 +40,12 @@ var projectSortableFields = map[string]string{
 
 // ProjectBudgetMetrics holds calculated budget metrics for a project
 type ProjectBudgetMetrics struct {
-	Budget      float64
-	Spent       float64
-	Remaining   float64
-	PercentUsed float64
+	Value         float64
+	Cost          float64
+	MarginPercent float64
+	Spent         float64
+	Remaining     float64
+	PercentUsed   float64
 }
 
 type ProjectRepository struct {
@@ -223,7 +225,9 @@ func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectI
 	}
 
 	metrics := &ProjectBudgetMetrics{
-		Budget: project.Budget,
+		Value:         project.Value,
+		Cost:          project.Cost,
+		MarginPercent: project.MarginPercent,
 	}
 
 	// Calculate spent based on whether project uses detailed budget
@@ -245,9 +249,9 @@ func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectI
 	}
 
 	// Calculate remaining and percent used
-	metrics.Remaining = metrics.Budget - metrics.Spent
-	if metrics.Budget > 0 {
-		metrics.PercentUsed = (metrics.Spent / metrics.Budget) * 100
+	metrics.Remaining = metrics.Value - metrics.Spent
+	if metrics.Value > 0 {
+		metrics.PercentUsed = (metrics.Spent / metrics.Value) * 100
 	}
 
 	return metrics, nil
@@ -271,8 +275,8 @@ func (r *ProjectRepository) CalculateHealth(ctx context.Context, projectID uuid.
 		return "", fmt.Errorf("failed to calculate budget metrics: %w", err)
 	}
 
-	// If budget is 0, default to on_track to avoid division issues
-	if metrics.Budget <= 0 {
+	// If value is 0, default to on_track to avoid division issues
+	if metrics.Value <= 0 {
 		return domain.ProjectHealthOnTrack, nil
 	}
 
@@ -497,13 +501,14 @@ func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID
 }
 
 // SetWinningOffer sets the winning offer for a project and transitions it to active phase
-func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, calculatedValue float64, wonAt time.Time) error {
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, wonAt time.Time) error {
 	updates := map[string]interface{}{
 		"phase":                  domain.ProjectPhaseActive,
 		"winning_offer_id":       offerID,
 		"inherited_offer_number": inheritedOfferNumber,
-		"calculated_offer_value": calculatedValue,
-		"budget":                 calculatedValue, // Set initial budget from winning offer
+		"calculated_offer_value": offerValue,
+		"value":                  offerValue, // Set value from winning offer
+		"cost":                   offerCost,  // Set cost from winning offer (margin_percent auto-calculated by trigger)
 		"won_at":                 wonAt,
 		"status":                 domain.ProjectStatusActive, // Also update status to active
 	}

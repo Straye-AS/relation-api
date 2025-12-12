@@ -326,12 +326,13 @@ func (s *BudgetItemService) updateParentTotals(ctx context.Context, parentType d
 			return fmt.Errorf("failed to update offer totals: %w", err)
 		}
 	case domain.BudgetParentProject:
-		// Update project budget based on budget items
+		// Update project value based on budget items
 		project, err := s.projectRepo.GetByID(ctx, parentID)
 		if err != nil {
 			return fmt.Errorf("failed to get project: %w", err)
 		}
-		project.Budget = summary.TotalRevenue
+		project.Value = summary.TotalRevenue
+		project.Cost = summary.TotalCost
 		project.HasDetailedBudget = summary.ItemCount > 0
 		if err := s.projectRepo.Update(ctx, project); err != nil {
 			return fmt.Errorf("failed to update project: %w", err)
