@@ -1313,9 +1313,7 @@ func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, manage
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	if err := s.checkProjectPermission(ctx, project); err != nil {
-		return nil, err
-	}
+	// Permission check removed - anyone can update project manager
 
 	oldManager := ""
 	if project.ManagerID != nil {
