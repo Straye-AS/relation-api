@@ -410,9 +410,10 @@ type TeamMemberStats struct {
 
 type PipelinePhaseData struct {
 	Phase         OfferPhase `json:"phase"`
-	Count         int        `json:"count"`
-	TotalValue    float64    `json:"totalValue"`
-	WeightedValue float64    `json:"weightedValue"`
+	Count         int        `json:"count"`         // Total offer count in this phase
+	ProjectCount  int        `json:"projectCount"`  // Unique projects in this phase (excludes orphan offers)
+	TotalValue    float64    `json:"totalValue"`    // Sum of best offer value per project (avoids double-counting)
+	WeightedValue float64    `json:"weightedValue"` // Weighted by probability
 	Offers        []OfferDTO `json:"offers,omitempty"`
 }
 
@@ -439,17 +440,23 @@ type TopCustomerDTO struct {
 // By default, metrics use a rolling 12-month window from the current date.
 // When timeRange is "allTime", metrics are calculated without any date filter.
 // Drafts and expired offers are excluded from all calculations.
+//
+// IMPORTANT: Pipeline metrics use aggregation to avoid double-counting.
+// When a project has multiple offers, only the highest value offer per phase is counted.
+// Orphan offers (without project) are included at full value.
 type DashboardMetrics struct {
 	// TimeRange indicates the time range used for the metrics
 	TimeRange TimeRange `json:"timeRange"` // "rolling12months" (default) or "allTime"
 
 	// Offer Metrics (excluding drafts and expired)
 	TotalOfferCount      int     `json:"totalOfferCount"`      // Count of offers excluding drafts and expired
-	OfferReserve         float64 `json:"offerReserve"`         // Total value of active offers (in_progress, sent)
+	TotalProjectCount    int     `json:"totalProjectCount"`    // Count of unique projects with offers (excludes orphan offers)
+	OfferReserve         float64 `json:"offerReserve"`         // Total value of active offers - best per project (avoids double-counting)
 	WeightedOfferReserve float64 `json:"weightedOfferReserve"` // Sum of (value * probability/100) for active offers
 	AverageProbability   float64 `json:"averageProbability"`   // Average probability of active offers
 
 	// Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
+	// Uses aggregation: for projects with multiple offers, only the highest value per phase is counted
 	Pipeline []PipelinePhaseData `json:"pipeline"`
 
 	// Win Rate Metrics

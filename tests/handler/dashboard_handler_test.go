@@ -71,14 +71,15 @@ func TestTimeRange_Constants(t *testing.T) {
 // TestDashboardMetrics_TimeRangeField verifies DashboardMetrics includes TimeRange
 func TestDashboardMetrics_TimeRangeField(t *testing.T) {
 	metrics := domain.DashboardMetrics{
-		TimeRange:        domain.TimeRangeAllTime,
-		TotalOfferCount:  10,
-		OfferReserve:     100000,
-		Pipeline:         []domain.PipelinePhaseData{},
-		RecentOffers:     []domain.OfferDTO{},
-		RecentProjects:   []domain.ProjectDTO{},
-		RecentActivities: []domain.ActivityDTO{},
-		TopCustomers:     []domain.TopCustomerDTO{},
+		TimeRange:         domain.TimeRangeAllTime,
+		TotalOfferCount:   10,
+		TotalProjectCount: 3,
+		OfferReserve:      100000,
+		Pipeline:          []domain.PipelinePhaseData{},
+		RecentOffers:      []domain.OfferDTO{},
+		RecentProjects:    []domain.ProjectDTO{},
+		RecentActivities:  []domain.ActivityDTO{},
+		TopCustomers:      []domain.TopCustomerDTO{},
 	}
 
 	// Verify JSON serialization includes timeRange field
@@ -91,6 +92,7 @@ func TestDashboardMetrics_TimeRangeField(t *testing.T) {
 
 	assert.Equal(t, "allTime", result["timeRange"])
 	assert.Equal(t, float64(10), result["totalOfferCount"])
+	assert.Equal(t, float64(3), result["totalProjectCount"])
 }
 
 // TestDashboardHandler_GetMetrics_TimeRangeValidation tests query parameter validation
@@ -147,6 +149,7 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 	metrics := domain.DashboardMetrics{
 		TimeRange:            domain.TimeRangeRolling12Months,
 		TotalOfferCount:      5,
+		TotalProjectCount:    2,
 		OfferReserve:         50000.50,
 		WeightedOfferReserve: 25000.25,
 		AverageProbability:   50.5,
@@ -154,6 +157,7 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 			{
 				Phase:         domain.OfferPhaseInProgress,
 				Count:         3,
+				ProjectCount:  2,
 				TotalValue:    30000,
 				WeightedValue: 15000,
 			},
@@ -186,6 +190,7 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 	expectedFields := []string{
 		"timeRange",
 		"totalOfferCount",
+		"totalProjectCount",
 		"offerReserve",
 		"weightedOfferReserve",
 		"averageProbability",
@@ -208,5 +213,82 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 	// Verify specific values
 	assert.Equal(t, "rolling12months", result["timeRange"])
 	assert.Equal(t, float64(5), result["totalOfferCount"])
+	assert.Equal(t, float64(2), result["totalProjectCount"])
 	assert.Equal(t, 50000.50, result["offerReserve"])
+
+	// Verify pipeline data includes projectCount
+	pipelineData, ok := result["pipeline"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, pipelineData, 1)
+	firstPhase, ok := pipelineData[0].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, float64(2), firstPhase["projectCount"])
+}
+
+// TestPipelinePhaseData_ProjectCount tests that projectCount field is properly included
+func TestPipelinePhaseData_ProjectCount(t *testing.T) {
+	phaseData := domain.PipelinePhaseData{
+		Phase:         domain.OfferPhaseSent,
+		Count:         5,        // Total offers
+		ProjectCount:  2,        // Unique projects (3 offers belong to 2 projects)
+		TotalValue:    35000000, // 25M (best from project A) + 10M (orphan)
+		WeightedValue: 28000000,
+	}
+
+	jsonBytes, err := json.Marshal(phaseData)
+	assert.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(jsonBytes, &result)
+	assert.NoError(t, err)
+
+	// Verify fields
+	assert.Equal(t, "sent", result["phase"])
+	assert.Equal(t, float64(5), result["count"])
+	assert.Equal(t, float64(2), result["projectCount"])
+	assert.Equal(t, float64(35000000), result["totalValue"])
+}
+
+// TestDashboardMetrics_AggregationExample tests the example from the story:
+// Project A: 2 offers (23M sent, 25M sent) + Orphan B: 10M sent
+// Result: projectCount=1, offerCount=3, totalValue=35M (25M best + 10M orphan)
+func TestDashboardMetrics_AggregationExample(t *testing.T) {
+	// This test verifies the DTO structure can represent the expected aggregation
+	metrics := domain.DashboardMetrics{
+		TimeRange:         domain.TimeRangeAllTime,
+		TotalOfferCount:   3,        // All offers counted
+		TotalProjectCount: 1,        // Only 1 project (orphans don't count)
+		OfferReserve:      35000000, // 25M (best from project) + 10M (orphan)
+		Pipeline: []domain.PipelinePhaseData{
+			{
+				Phase:        domain.OfferPhaseSent,
+				Count:        3,        // 2 project offers + 1 orphan
+				ProjectCount: 1,        // Only 1 unique project
+				TotalValue:   35000000, // 25M (best) + 10M (orphan), NOT 23M+25M+10M=58M
+			},
+		},
+		RecentOffers:     []domain.OfferDTO{},
+		RecentProjects:   []domain.ProjectDTO{},
+		RecentActivities: []domain.ActivityDTO{},
+		TopCustomers:     []domain.TopCustomerDTO{},
+	}
+
+	jsonBytes, err := json.Marshal(metrics)
+	assert.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(jsonBytes, &result)
+	assert.NoError(t, err)
+
+	// Verify aggregation values
+	assert.Equal(t, float64(3), result["totalOfferCount"])
+	assert.Equal(t, float64(1), result["totalProjectCount"])
+	assert.Equal(t, float64(35000000), result["offerReserve"])
+
+	// Verify pipeline aggregation
+	pipelineData := result["pipeline"].([]interface{})
+	sentPhase := pipelineData[0].(map[string]interface{})
+	assert.Equal(t, float64(3), sentPhase["count"])
+	assert.Equal(t, float64(1), sentPhase["projectCount"])
+	assert.Equal(t, float64(35000000), sentPhase["totalValue"])
 }

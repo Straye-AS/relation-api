@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/domain"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -1206,4 +1207,302 @@ func (r *OfferRepository) GetBestOfferForProject(ctx context.Context, projectID 
 
 	// No offers found
 	return nil, nil
+}
+
+// ============================================================================
+// Dashboard Aggregation Methods (Uses Pre-computed View)
+// ============================================================================
+
+// AggregatedPipelineStats holds aggregated pipeline statistics from the view
+// This avoids double-counting by using MAX(value) per project per phase
+type AggregatedPipelineStats struct {
+	Phase         domain.OfferPhase
+	ProjectCount  int     // Unique projects in this phase
+	OfferCount    int     // Total offers (including all offers per project)
+	TotalValue    float64 // Sum of best values per project (no double-counting)
+	WeightedValue float64 // Weighted by probability
+}
+
+// GetAggregatedPipelineStats returns pipeline statistics using the aggregation view
+// This solves the double-counting problem by using MAX(value) per project per phase
+// If since is nil, no date filter is applied (queries the pre-computed view)
+// Note: The view only includes valid phases (excludes draft and expired)
+func (r *OfferRepository) GetAggregatedPipelineStats(ctx context.Context, since *time.Time) ([]AggregatedPipelineStats, error) {
+	// If we have a date filter, we need to fall back to raw query
+	// because the view doesn't have date-based aggregation
+	if since != nil {
+		return r.getAggregatedPipelineStatsWithDateFilter(ctx, since)
+	}
+
+	// Query the pre-computed view
+	type viewResult struct {
+		Phase         string  `gorm:"column:phase"`
+		ProjectCount  int     `gorm:"column:project_count"`
+		OfferCount    int     `gorm:"column:offer_count"`
+		TotalValue    float64 `gorm:"column:total_value"`
+		WeightedValue float64 `gorm:"column:weighted_value"`
+	}
+
+	var results []viewResult
+	query := r.db.WithContext(ctx).
+		Table("dashboard_metrics_aggregation").
+		Select("phase, project_count, offer_count, total_value, weighted_value")
+	query = ApplyCompanyFilterWithColumn(ctx, query, "company_id")
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get aggregated pipeline stats: %w", err)
+	}
+
+	// Convert to our stats type
+	stats := make([]AggregatedPipelineStats, len(results))
+	for i, r := range results {
+		stats[i] = AggregatedPipelineStats{
+			Phase:         domain.OfferPhase(r.Phase),
+			ProjectCount:  r.ProjectCount,
+			OfferCount:    r.OfferCount,
+			TotalValue:    r.TotalValue,
+			WeightedValue: r.WeightedValue,
+		}
+	}
+
+	return stats, nil
+}
+
+// getAggregatedPipelineStatsWithDateFilter computes aggregated stats with a date filter
+// This is needed because the view doesn't support date filtering
+func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.Context, since *time.Time) ([]AggregatedPipelineStats, error) {
+	// Valid phases (excludes draft and expired)
+	validPhases := []domain.OfferPhase{
+		domain.OfferPhaseInProgress,
+		domain.OfferPhaseSent,
+		domain.OfferPhaseWon,
+		domain.OfferPhaseLost,
+	}
+
+	type aggregatedResult struct {
+		Phase         string  `gorm:"column:phase"`
+		ProjectCount  int     `gorm:"column:project_count"`
+		OfferCount    int     `gorm:"column:offer_count"`
+		TotalValue    float64 `gorm:"column:total_value"`
+		WeightedValue float64 `gorm:"column:weighted_value"`
+	}
+
+	// Apply company filter
+	companyID := auth.GetEffectiveCompanyFilter(ctx)
+
+	var results []aggregatedResult
+	var query *gorm.DB
+
+	if companyID != nil {
+		query = r.db.WithContext(ctx).Raw(`
+			WITH
+			project_best_offers AS (
+				SELECT
+					o.company_id,
+					o.phase,
+					o.project_id,
+					MAX(o.value) AS best_value,
+					(
+						SELECT o2.probability
+						FROM offers o2
+						WHERE o2.project_id = o.project_id
+						  AND o2.phase = o.phase
+						  AND o2.company_id = o.company_id
+						  AND o2.value = (SELECT MAX(o3.value) FROM offers o3 WHERE o3.project_id = o.project_id AND o3.phase = o.phase AND o3.company_id = o.company_id AND o3.created_at >= $1)
+						  AND o2.created_at >= $1
+						LIMIT 1
+					) AS best_probability,
+					COUNT(*) AS offer_count
+				FROM offers o
+				WHERE o.project_id IS NOT NULL
+				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.created_at >= $1
+				  AND o.company_id = $6
+				GROUP BY o.company_id, o.phase, o.project_id
+			),
+			orphan_offers AS (
+				SELECT
+					o.company_id,
+					o.phase,
+					o.value,
+					o.probability,
+					1 AS offer_count
+				FROM offers o
+				WHERE o.project_id IS NULL
+				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.created_at >= $1
+				  AND o.company_id = $6
+			),
+			combined_metrics AS (
+				SELECT
+					company_id,
+					phase,
+					project_id,
+					best_value AS value,
+					best_probability AS probability,
+					offer_count,
+					1 AS project_count
+				FROM project_best_offers
+
+				UNION ALL
+
+				SELECT
+					company_id,
+					phase,
+					NULL AS project_id,
+					value,
+					probability,
+					offer_count,
+					0 AS project_count
+				FROM orphan_offers
+			)
+			SELECT
+				phase,
+				COALESCE(SUM(project_count), 0) AS project_count,
+				COALESCE(SUM(offer_count), 0) AS offer_count,
+				COALESCE(SUM(value), 0) AS total_value,
+				COALESCE(SUM(value * COALESCE(probability, 0) / 100.0), 0) AS weighted_value
+			FROM combined_metrics
+			GROUP BY phase
+		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3], *companyID)
+	} else {
+		query = r.db.WithContext(ctx).Raw(`
+			WITH
+			project_best_offers AS (
+				SELECT
+					o.company_id,
+					o.phase,
+					o.project_id,
+					MAX(o.value) AS best_value,
+					(
+						SELECT o2.probability
+						FROM offers o2
+						WHERE o2.project_id = o.project_id
+						  AND o2.phase = o.phase
+						  AND o2.company_id = o.company_id
+						  AND o2.value = (SELECT MAX(o3.value) FROM offers o3 WHERE o3.project_id = o.project_id AND o3.phase = o.phase AND o3.company_id = o.company_id AND o3.created_at >= $1)
+						  AND o2.created_at >= $1
+						LIMIT 1
+					) AS best_probability,
+					COUNT(*) AS offer_count
+				FROM offers o
+				WHERE o.project_id IS NOT NULL
+				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.created_at >= $1
+				GROUP BY o.company_id, o.phase, o.project_id
+			),
+			orphan_offers AS (
+				SELECT
+					o.company_id,
+					o.phase,
+					o.value,
+					o.probability,
+					1 AS offer_count
+				FROM offers o
+				WHERE o.project_id IS NULL
+				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.created_at >= $1
+			),
+			combined_metrics AS (
+				SELECT
+					company_id,
+					phase,
+					project_id,
+					best_value AS value,
+					best_probability AS probability,
+					offer_count,
+					1 AS project_count
+				FROM project_best_offers
+
+				UNION ALL
+
+				SELECT
+					company_id,
+					phase,
+					NULL AS project_id,
+					value,
+					probability,
+					offer_count,
+					0 AS project_count
+				FROM orphan_offers
+			)
+			SELECT
+				phase,
+				COALESCE(SUM(project_count), 0) AS project_count,
+				COALESCE(SUM(offer_count), 0) AS offer_count,
+				COALESCE(SUM(value), 0) AS total_value,
+				COALESCE(SUM(value * COALESCE(probability, 0) / 100.0), 0) AS weighted_value
+			FROM combined_metrics
+			GROUP BY phase
+		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3])
+	}
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get aggregated pipeline stats with date filter: %w", err)
+	}
+
+	// Convert to our stats type
+	stats := make([]AggregatedPipelineStats, len(results))
+	for i, r := range results {
+		stats[i] = AggregatedPipelineStats{
+			Phase:         domain.OfferPhase(r.Phase),
+			ProjectCount:  r.ProjectCount,
+			OfferCount:    r.OfferCount,
+			TotalValue:    r.TotalValue,
+			WeightedValue: r.WeightedValue,
+		}
+	}
+
+	return stats, nil
+}
+
+// AggregatedOfferStats holds aggregated offer statistics avoiding double-counting
+type AggregatedOfferStats struct {
+	TotalOfferCount      int     // Count of offers excluding drafts and expired
+	TotalProjectCount    int     // Count of unique projects
+	OfferReserve         float64 // Total value of active offers (best per project)
+	WeightedOfferReserve float64 // Weighted by probability
+	AverageProbability   float64 // Average probability of active offers
+}
+
+// GetAggregatedOfferStats returns offer statistics using aggregation logic
+// This avoids double-counting by using MAX(value) per project
+func (r *OfferRepository) GetAggregatedOfferStats(ctx context.Context, since *time.Time) (*AggregatedOfferStats, error) {
+	stats := &AggregatedOfferStats{}
+
+	// Get aggregated pipeline stats
+	pipelineStats, err := r.GetAggregatedPipelineStats(ctx, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get aggregated pipeline stats: %w", err)
+	}
+
+	// Aggregate across all phases
+	for _, ps := range pipelineStats {
+		stats.TotalOfferCount += ps.OfferCount
+		stats.TotalProjectCount += ps.ProjectCount
+
+		// Only active phases contribute to reserve
+		if ps.Phase == domain.OfferPhaseInProgress || ps.Phase == domain.OfferPhaseSent {
+			stats.OfferReserve += ps.TotalValue
+			stats.WeightedOfferReserve += ps.WeightedValue
+		}
+	}
+
+	// Calculate average probability from raw offers for active phases
+	// (view doesn't provide this directly)
+	activePhases := []domain.OfferPhase{
+		domain.OfferPhaseInProgress,
+		domain.OfferPhaseSent,
+	}
+	avgProbQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("phase IN ?", activePhases)
+	if since != nil {
+		avgProbQuery = avgProbQuery.Where("created_at >= ?", *since)
+	}
+	avgProbQuery = ApplyCompanyFilter(ctx, avgProbQuery)
+	if err := avgProbQuery.Select("COALESCE(AVG(probability), 0)").Scan(&stats.AverageProbability).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate avg probability: %w", err)
+	}
+
+	return stats, nil
 }

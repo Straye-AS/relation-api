@@ -3731,7 +3731,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.\n\n**Time Range Options:**\n- ` + "`" + `rolling12months` + "`" + ` (default): Uses a rolling 12-month window from the current date\n- ` + "`" + `allTime` + "`" + `: Calculates metrics without any date filter\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers (in_progress, sent)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in the time range\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** Limit 5 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
+                "description": "Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.\n\n**IMPORTANT: Aggregation Logic (Avoids Double-Counting)**\nWhen a project has multiple offers, only the highest value offer per phase is counted.\nOrphan offers (without project) are included at full value.\nExample: Project A has offers 23M and 25M in \"sent\" phase - totalValue shows 25M, not 48M.\n\n**Time Range Options:**\n- ` + "`" + `rolling12months` + "`" + ` (default): Uses a rolling 12-month window from the current date\n- ` + "`" + `allTime` + "`" + `: Calculates metrics without any date filter\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `totalProjectCount` + "`" + `: Count of unique projects with offers (excludes orphan offers)\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers - best per project (avoids double-counting)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- ` + "`" + `count` + "`" + `: Total offer count in phase\n- ` + "`" + `projectCount` + "`" + `: Unique projects in phase (excludes orphan offers)\n- ` + "`" + `totalValue` + "`" + `: Sum of best offer value per project (avoids double-counting)\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in the time range\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** Limit 5 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
                 "produces": [
                     "application/json"
                 ],
@@ -11178,7 +11178,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "offerReserve": {
-                    "description": "Total value of active offers (in_progress, sent)",
+                    "description": "Total value of active offers - best per project (avoids double-counting)",
                     "type": "number"
                 },
                 "orderReserve": {
@@ -11186,7 +11186,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "pipeline": {
-                    "description": "Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)",
+                    "description": "Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)\nUses aggregation: for projects with multiple offers, only the highest value per phase is counted",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.PipelinePhaseData"
@@ -11234,6 +11234,10 @@ const docTemplate = `{
                 },
                 "totalOfferCount": {
                     "description": "Offer Metrics (excluding drafts and expired)",
+                    "type": "integer"
+                },
+                "totalProjectCount": {
+                    "description": "Count of unique projects with offers (excludes orphan offers)",
                     "type": "integer"
                 },
                 "totalValue": {
@@ -11954,6 +11958,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "count": {
+                    "description": "Total offer count in this phase",
                     "type": "integer"
                 },
                 "offers": {
@@ -11965,10 +11970,16 @@ const docTemplate = `{
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
                 },
+                "projectCount": {
+                    "description": "Unique projects in this phase (excludes orphan offers)",
+                    "type": "integer"
+                },
                 "totalValue": {
+                    "description": "Sum of best offer value per project (avoids double-counting)",
                     "type": "number"
                 },
                 "weightedValue": {
+                    "description": "Weighted by probability",
                     "type": "number"
                 }
             }
