@@ -147,7 +147,7 @@ func run() error {
 	auditMiddleware := middleware.NewAuditMiddleware(auditLogService, nil, log)
 
 	// Initialize handlers
-	customerHandler := handler.NewCustomerHandler(customerService, contactService, log)
+	customerHandler := handler.NewCustomerHandler(customerService, contactService, offerService, projectService, log)
 	contactHandler := handler.NewContactHandler(contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, offerService, log)
 	offerHandler := handler.NewOfferHandler(offerService, log)

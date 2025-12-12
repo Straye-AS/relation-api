@@ -482,13 +482,15 @@ func TestCustomerService_Delete(t *testing.T) {
 
 		// Create an active project for this customer
 		userCtx, _ := auth.FromContext(ctx)
+		managerID := userCtx.UserID.String()
+		startDate := time.Now()
 		project := &domain.Project{
 			Name:       "Active Project",
 			CustomerID: created.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			ManagerID:  userCtx.UserID.String(),
+			StartDate:  startDate,
+			ManagerID:  &managerID,
 		}
 		err = db.Omit(clause.Associations).Create(project).Error
 		require.NoError(t, err)

@@ -164,8 +164,9 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		CompanyID:            project.CompanyID,
 		Status:               project.Status,
 		Phase:                phase,
-		StartDate:            project.StartDate.Format("2006-01-02T15:04:05Z"),
-		Budget:               project.Budget,
+		Value:                project.Value,
+		Cost:                 project.Cost,
+		MarginPercent:        project.MarginPercent,
 		Spent:                project.Spent,
 		ManagerID:            project.ManagerID,
 		ManagerName:          project.ManagerName,
@@ -181,6 +182,10 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		InheritedOfferNumber: project.InheritedOfferNumber,
 		CalculatedOfferValue: project.CalculatedOfferValue,
 		IsEconomicsEditable:  phase.IsEditablePhase(),
+	}
+
+	if !project.StartDate.IsZero() {
+		dto.StartDate = project.StartDate.Format("2006-01-02T15:04:05Z")
 	}
 
 	if project.EndDate != nil {
@@ -234,6 +239,7 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		CustomerID:            offer.CustomerID,
 		CustomerName:          offer.CustomerName,
 		ProjectID:             offer.ProjectID,
+		ProjectName:           offer.ProjectName,
 		CompanyID:             offer.CompanyID,
 		Phase:                 offer.Phase,
 		Probability:           offer.Probability,
@@ -362,21 +368,23 @@ func ToProjectCostSummaryDTO(project *domain.Project, actualCosts []domain.Proje
 		totalActualCosts += cost.Amount
 	}
 
-	remainingBudget := project.Budget - totalActualCosts
-	budgetUsedPercent := 0.0
-	if project.Budget > 0 {
-		budgetUsedPercent = (totalActualCosts / project.Budget) * 100
+	remainingValue := project.Value - totalActualCosts
+	valueUsedPercent := 0.0
+	if project.Value > 0 {
+		valueUsedPercent = (totalActualCosts / project.Value) * 100
 	}
 
 	return domain.ProjectCostSummaryDTO{
-		ProjectID:         project.ID,
-		ProjectName:       project.Name,
-		Budget:            project.Budget,
-		Spent:             project.Spent,
-		ActualCosts:       totalActualCosts,
-		RemainingBudget:   remainingBudget,
-		BudgetUsedPercent: budgetUsedPercent,
-		CostEntryCount:    len(actualCosts),
+		ProjectID:        project.ID,
+		ProjectName:      project.Name,
+		Value:            project.Value,
+		Cost:             project.Cost,
+		MarginPercent:    project.MarginPercent,
+		Spent:            project.Spent,
+		ActualCosts:      totalActualCosts,
+		RemainingValue:   remainingValue,
+		ValueUsedPercent: valueUsedPercent,
+		CostEntryCount:   len(actualCosts),
 	}
 }
 
@@ -562,16 +570,18 @@ func ToAuditLogDTO(log *domain.AuditLog) domain.AuditLogDTO {
 
 // ToProjectBudgetDTO converts project budget info to DTO
 func ToProjectBudgetDTO(project *domain.Project) domain.ProjectBudgetDTO {
-	remaining := project.Budget - project.Spent
+	remaining := project.Value - project.Spent
 	percentUsed := 0.0
-	if project.Budget > 0 {
-		percentUsed = (project.Spent / project.Budget) * 100
+	if project.Value > 0 {
+		percentUsed = (project.Spent / project.Value) * 100
 	}
 	return domain.ProjectBudgetDTO{
-		Budget:      project.Budget,
-		Spent:       project.Spent,
-		Remaining:   remaining,
-		PercentUsed: percentUsed,
+		Value:         project.Value,
+		Cost:          project.Cost,
+		MarginPercent: project.MarginPercent,
+		Spent:         project.Spent,
+		Remaining:     remaining,
+		PercentUsed:   percentUsed,
 	}
 }
 

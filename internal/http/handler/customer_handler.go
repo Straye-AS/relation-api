@@ -17,13 +17,23 @@ import (
 type CustomerHandler struct {
 	customerService *service.CustomerService
 	contactService  *service.ContactService
+	offerService    *service.OfferService
+	projectService  *service.ProjectService
 	logger          *zap.Logger
 }
 
-func NewCustomerHandler(customerService *service.CustomerService, contactService *service.ContactService, logger *zap.Logger) *CustomerHandler {
+func NewCustomerHandler(
+	customerService *service.CustomerService,
+	contactService *service.ContactService,
+	offerService *service.OfferService,
+	projectService *service.ProjectService,
+	logger *zap.Logger,
+) *CustomerHandler {
 	return &CustomerHandler{
 		customerService: customerService,
 		contactService:  contactService,
+		offerService:    offerService,
+		projectService:  projectService,
 		logger:          logger,
 	}
 }
@@ -1128,4 +1138,149 @@ func (h *CustomerHandler) UpdateCity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, customer)
+}
+
+// ListOffers godoc
+// @Summary List offers for a customer
+// @Description Get paginated list of offers associated with a customer
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID" format(uuid)
+// @Param page query int false "Page number" default(1)
+// @Param pageSize query int false "Items per page (max 200)" default(20)
+// @Param phase query string false "Filter by phase" Enums(draft, in_progress, sent, won, lost, expired)
+// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, title, value, probability, phase, status, dueDate, customerName)
+// @Param sortOrder query string false "Sort order" Enums(asc, desc) default(desc)
+// @Success 200 {object} domain.PaginatedResponse{data=[]domain.OfferDTO}
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /customers/{id}/offers [get]
+func (h *CustomerHandler) ListOffers(w http.ResponseWriter, r *http.Request) {
+	customerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid customer ID format",
+		})
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if pageSize < 1 {
+		pageSize = 20
+	}
+
+	// Parse optional phase filter
+	var phase *domain.OfferPhase
+	if phaseStr := r.URL.Query().Get("phase"); phaseStr != "" {
+		p := domain.OfferPhase(phaseStr)
+		phase = &p
+	}
+
+	// Parse sort configuration
+	sort := repository.DefaultSortConfig()
+	if sortBy := r.URL.Query().Get("sortBy"); sortBy != "" {
+		sort.Field = sortBy
+	}
+	if sortOrder := r.URL.Query().Get("sortOrder"); sortOrder != "" {
+		sort.Order = repository.ParseSortOrder(sortOrder)
+	}
+
+	result, err := h.offerService.ListWithSort(r.Context(), page, pageSize, &customerID, nil, phase, sort)
+	if err != nil {
+		h.logger.Error("failed to list offers for customer", zap.String("customerID", customerID.String()), zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to list offers",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// ListProjects godoc
+// @Summary List projects for a customer
+// @Description Get paginated list of projects associated with a customer
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID" format(uuid)
+// @Param page query int false "Page number" default(1)
+// @Param pageSize query int false "Items per page (max 200)" default(20)
+// @Param status query string false "Filter by status" Enums(active, completed, cancelled, on_hold)
+// @Param phase query string false "Filter by phase" Enums(tilbud, active, working, completed, cancelled)
+// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, status, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
+// @Param sortOrder query string false "Sort order" Enums(asc, desc) default(desc)
+// @Success 200 {object} domain.PaginatedResponse{data=[]domain.ProjectDTO}
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /customers/{id}/projects [get]
+func (h *CustomerHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
+	customerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid customer ID format",
+		})
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if pageSize < 1 {
+		pageSize = 20
+	}
+
+	// Build filters
+	filters := &repository.ProjectFilters{
+		CustomerID: &customerID,
+	}
+
+	// Parse optional status filter
+	if status := r.URL.Query().Get("status"); status != "" {
+		s := domain.ProjectStatus(status)
+		filters.Status = &s
+	}
+
+	// Parse optional phase filter
+	if phase := r.URL.Query().Get("phase"); phase != "" {
+		p := domain.ProjectPhase(phase)
+		filters.Phase = &p
+	}
+
+	// Parse sort configuration
+	sort := repository.DefaultSortConfig()
+	if sortBy := r.URL.Query().Get("sortBy"); sortBy != "" {
+		sort.Field = sortBy
+	}
+	if sortOrder := r.URL.Query().Get("sortOrder"); sortOrder != "" {
+		sort.Order = repository.ParseSortOrder(sortOrder)
+	}
+
+	result, err := h.projectService.ListWithSort(r.Context(), page, pageSize, filters, sort)
+	if err != nil {
+		h.logger.Error("failed to list projects for customer", zap.String("customerID", customerID.String()), zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to list projects",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
 }

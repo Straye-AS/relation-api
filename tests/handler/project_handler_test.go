@@ -123,6 +123,7 @@ func createProjectTestContext() context.Context {
 }
 
 func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer, name string, status domain.ProjectStatus, managerID string) *domain.Project {
+	startDate := time.Now()
 	project := &domain.Project{
 		Name:         name,
 		CustomerID:   customer.ID,
@@ -130,9 +131,10 @@ func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer, nam
 		CompanyID:    domain.CompanyStalbygg,
 		Status:       status,
 		Phase:        domain.ProjectPhaseActive, // Set to active to allow budget updates in tests
-		StartDate:    time.Now(),
-		Budget:       100000,
-		ManagerID:    managerID,
+		StartDate:    startDate,
+		Value:        100000,
+		Cost:         80000,
+		ManagerID:    &managerID,
 	}
 	err := db.Create(project).Error
 	require.NoError(t, err)
@@ -334,14 +336,17 @@ func TestProjectHandler_Create(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "New Customer")
 
 	t.Run("create valid project", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.CreateProjectRequest{
 			Name:       "New Project",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusPlanning,
-			StartDate:  time.Now(),
-			Budget:     150000,
-			ManagerID:  userCtx.UserID.String(),
+			StartDate:  &startDate,
+			Value:      150000,
+			Cost:       120000,
+			ManagerID:  &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -392,14 +397,17 @@ func TestProjectHandler_Create(t *testing.T) {
 	})
 
 	t.Run("create with non-existent customer", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.CreateProjectRequest{
 			Name:       "Project Without Customer",
 			CustomerID: uuid.New(), // Non-existent customer
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusPlanning,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  userCtx.UserID.String(),
+			StartDate:  &startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -425,13 +433,16 @@ func TestProjectHandler_Update(t *testing.T) {
 	project := createTestProject(t, db, customer, "Original Project", domain.ProjectStatusPlanning, userCtx.UserID.String())
 
 	t.Run("update project successfully", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.UpdateProjectRequest{
 			Name:      "Updated Project Name",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    200000,
-			ManagerID: userCtx.UserID.String(),
+			StartDate: &startDate,
+			Value:     200000,
+			Cost:      160000,
+			ManagerID: &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -452,18 +463,21 @@ func TestProjectHandler_Update(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Project Name", result.Name)
-		assert.Equal(t, 200000.0, result.Budget)
+		assert.Equal(t, 200000.0, result.Value)
 	})
 
 	t.Run("update non-existent project", func(t *testing.T) {
 		nonExistentID := uuid.New()
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.UpdateProjectRequest{
 			Name:      "Updated Name",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    100000,
-			ManagerID: userCtx.UserID.String(),
+			StartDate: &startDate,
+			Value:     100000,
+			Cost:      80000,
+			ManagerID: &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -730,7 +744,7 @@ func TestProjectHandler_GetBudget(t *testing.T) {
 		var result domain.ProjectBudgetDTO
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
-		assert.Equal(t, 100000.0, result.Budget)
+		assert.Equal(t, 100000.0, result.Value)
 		assert.Equal(t, 25000.0, result.Spent)
 		assert.Equal(t, 75000.0, result.Remaining)
 		assert.Equal(t, 25.0, result.PercentUsed)
@@ -915,7 +929,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, project.ID, result.Project.ID)
 		assert.Equal(t, 3, result.ItemsCount)
-		assert.Equal(t, 150000.0, result.Project.Budget)
+		assert.Equal(t, 150000.0, result.Project.Value)
 		assert.True(t, result.Project.HasDetailedBudget)
 		assert.NotNil(t, result.Project.OfferID)
 		assert.Equal(t, offer.ID, *result.Project.OfferID)
@@ -951,7 +965,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, 0, result.ItemsCount)
-		assert.Equal(t, 100000.0, result.Project.Budget)
+		assert.Equal(t, 100000.0, result.Project.Value)
 		assert.NotNil(t, result.Project.OfferID)
 	})
 

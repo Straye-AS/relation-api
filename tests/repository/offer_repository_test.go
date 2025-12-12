@@ -684,6 +684,7 @@ func TestOfferRepository_Search(t *testing.T) {
 
 // createOfferTestProject creates a test project and returns it
 func createOfferTestProject(t *testing.T, db *gorm.DB, name string, customerID uuid.UUID, customerName string) *domain.Project {
+	managerID := "test-manager"
 	project := &domain.Project{
 		Name:         name,
 		CustomerID:   customerID,
@@ -691,7 +692,7 @@ func createOfferTestProject(t *testing.T, db *gorm.DB, name string, customerID u
 		CompanyID:    domain.CompanyStalbygg,
 		Status:       domain.ProjectStatusPlanning,
 		Phase:        domain.ProjectPhaseTilbud,
-		ManagerID:    "test-manager",
+		ManagerID:    &managerID,
 	}
 	err := db.Create(project).Error
 	require.NoError(t, err)

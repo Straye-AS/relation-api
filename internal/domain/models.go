@@ -279,13 +279,15 @@ const (
 
 // ProjectPhase represents the lifecycle phase of a project
 // - tilbud: Offer/bidding phase (default). Economics mirror highest offer value (read-only)
-// - active: Project is active. Economics are fully editable
+// - working: Project has started (has StartDate) but no WinningOfferID. Economics are editable.
+// - active: Project is active with a winning offer. Economics are fully editable
 // - completed: Project is finished
 // - cancelled: Project was cancelled
 type ProjectPhase string
 
 const (
 	ProjectPhaseTilbud    ProjectPhase = "tilbud"
+	ProjectPhaseWorking   ProjectPhase = "working"
 	ProjectPhaseActive    ProjectPhase = "active"
 	ProjectPhaseCompleted ProjectPhase = "completed"
 	ProjectPhaseCancelled ProjectPhase = "cancelled"
@@ -294,7 +296,7 @@ const (
 // IsValid checks if the ProjectPhase is a valid enum value
 func (p ProjectPhase) IsValid() bool {
 	switch p {
-	case ProjectPhaseTilbud, ProjectPhaseActive, ProjectPhaseCompleted, ProjectPhaseCancelled:
+	case ProjectPhaseTilbud, ProjectPhaseWorking, ProjectPhaseActive, ProjectPhaseCompleted, ProjectPhaseCancelled:
 		return true
 	}
 	return false
@@ -302,7 +304,62 @@ func (p ProjectPhase) IsValid() bool {
 
 // IsEditablePhase returns true if economic values can be edited in this phase
 func (p ProjectPhase) IsEditablePhase() bool {
-	return p == ProjectPhaseActive
+	return p == ProjectPhaseActive || p == ProjectPhaseWorking
+}
+
+// IsActivePhase returns true if the phase represents an active project (working or active)
+func (p ProjectPhase) IsActivePhase() bool {
+	return p == ProjectPhaseWorking || p == ProjectPhaseActive
+}
+
+// IsClosedPhase returns true if the phase represents a closed/terminal state
+func (p ProjectPhase) IsClosedPhase() bool {
+	return p == ProjectPhaseCompleted || p == ProjectPhaseCancelled
+}
+
+// CanTransitionTo checks if a phase transition is valid
+// Valid transitions:
+// - tilbud -> working (start work without winning offer)
+// - tilbud -> active (via winning offer)
+// - tilbud -> cancelled (cancel before starting)
+// - working -> active (via winning offer)
+// - working -> completed (complete without formal offer win)
+// - working -> cancelled (cancel during work)
+// - working -> tilbud (reopen to tilbud - rare but allowed)
+// - active -> completed (normal completion)
+// - active -> cancelled (cancel active project)
+// - active -> working (reopen: revert winning offer to sent)
+// - completed -> working (reopen completed project)
+// - completed -> active (reopen completed project with winning offer retained)
+// - cancelled -> tilbud (reopen cancelled project)
+// - cancelled -> working (reopen cancelled project that had work)
+func (p ProjectPhase) CanTransitionTo(target ProjectPhase) bool {
+	if p == target {
+		return true // Same phase is always valid
+	}
+
+	switch p {
+	case ProjectPhaseTilbud:
+		return target == ProjectPhaseWorking ||
+			target == ProjectPhaseActive ||
+			target == ProjectPhaseCancelled
+	case ProjectPhaseWorking:
+		return target == ProjectPhaseActive ||
+			target == ProjectPhaseCompleted ||
+			target == ProjectPhaseCancelled ||
+			target == ProjectPhaseTilbud
+	case ProjectPhaseActive:
+		return target == ProjectPhaseCompleted ||
+			target == ProjectPhaseCancelled ||
+			target == ProjectPhaseWorking
+	case ProjectPhaseCompleted:
+		return target == ProjectPhaseWorking ||
+			target == ProjectPhaseActive
+	case ProjectPhaseCancelled:
+		return target == ProjectPhaseTilbud ||
+			target == ProjectPhaseWorking
+	}
+	return false
 }
 
 // Project represents work being performed for a customer
@@ -318,11 +375,13 @@ type Project struct {
 	CompanyID               CompanyID      `gorm:"type:varchar(50);not null;index"`
 	Status                  ProjectStatus  `gorm:"type:varchar(50);not null;index"`
 	Phase                   ProjectPhase   `gorm:"type:project_phase;not null;default:'tilbud';index"`
-	StartDate               time.Time      `gorm:"type:date;not null"`
+	StartDate               time.Time      `gorm:"type:date"`
 	EndDate                 *time.Time     `gorm:"type:date"`
-	Budget                  float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	Value                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	Cost                    float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	MarginPercent           float64        `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Auto-calculated by DB trigger
 	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	ManagerID               string         `gorm:"type:varchar(100);not null"`
+	ManagerID               *string        `gorm:"type:varchar(100)"`
 	ManagerName             string         `gorm:"type:varchar(200)"`
 	TeamMembers             pq.StringArray `gorm:"type:text[]"`
 	OfferID                 *uuid.UUID     `gorm:"type:uuid;index"`
@@ -422,6 +481,7 @@ type Offer struct {
 	CustomerName          string      `gorm:"type:varchar(200)"`
 	ProjectID             *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project
 	Project               *Project    `gorm:"foreignKey:ProjectID"`
+	ProjectName           string      `gorm:"type:varchar(200);column:project_name"`
 	CompanyID             CompanyID   `gorm:"type:varchar(50);not null;index"`
 	Phase                 OfferPhase  `gorm:"type:varchar(50);not null;index"`
 	Probability           int         `gorm:"type:int;not null;default:0"`

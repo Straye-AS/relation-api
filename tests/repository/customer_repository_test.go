@@ -323,11 +323,12 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 	t.Run("customer with projects", func(t *testing.T) {
 		// Create projects for the customer
 		startDate := time.Now()
+		managerID := "mgr-1"
 		projects := []*domain.Project{
-			{Name: "Active Project 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusActive, ManagerID: "mgr-1", StartDate: startDate},
-			{Name: "Planning Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusPlanning, ManagerID: "mgr-1", StartDate: startDate},
-			{Name: "Completed Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusCompleted, ManagerID: "mgr-1", StartDate: startDate},
-			{Name: "On Hold Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusOnHold, ManagerID: "mgr-1", StartDate: startDate},
+			{Name: "Active Project 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusActive, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Planning Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusPlanning, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Completed Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusCompleted, ManagerID: &managerID, StartDate: startDate},
+			{Name: "On Hold Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusOnHold, ManagerID: &managerID, StartDate: startDate},
 		}
 		for _, p := range projects {
 			err := db.Create(p).Error

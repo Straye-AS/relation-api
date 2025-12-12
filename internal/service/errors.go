@@ -134,9 +134,6 @@ var (
 	// ErrNonDraftOfferRequiresProject is returned when trying to create/update a non-draft offer without a project
 	ErrNonDraftOfferRequiresProject = errors.New("non-draft offers must be linked to a project")
 
-	// ErrCannotUnlinkNonDraftOffer is returned when trying to unlink a non-draft offer from its project
-	ErrCannotUnlinkNonDraftOffer = errors.New("cannot unlink non-draft offer from project")
-
 	// ErrCannotAddOfferToCancelledProject is returned when trying to add an offer to a cancelled project
 	ErrCannotAddOfferToCancelledProject = errors.New("cannot add offer to cancelled project")
 

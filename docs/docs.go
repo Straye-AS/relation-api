@@ -3225,6 +3225,136 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/offers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get paginated list of offers associated with a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List offers for a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page (max 200)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "draft",
+                            "in_progress",
+                            "sent",
+                            "won",
+                            "lost",
+                            "expired"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "title",
+                            "value",
+                            "probability",
+                            "phase",
+                            "status",
+                            "dueDate",
+                            "customerName"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.OfferDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers/{id}/postal-code": {
             "put": {
                 "security": [
@@ -3286,6 +3416,150 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/projects": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get paginated list of projects associated with a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List projects for a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page (max 200)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "completed",
+                            "cancelled",
+                            "on_hold"
+                        ],
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "tilbud",
+                            "active",
+                            "working",
+                            "completed",
+                            "cancelled"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "name",
+                            "status",
+                            "phase",
+                            "health",
+                            "budget",
+                            "spent",
+                            "startDate",
+                            "endDate",
+                            "customerName",
+                            "wonAt"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.ProjectDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -7239,6 +7513,7 @@ const docTemplate = `{
                     {
                         "enum": [
                             "tilbud",
+                            "working",
                             "active",
                             "completed",
                             "cancelled"
@@ -8769,6 +9044,141 @@ const docTemplate = `{
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/reopen": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reopens a project that was completed or cancelled. Can reopen to tilbud or working phase.\nWhen reopening a project with a winning offer, that offer is reverted to sent phase.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Reopen a completed or cancelled project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reopen configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReopenProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReopenProjectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request, phase transition, or project not in closed state",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/resync-from-offer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Syncs project economics (value, cost, margin) from the best connected offer",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Resync project from best offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated project with synced values",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ResyncFromOfferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or no offers found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -10400,22 +10810,20 @@ const docTemplate = `{
             "required": [
                 "companyId",
                 "customerId",
-                "managerId",
                 "name",
-                "startDate",
                 "status"
             ],
             "properties": {
-                "budget": {
-                    "type": "number",
-                    "minimum": 0
-                },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
                     "type": "number",
                     "maximum": 100,
+                    "minimum": 0
+                },
+                "cost": {
+                    "type": "number",
                     "minimum": 0
                 },
                 "customerId": {
@@ -10495,6 +10903,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "value": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },
@@ -11196,6 +11608,9 @@ const docTemplate = `{
                     "description": "Link to project (nullable)",
                     "type": "string"
                 },
+                "projectName": {
+                    "type": "string"
+                },
                 "responsibleUserId": {
                     "type": "string"
                 },
@@ -11307,6 +11722,9 @@ const docTemplate = `{
                 },
                 "projectId": {
                     "description": "Link to project (nullable)",
+                    "type": "string"
+                },
+                "projectName": {
                     "type": "string"
                 },
                 "responsibleUserId": {
@@ -11558,7 +11976,10 @@ const docTemplate = `{
         "domain.ProjectBudgetDTO": {
             "type": "object",
             "properties": {
-                "budget": {
+                "cost": {
+                    "type": "number"
+                },
+                "marginPercent": {
                     "type": "number"
                 },
                 "percentUsed": {
@@ -11569,15 +11990,15 @@ const docTemplate = `{
                 },
                 "spent": {
                     "type": "number"
+                },
+                "value": {
+                    "type": "number"
                 }
             }
         },
         "domain.ProjectDTO": {
             "type": "object",
             "properties": {
-                "budget": {
-                    "type": "number"
-                },
                 "calculatedOfferValue": {
                     "type": "number"
                 },
@@ -11585,6 +12006,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
+                    "type": "number"
+                },
+                "cost": {
                     "type": "number"
                 },
                 "createdAt": {
@@ -11631,6 +12055,9 @@ const docTemplate = `{
                 "managerName": {
                     "type": "string"
                 },
+                "marginPercent": {
+                    "type": "number"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -11666,6 +12093,9 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "value": {
+                    "type": "number"
+                },
                 "winningOfferId": {
                     "description": "Phase-related fields for offer folder functionality",
                     "type": "string"
@@ -11695,12 +12125,14 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "tilbud",
+                "working",
                 "active",
                 "completed",
                 "cancelled"
             ],
             "x-enum-varnames": [
                 "ProjectPhaseTilbud",
+                "ProjectPhaseWorking",
                 "ProjectPhaseActive",
                 "ProjectPhaseCompleted",
                 "ProjectPhaseCancelled"
@@ -11726,9 +12158,6 @@ const docTemplate = `{
         "domain.ProjectWithDetailsDTO": {
             "type": "object",
             "properties": {
-                "budget": {
-                    "type": "number"
-                },
                 "budgetSummary": {
                     "$ref": "#/definitions/domain.BudgetSummaryDTO"
                 },
@@ -11739,6 +12168,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
+                    "type": "number"
+                },
+                "cost": {
                     "type": "number"
                 },
                 "createdAt": {
@@ -11788,6 +12220,9 @@ const docTemplate = `{
                 "managerName": {
                     "type": "string"
                 },
+                "marginPercent": {
+                    "type": "number"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -11832,6 +12267,9 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "value": {
+                    "type": "number"
+                },
                 "winningOfferId": {
                     "description": "Phase-related fields for offer folder functionality",
                     "type": "string"
@@ -11851,6 +12289,56 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.ReopenProjectRequest": {
+            "type": "object",
+            "required": [
+                "targetPhase"
+            ],
+            "properties": {
+                "notes": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "targetPhase": {
+                    "enum": [
+                        "tilbud",
+                        "working"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectPhase"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.ReopenProjectResponse": {
+            "type": "object",
+            "properties": {
+                "clearedOfferId": {
+                    "description": "Whether WinningOfferID was cleared",
+                    "type": "boolean"
+                },
+                "clearedOfferValue": {
+                    "description": "Whether economic values were cleared",
+                    "type": "boolean"
+                },
+                "previousPhase": {
+                    "type": "string"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
+                },
+                "revertedOffer": {
+                    "description": "Offer that was reverted to sent (if any)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    ]
+                }
+            }
+        },
         "domain.ReorderBudgetItemsRequest": {
             "type": "object",
             "required": [
@@ -11863,6 +12351,29 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.ResyncFromOfferResponse": {
+            "type": "object",
+            "properties": {
+                "offerId": {
+                    "type": "string"
+                },
+                "offerPhase": {
+                    "type": "string"
+                },
+                "offerTitle": {
+                    "type": "string"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
+                },
+                "syncedCost": {
+                    "type": "number"
+                },
+                "syncedValue": {
+                    "type": "number"
                 }
             }
         },
@@ -12763,6 +13274,7 @@ const docTemplate = `{
                 "phase": {
                     "enum": [
                         "tilbud",
+                        "working",
                         "active",
                         "completed",
                         "cancelled"
@@ -12779,22 +13291,20 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "companyId",
-                "managerId",
                 "name",
-                "startDate",
                 "status"
             ],
             "properties": {
-                "budget": {
-                    "type": "number",
-                    "minimum": 0
-                },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
                     "type": "number",
                     "maximum": 100,
+                    "minimum": 0
+                },
+                "cost": {
+                    "type": "number",
                     "minimum": 0
                 },
                 "dealId": {
@@ -12844,6 +13354,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "value": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },

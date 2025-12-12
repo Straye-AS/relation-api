@@ -36,11 +36,23 @@ func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	contactRepo := repository.NewContactRepository(db)
+	offerRepo := repository.NewOfferRepository(db)
+	offerItemRepo := repository.NewOfferItemRepository(db)
+	projectRepo := repository.NewProjectRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	companyRepo := repository.NewCompanyRepository(db)
+	userRepo := repository.NewUserRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	customerService := service.NewCustomerService(customerRepo, activityRepo, logger)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, logger)
+	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, companyService, numberSequenceService, logger, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetItemRepo, activityRepo, companyService, numberSequenceService, logger, db)
 
-	return handler.NewCustomerHandler(customerService, contactService, logger)
+	return handler.NewCustomerHandler(customerService, contactService, offerService, projectService, logger)
 }
 
 func createCustomerTestContext() context.Context {
@@ -523,14 +535,16 @@ func TestCustomerHandler_Delete(t *testing.T) {
 
 		// Create an active project for this customer
 		userCtx, _ := auth.FromContext(ctx)
+		managerID := userCtx.UserID.String()
 		project := &domain.Project{
 			Name:         "Active Project",
 			CustomerID:   customer.ID,
 			CustomerName: customer.Name,
 			CompanyID:    domain.CompanyStalbygg,
 			Status:       domain.ProjectStatusActive,
-			ManagerID:    userCtx.UserID.String(),
-			Budget:       100000,
+			ManagerID:    &managerID,
+			Value:        100000,
+			Cost:         80000,
 		}
 		err := db.Create(project).Error
 		require.NoError(t, err)

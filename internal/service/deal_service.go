@@ -404,6 +404,7 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 			}
 		}
 
+		managerID := deal.OwnerID
 		project := &domain.Project{
 			Name:         deal.Title,
 			Description:  deal.Description,
@@ -412,8 +413,8 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 			CompanyID:    deal.CompanyID,
 			Status:       domain.ProjectStatusPlanning,
 			StartDate:    closeDate,
-			Budget:       budget,
-			ManagerID:    deal.OwnerID,
+			Value:        budget,
+			ManagerID:    &managerID,
 			ManagerName:  deal.OwnerName,
 			DealID:       &deal.ID,
 			OfferID:      linkedOfferID,

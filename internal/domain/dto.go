@@ -141,6 +141,7 @@ type OfferDTO struct {
 	CustomerID            uuid.UUID      `json:"customerId"`
 	CustomerName          string         `json:"customerName,omitempty"`
 	ProjectID             *uuid.UUID     `json:"projectId,omitempty"` // Link to project (nullable)
+	ProjectName           string         `json:"projectName,omitempty"`
 	CompanyID             CompanyID      `json:"companyId"`
 	Phase                 OfferPhase     `json:"phase"`
 	Probability           int            `json:"probability"`
@@ -214,11 +215,13 @@ type ProjectDTO struct {
 	CompanyID               CompanyID      `json:"companyId"`
 	Status                  ProjectStatus  `json:"status"`
 	Phase                   ProjectPhase   `json:"phase"`
-	StartDate               string         `json:"startDate"`         // ISO 8601
-	EndDate                 string         `json:"endDate,omitempty"` // ISO 8601
-	Budget                  float64        `json:"budget"`
+	StartDate               string         `json:"startDate,omitempty"` // ISO 8601
+	EndDate                 string         `json:"endDate,omitempty"`   // ISO 8601
+	Value                   float64        `json:"value"`
+	Cost                    float64        `json:"cost"`
+	MarginPercent           float64        `json:"marginPercent"`
 	Spent                   float64        `json:"spent"`
-	ManagerID               string         `json:"managerId"`
+	ManagerID               *string        `json:"managerId,omitempty"`
 	ManagerName             string         `json:"managerName,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	CreatedAt               string         `json:"createdAt"` // ISO 8601
@@ -262,14 +265,16 @@ type ProjectActualCostDTO struct {
 }
 
 type ProjectCostSummaryDTO struct {
-	ProjectID         uuid.UUID `json:"projectId"`
-	ProjectName       string    `json:"projectName"`
-	Budget            float64   `json:"budget"`
-	Spent             float64   `json:"spent"`
-	ActualCosts       float64   `json:"actualCosts"`
-	RemainingBudget   float64   `json:"remainingBudget"`
-	BudgetUsedPercent float64   `json:"budgetUsedPercent"`
-	CostEntryCount    int       `json:"costEntryCount"`
+	ProjectID        uuid.UUID `json:"projectId"`
+	ProjectName      string    `json:"projectName"`
+	Value            float64   `json:"value"`
+	Cost             float64   `json:"cost"`
+	MarginPercent    float64   `json:"marginPercent"`
+	Spent            float64   `json:"spent"`
+	ActualCosts      float64   `json:"actualCosts"`
+	RemainingValue   float64   `json:"remainingValue"`
+	ValueUsedPercent float64   `json:"valueUsedPercent"`
+	CostEntryCount   int       `json:"costEntryCount"`
 }
 
 type UserDTO struct {
@@ -639,11 +644,12 @@ type CreateProjectRequest struct {
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
 	Status                  ProjectStatus  `json:"status" validate:"required,oneof=planning active on_hold completed cancelled"`
 	Phase                   ProjectPhase   `json:"phase,omitempty" validate:"omitempty,oneof=tilbud active completed cancelled"`
-	StartDate               time.Time      `json:"startDate" validate:"required"`
+	StartDate               *time.Time     `json:"startDate,omitempty"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
-	Budget                  float64        `json:"budget" validate:"gte=0"`
+	Value                   float64        `json:"value" validate:"gte=0"`
+	Cost                    float64        `json:"cost" validate:"gte=0"`
 	Spent                   float64        `json:"spent" validate:"gte=0"`
-	ManagerID               string         `json:"managerId" validate:"required"`
+	ManagerID               *string        `json:"managerId,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	OfferID                 *uuid.UUID     `json:"offerId,omitempty"`
 	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
@@ -660,11 +666,12 @@ type UpdateProjectRequest struct {
 	Description             string         `json:"description,omitempty"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
 	Status                  ProjectStatus  `json:"status" validate:"required"`
-	StartDate               time.Time      `json:"startDate" validate:"required"`
+	StartDate               *time.Time     `json:"startDate,omitempty"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
-	Budget                  float64        `json:"budget" validate:"gte=0"`
+	Value                   float64        `json:"value" validate:"gte=0"`
+	Cost                    float64        `json:"cost" validate:"gte=0"`
 	Spent                   float64        `json:"spent" validate:"gte=0"`
-	ManagerID               string         `json:"managerId" validate:"required"`
+	ManagerID               *string        `json:"managerId,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
 	HasDetailedBudget       *bool          `json:"hasDetailedBudget,omitempty"`
@@ -892,10 +899,12 @@ type OfferDetailDTO struct {
 }
 
 type ProjectBudgetDTO struct {
-	Budget      float64 `json:"budget"`
-	Spent       float64 `json:"spent"`
-	Remaining   float64 `json:"remaining"`
-	PercentUsed float64 `json:"percentUsed"`
+	Value         float64 `json:"value"`
+	Cost          float64 `json:"cost"`
+	MarginPercent float64 `json:"marginPercent"`
+	Spent         float64 `json:"spent"`
+	Remaining     float64 `json:"remaining"`
+	PercentUsed   float64 `json:"percentUsed"`
 }
 
 type ActivityDTO struct {
@@ -1097,6 +1106,16 @@ type InheritBudgetRequest struct {
 type InheritBudgetResponse struct {
 	Project    *ProjectDTO `json:"project"`
 	ItemsCount int         `json:"itemsCount"`
+}
+
+// ResyncFromOfferResponse contains the result of syncing project economics from its best offer
+type ResyncFromOfferResponse struct {
+	Project     *ProjectDTO `json:"project"`
+	OfferID     uuid.UUID   `json:"offerId"`
+	OfferTitle  string      `json:"offerTitle"`
+	OfferPhase  string      `json:"offerPhase"`
+	SyncedValue float64     `json:"syncedValue"`
+	SyncedCost  float64     `json:"syncedCost"`
 }
 
 // ProjectWithDetailsDTO includes project data with related entities and budget summary
@@ -1367,7 +1386,7 @@ type UpdateProjectDescriptionRequest struct {
 
 // UpdateProjectPhaseRequest for updating project phase
 type UpdateProjectPhaseRequest struct {
-	Phase ProjectPhase `json:"phase" validate:"required,oneof=tilbud active completed cancelled"`
+	Phase ProjectPhase `json:"phase" validate:"required,oneof=tilbud working active completed cancelled"`
 }
 
 // UpdateProjectManagerRequest for updating project manager
@@ -1419,4 +1438,19 @@ type UpdateProjectNumberRequest struct {
 // UpdateProjectCompanyRequest for updating project company assignment
 type UpdateProjectCompanyRequest struct {
 	CompanyID CompanyID `json:"companyId" validate:"omitempty,oneof=gruppen stalbygg hybridbygg industri tak montasje"`
+}
+
+// ReopenProjectRequest for reopening a completed or cancelled project
+type ReopenProjectRequest struct {
+	TargetPhase ProjectPhase `json:"targetPhase" validate:"required,oneof=tilbud working"`
+	Notes       string       `json:"notes" validate:"max=1000"`
+}
+
+// ReopenProjectResponse is the response when reopening a project
+type ReopenProjectResponse struct {
+	Project           *ProjectDTO `json:"project"`
+	PreviousPhase     string      `json:"previousPhase"`
+	RevertedOffer     *OfferDTO   `json:"revertedOffer,omitempty"` // Offer that was reverted to sent (if any)
+	ClearedOfferID    bool        `json:"clearedOfferId"`          // Whether WinningOfferID was cleared
+	ClearedOfferValue bool        `json:"clearedOfferValue"`       // Whether economic values were cleared
 }

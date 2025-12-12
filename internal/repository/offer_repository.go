@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -887,14 +888,30 @@ func (r *OfferRepository) SetOfferNumber(ctx context.Context, id uuid.UUID, offe
 	return r.UpdateField(ctx, id, "offer_number", offerNumber)
 }
 
-// LinkToProject sets the project_id for an offer
+// LinkToProject sets the project_id and project_name for an offer
 func (r *OfferRepository) LinkToProject(ctx context.Context, offerID uuid.UUID, projectID uuid.UUID) error {
-	return r.UpdateField(ctx, offerID, "project_id", projectID)
+	// Fetch project name for denormalized field
+	var projectName string
+	err := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID).
+		Pluck("name", &projectName).Error
+	if err != nil {
+		return fmt.Errorf("failed to get project name: %w", err)
+	}
+
+	return r.UpdateFields(ctx, offerID, map[string]interface{}{
+		"project_id":   projectID,
+		"project_name": projectName,
+	})
 }
 
 // UnlinkFromProject removes the project link from an offer
 func (r *OfferRepository) UnlinkFromProject(ctx context.Context, offerID uuid.UUID) error {
-	return r.UpdateField(ctx, offerID, "project_id", nil)
+	return r.UpdateFields(ctx, offerID, map[string]interface{}{
+		"project_id":   nil,
+		"project_name": "",
+	})
 }
 
 // OfferNumberExists checks if an offer number already exists, excluding the given offer ID
@@ -1112,4 +1129,81 @@ func (r *OfferRepository) GetDistinctCustomerIDsForActiveOffers(ctx context.Cont
 		return nil, err
 	}
 	return customerIDs, nil
+}
+
+// UpdateProjectNameByProjectID updates the project_name for all offers linked to a project
+func (r *OfferRepository) UpdateProjectNameByProjectID(ctx context.Context, projectID uuid.UUID, projectName string) error {
+	result := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("project_id = ?", projectID).
+		Update("project_name", projectName)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project_name for offers: %w", result.Error)
+	}
+	return nil
+}
+
+// GetBestOfferForProject returns the "best" offer for a project based on priority:
+// 1. Won offer (if any exists)
+// 2. Sent offer with highest value
+// 3. In_progress offer with highest value
+// 4. Draft offer with highest value
+// Returns nil if no offers exist for the project.
+func (r *OfferRepository) GetBestOfferForProject(ctx context.Context, projectID uuid.UUID) (*domain.Offer, error) {
+	var offer domain.Offer
+
+	// Priority 1: Won offer
+	err := r.db.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Where("phase = ?", domain.OfferPhaseWon).
+		Order("value DESC").
+		First(&offer).Error
+	if err == nil {
+		return &offer, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to query won offers: %w", err)
+	}
+
+	// Priority 2: Sent offer with highest value
+	err = r.db.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Where("phase = ?", domain.OfferPhaseSent).
+		Order("value DESC").
+		First(&offer).Error
+	if err == nil {
+		return &offer, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to query sent offers: %w", err)
+	}
+
+	// Priority 3: In_progress offer with highest value
+	err = r.db.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Where("phase = ?", domain.OfferPhaseInProgress).
+		Order("value DESC").
+		First(&offer).Error
+	if err == nil {
+		return &offer, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to query in_progress offers: %w", err)
+	}
+
+	// Priority 4: Draft offer with highest value
+	err = r.db.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Where("phase = ?", domain.OfferPhaseDraft).
+		Order("value DESC").
+		First(&offer).Error
+	if err == nil {
+		return &offer, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to query draft offers: %w", err)
+	}
+
+	// No offers found
+	return nil, nil
 }

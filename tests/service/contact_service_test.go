@@ -64,6 +64,8 @@ func createTestDeal(t *testing.T, db *gorm.DB, customer *domain.Customer) *domai
 }
 
 func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer) *domain.Project {
+	startDate := time.Now()
+	managerID := "test-manager"
 	project := &domain.Project{
 		Name:         "Test Project",
 		Description:  "Test project description",
@@ -71,9 +73,10 @@ func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer) *do
 		CustomerName: customer.Name,
 		CompanyID:    domain.CompanyStalbygg,
 		Status:       domain.ProjectStatusActive,
-		StartDate:    time.Now(),
-		Budget:       500000,
-		ManagerID:    "test-manager",
+		StartDate:    startDate,
+		Value:        500000,
+		Cost:         400000,
+		ManagerID:    &managerID,
 		ManagerName:  "Test Manager",
 	}
 	err := db.Create(project).Error

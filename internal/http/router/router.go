@@ -220,6 +220,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Delete("/{id}", rt.customerHandler.Delete)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Post("/{id}/contacts", rt.customerHandler.CreateContact)
+				r.Get("/{id}/offers", rt.customerHandler.ListOffers)
+				r.Get("/{id}/projects", rt.customerHandler.ListProjects)
 
 				// Individual property update endpoints
 				r.Put("/{id}/status", rt.customerHandler.UpdateStatus)
@@ -257,6 +259,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/status", rt.projectHandler.UpdateStatus)
 				r.Get("/{id}/budget", rt.projectHandler.GetBudget)
 				r.Post("/{id}/inherit-budget", rt.projectHandler.InheritBudget)
+				r.Post("/{id}/resync-from-offer", rt.projectHandler.ResyncFromBestOffer)
+				r.Post("/{id}/reopen", rt.projectHandler.ReopenProject) // Reopen completed/cancelled project
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Get("/{id}/offers", rt.projectHandler.GetProjectOffers) // List offers in project (offer folder model)
