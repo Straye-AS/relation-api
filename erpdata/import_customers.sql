@@ -7,8 +7,6 @@
 -- CUSTOMERS WITH ORG NUMBER (UPSERT)
 -- =====================================================
 
-TRUNCATE TABLE customers;
-
 INSERT INTO customers (id, name, org_number, email, phone, address, postal_code, city, country, contact_person, status, tier, notes, is_internal, municipality, county)
 VALUES
 ('38762824-0b7c-4ab7-a292-da5a88d53119', 'A BYGG ENTREPRENØR AS', '989575716', '', '', 'Ulvenveien 82E', '0581', 'OSLO', 'Norge', '', 'active', 'bronze', '', false, '', ''),
