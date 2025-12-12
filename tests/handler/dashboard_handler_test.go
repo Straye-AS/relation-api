@@ -229,8 +229,8 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 func TestPipelinePhaseData_ProjectCount(t *testing.T) {
 	phaseData := domain.PipelinePhaseData{
 		Phase:         domain.OfferPhaseSent,
-		Count:         5,  // Total offers
-		ProjectCount:  2,  // Unique projects (3 offers belong to 2 projects)
+		Count:         5,        // Total offers
+		ProjectCount:  2,        // Unique projects (3 offers belong to 2 projects)
 		TotalValue:    35000000, // 25M (best from project A) + 10M (orphan)
 		WeightedValue: 28000000,
 	}
@@ -256,14 +256,14 @@ func TestDashboardMetrics_AggregationExample(t *testing.T) {
 	// This test verifies the DTO structure can represent the expected aggregation
 	metrics := domain.DashboardMetrics{
 		TimeRange:         domain.TimeRangeAllTime,
-		TotalOfferCount:   3,  // All offers counted
-		TotalProjectCount: 1,  // Only 1 project (orphans don't count)
+		TotalOfferCount:   3,        // All offers counted
+		TotalProjectCount: 1,        // Only 1 project (orphans don't count)
 		OfferReserve:      35000000, // 25M (best from project) + 10M (orphan)
 		Pipeline: []domain.PipelinePhaseData{
 			{
 				Phase:        domain.OfferPhaseSent,
-				Count:        3,  // 2 project offers + 1 orphan
-				ProjectCount: 1,  // Only 1 unique project
+				Count:        3,        // 2 project offers + 1 orphan
+				ProjectCount: 1,        // Only 1 unique project
 				TotalValue:   35000000, // 25M (best) + 10M (orphan), NOT 23M+25M+10M=58M
 			},
 		},

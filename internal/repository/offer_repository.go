@@ -1287,89 +1287,12 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 		WeightedValue float64 `gorm:"column:weighted_value"`
 	}
 
-	// Complex query that mirrors the view logic but with date filter
-	// Uses a CTE-like approach with subqueries
-	query := r.db.WithContext(ctx).Raw(`
-		WITH
-		-- Get best (highest value) offer per project per phase
-		project_best_offers AS (
-			SELECT
-				o.company_id,
-				o.phase,
-				o.project_id,
-				MAX(o.value) AS best_value,
-				(
-					SELECT o2.probability
-					FROM offers o2
-					WHERE o2.project_id = o.project_id
-					  AND o2.phase = o.phase
-					  AND o2.company_id = o.company_id
-					  AND o2.value = MAX(o.value)
-					  AND o2.created_at >= ?
-					LIMIT 1
-				) AS best_probability,
-				COUNT(*) AS offer_count
-			FROM offers o
-			WHERE o.project_id IS NOT NULL
-			  AND o.phase IN (?, ?, ?, ?)
-			  AND o.created_at >= ?
-			GROUP BY o.company_id, o.phase, o.project_id
-		),
-		-- Get orphan offers (no project_id)
-		orphan_offers AS (
-			SELECT
-				o.company_id,
-				o.phase,
-				o.value,
-				o.probability,
-				1 AS offer_count
-			FROM offers o
-			WHERE o.project_id IS NULL
-			  AND o.phase IN (?, ?, ?, ?)
-			  AND o.created_at >= ?
-		),
-		-- Combine for final aggregation
-		combined_metrics AS (
-			SELECT
-				company_id,
-				phase,
-				project_id,
-				best_value AS value,
-				best_probability AS probability,
-				offer_count,
-				1 AS project_count
-			FROM project_best_offers
-
-			UNION ALL
-
-			SELECT
-				company_id,
-				phase,
-				NULL AS project_id,
-				value,
-				probability,
-				offer_count,
-				0 AS project_count
-			FROM orphan_offers
-		)
-		SELECT
-			phase,
-			SUM(project_count) AS project_count,
-			SUM(offer_count) AS offer_count,
-			SUM(value) AS total_value,
-			SUM(value * COALESCE(probability, 0) / 100.0) AS weighted_value
-		FROM combined_metrics
-		WHERE (? IS NULL OR company_id = ?)
-		GROUP BY phase
-	`, since,
-		validPhases[0], validPhases[1], validPhases[2], validPhases[3], since,
-		validPhases[0], validPhases[1], validPhases[2], validPhases[3], since,
-		nil, nil) // Placeholder for company filter - will be applied via context
-
 	// Apply company filter
 	companyID := auth.GetEffectiveCompanyFilter(ctx)
 
 	var results []aggregatedResult
+	var query *gorm.DB
+
 	if companyID != nil {
 		query = r.db.WithContext(ctx).Raw(`
 			WITH

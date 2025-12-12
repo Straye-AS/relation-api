@@ -1137,14 +1137,15 @@ definitions:
         description: Average probability of active offers
         type: number
       offerReserve:
-        description: Total value of active offers (in_progress, sent)
+        description: Total value of active offers - best per project (avoids double-counting)
         type: number
       orderReserve:
         description: Order Reserve (from active projects)
         type: number
       pipeline:
-        description: 'Pipeline Data (phases: in_progress, sent, won, lost - excludes
-          draft and expired)'
+        description: |-
+          Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
+          Uses aggregation: for projects with multiple offers, only the highest value per phase is counted
         items:
           $ref: '#/definitions/domain.PipelinePhaseData'
         type: array
@@ -1177,6 +1178,9 @@ definitions:
         type: number
       totalOfferCount:
         description: Offer Metrics (excluding drafts and expired)
+        type: integer
+      totalProjectCount:
+        description: Count of unique projects with offers (excludes orphan offers)
         type: integer
       totalValue:
         description: orderReserve + totalInvoiced
@@ -1671,6 +1675,7 @@ definitions:
   domain.PipelinePhaseData:
     properties:
       count:
+        description: Total offer count in this phase
         type: integer
       offers:
         items:
@@ -1678,9 +1683,14 @@ definitions:
         type: array
       phase:
         $ref: '#/definitions/domain.OfferPhase'
+      projectCount:
+        description: Unique projects in this phase (excludes orphan offers)
+        type: integer
       totalValue:
+        description: Sum of best offer value per project (avoids double-counting)
         type: number
       weightedValue:
+        description: Weighted by probability
         type: number
     type: object
   domain.ProjectBudgetDTO:
@@ -5296,18 +5306,27 @@ paths:
       description: |-
         Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.
 
+        **IMPORTANT: Aggregation Logic (Avoids Double-Counting)**
+        When a project has multiple offers, only the highest value offer per phase is counted.
+        Orphan offers (without project) are included at full value.
+        Example: Project A has offers 23M and 25M in "sent" phase - totalValue shows 25M, not 48M.
+
         **Time Range Options:**
         - `rolling12months` (default): Uses a rolling 12-month window from the current date
         - `allTime`: Calculates metrics without any date filter
 
         **Offer Metrics:**
         - `totalOfferCount`: Count of offers excluding drafts and expired
-        - `offerReserve`: Total value of active offers (in_progress, sent)
+        - `totalProjectCount`: Count of unique projects with offers (excludes orphan offers)
+        - `offerReserve`: Total value of active offers - best per project (avoids double-counting)
         - `weightedOfferReserve`: Sum of (value * probability/100) for active offers
         - `averageProbability`: Average probability of active offers
 
         **Pipeline Data:**
         - Returns phases: in_progress, sent, won, lost with counts and values
+        - `count`: Total offer count in phase
+        - `projectCount`: Unique projects in phase (excludes orphan offers)
+        - `totalValue`: Sum of best offer value per project (avoids double-counting)
         - Excludes draft and expired offers
 
         **Win Rate Metrics:**
