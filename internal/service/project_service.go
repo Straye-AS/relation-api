@@ -28,6 +28,18 @@ var (
 
 	// ErrProjectNotManager is returned when user is not the project manager
 	ErrProjectNotManager = errors.New("user is not the project manager")
+
+	// ErrCannotReopenProject is returned when a project cannot be reopened
+	ErrCannotReopenProject = errors.New("project cannot be reopened from its current state")
+
+	// ErrWorkingPhaseRequiresStartDate is returned when transitioning to working without a start date
+	ErrWorkingPhaseRequiresStartDate = errors.New("working phase requires a start date")
+
+	// ErrInvalidPhaseTransition is returned when trying to make an invalid phase transition
+	ErrInvalidPhaseTransition = errors.New("invalid project phase transition")
+
+	// ErrTilbudPhaseCannotHaveWinningOffer is returned when a project in tilbud phase has a winning offer
+	ErrTilbudPhaseCannotHaveWinningOffer = errors.New("project in tilbud phase cannot have a winning offer")
 )
 
 // ProjectService handles business logic for projects
@@ -103,13 +115,13 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 
 	// Auto-assign manager from company default if not provided
 	managerID := req.ManagerID
-	if managerID == "" && req.CompanyID != "" && s.companyService != nil {
+	if (managerID == nil || *managerID == "") && req.CompanyID != "" && s.companyService != nil {
 		defaultManager := s.companyService.GetDefaultProjectResponsible(ctx, req.CompanyID)
 		if defaultManager != nil && *defaultManager != "" {
-			managerID = *defaultManager
+			managerID = defaultManager
 			s.logger.Debug("auto-assigned manager from company default",
 				zap.String("companyID", string(req.CompanyID)),
-				zap.String("managerID", managerID))
+				zap.String("managerID", *managerID))
 		}
 	}
 
@@ -146,11 +158,11 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		ProjectNumber:           projectNumber,
 		Summary:                 req.Summary,
 		Description:             req.Description,
-		Budget:                  req.Budget,
+		Value:                   req.Value,
+		Cost:                    req.Cost,
 		Spent:                   req.Spent,
 		Status:                  req.Status,
 		Phase:                   phase,
-		StartDate:               req.StartDate,
 		EndDate:                 req.EndDate,
 		CompanyID:               req.CompanyID,
 		ManagerID:               managerID,
@@ -161,7 +173,12 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		Health:                  health,
 		CompletionPercent:       req.CompletionPercent,
 		EstimatedCompletionDate: req.EstimatedCompletionDate,
-		CalculatedOfferValue:    req.Budget, // Initialize with budget
+		CalculatedOfferValue:    req.Value, // Initialize with value
+	}
+
+	// Set StartDate if provided
+	if req.StartDate != nil {
+		project.StartDate = *req.StartDate
 	}
 
 	if err := s.projectRepo.Create(ctx, project); err != nil {
@@ -328,15 +345,18 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	}
 
 	// Validate economics changes during tilbud phase
-	// During tilbud phase, Budget and Spent are read-only (they mirror offer values)
+	// During tilbud phase, Value/Cost/Spent are read-only (they mirror offer values)
 	if project.Phase == domain.ProjectPhaseTilbud {
-		if req.Budget != project.Budget || req.Spent != project.Spent {
+		if req.Value != project.Value || req.Cost != project.Cost || req.Spent != project.Spent {
 			return nil, ErrProjectEconomicsNotEditable
 		}
 	}
 
 	// Track changes for activity logging
 	changes := s.trackChanges(project, req)
+
+	// Track if name changed for denormalized field update
+	oldName := project.Name
 
 	// Update fields
 	project.Name = req.Name
@@ -346,12 +366,15 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 
 	// Only update economic fields if project is in editable phase
 	if project.Phase.IsEditablePhase() {
-		project.Budget = req.Budget
+		project.Value = req.Value
+		project.Cost = req.Cost
 		project.Spent = req.Spent
 	}
 
 	project.Status = req.Status
-	project.StartDate = req.StartDate
+	if req.StartDate != nil {
+		project.StartDate = *req.StartDate
+	}
 	project.EndDate = req.EndDate
 	project.CompanyID = req.CompanyID
 	project.ManagerID = req.ManagerID
@@ -379,6 +402,15 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
+	}
+
+	// Update project_name on linked offers if name changed
+	if oldName != project.Name && s.offerRepo != nil {
+		if err := s.offerRepo.UpdateProjectNameByProjectID(ctx, id, project.Name); err != nil {
+			s.logger.Warn("failed to update project_name on linked offers",
+				zap.String("project_id", id.String()),
+				zap.Error(err))
+		}
 	}
 
 	// Recalculate health if budget changed
@@ -537,7 +569,8 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 
 		// Still update project to link to offer even if no items
 		project.OfferID = &offerID
-		project.Budget = offer.Value
+		project.Value = offer.Value
+		project.Cost = offer.Cost
 		if err := s.projectRepo.Update(ctx, project); err != nil {
 			return nil, fmt.Errorf("failed to update project: %w", err)
 		}
@@ -581,7 +614,8 @@ func (s *ProjectService) InheritBudgetFromOffer(ctx context.Context, projectID, 
 		// Update project to reflect detailed budget and link to offer
 		project.HasDetailedBudget = true
 		project.OfferID = &offerID
-		project.Budget = offer.Value
+		project.Value = offer.Value
+		project.Cost = offer.Cost
 		if err := tx.Save(project).Error; err != nil {
 			return fmt.Errorf("failed to update project: %w", err)
 		}
@@ -897,7 +931,7 @@ func (s *ProjectService) checkProjectPermission(ctx context.Context, project *do
 	}
 
 	// Check if user is the project manager
-	if project.ManagerID == userCtx.UserID.String() {
+	if project.ManagerID != nil && *project.ManagerID == userCtx.UserID.String() {
 		return nil
 	}
 
@@ -960,14 +994,26 @@ func (s *ProjectService) trackChanges(project *domain.Project, req *domain.Updat
 	if project.Status != req.Status {
 		changes = append(changes, fmt.Sprintf("status: %s -> %s", project.Status, req.Status))
 	}
-	if project.Budget != req.Budget {
-		changes = append(changes, fmt.Sprintf("budget: %.2f -> %.2f", project.Budget, req.Budget))
+	if project.Value != req.Value {
+		changes = append(changes, fmt.Sprintf("value: %.2f -> %.2f", project.Value, req.Value))
+	}
+	if project.Cost != req.Cost {
+		changes = append(changes, fmt.Sprintf("cost: %.2f -> %.2f", project.Cost, req.Cost))
 	}
 	if project.Spent != req.Spent {
 		changes = append(changes, fmt.Sprintf("spent: %.2f -> %.2f", project.Spent, req.Spent))
 	}
-	if project.ManagerID != req.ManagerID {
-		changes = append(changes, fmt.Sprintf("manager: %s -> %s", project.ManagerID, req.ManagerID))
+	// Compare ManagerID pointers
+	oldManager := ""
+	newManager := ""
+	if project.ManagerID != nil {
+		oldManager = *project.ManagerID
+	}
+	if req.ManagerID != nil {
+		newManager = *req.ManagerID
+	}
+	if oldManager != newManager {
+		changes = append(changes, fmt.Sprintf("manager: %s -> %s", oldManager, newManager))
 	}
 
 	if len(changes) == 0 {
@@ -1073,6 +1119,9 @@ func (s *ProjectService) UpdateDescription(ctx context.Context, id uuid.UUID, su
 }
 
 // UpdatePhase updates only the project phase
+// Validates phase transitions and enforces business rules:
+// - Working phase requires StartDate
+// - Project cannot be tilbud if it has a WinningOfferID
 func (s *ProjectService) UpdatePhase(ctx context.Context, id uuid.UUID, phase domain.ProjectPhase) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1086,8 +1135,33 @@ func (s *ProjectService) UpdatePhase(ctx context.Context, id uuid.UUID, phase do
 		return nil, err
 	}
 
+	// Validate phase transition
+	if !project.Phase.CanTransitionTo(phase) {
+		return nil, fmt.Errorf("%w: cannot transition from %s to %s",
+			ErrInvalidPhaseTransition, project.Phase, phase)
+	}
+
+	// Working phase requires StartDate
+	if phase == domain.ProjectPhaseWorking && project.StartDate.IsZero() {
+		return nil, ErrWorkingPhaseRequiresStartDate
+	}
+
+	// Project cannot be tilbud if it has a WinningOfferID
+	if phase == domain.ProjectPhaseTilbud && project.WinningOfferID != nil {
+		return nil, ErrTilbudPhaseCannotHaveWinningOffer
+	}
+
 	oldPhase := project.Phase
 	project.Phase = phase
+
+	// Update status to match phase where appropriate
+	if phase == domain.ProjectPhaseWorking || phase == domain.ProjectPhaseActive {
+		project.Status = domain.ProjectStatusActive
+	} else if phase == domain.ProjectPhaseCancelled {
+		project.Status = domain.ProjectStatusCancelled
+	} else if phase == domain.ProjectPhaseCompleted {
+		project.Status = domain.ProjectStatusCompleted
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project phase: %w", err)
@@ -1097,6 +1171,136 @@ func (s *ProjectService) UpdatePhase(ctx context.Context, id uuid.UUID, phase do
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
+}
+
+// ReopenProject reopens a completed or cancelled project
+// Business rules:
+// - Completed projects can be reopened to working (winning offer reverts to sent)
+// - Cancelled projects can be reopened to tilbud (WinningOfferID cleared, winning offer reverts to sent if exists)
+// - Working phase requires StartDate (auto-set to now if not present)
+func (s *ProjectService) ReopenProject(ctx context.Context, id uuid.UUID, req *domain.ReopenProjectRequest) (*domain.ReopenProjectResponse, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, err
+	}
+
+	// Validate source phase - only completed or cancelled can be reopened
+	if !project.Phase.IsClosedPhase() {
+		return nil, fmt.Errorf("%w: project is in %s phase, only completed or cancelled projects can be reopened",
+			ErrCannotReopenProject, project.Phase)
+	}
+
+	// Validate target phase transition
+	if !project.Phase.CanTransitionTo(req.TargetPhase) {
+		return nil, fmt.Errorf("%w: cannot transition from %s to %s",
+			ErrInvalidPhaseTransition, project.Phase, req.TargetPhase)
+	}
+
+	previousPhase := project.Phase
+	response := &domain.ReopenProjectResponse{
+		PreviousPhase: string(previousPhase),
+	}
+
+	// Handle winning offer if exists
+	var revertedOffer *domain.Offer
+	if project.WinningOfferID != nil {
+		// Revert the winning offer to sent phase
+		offer, err := s.offerRepo.GetByID(ctx, *project.WinningOfferID)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("failed to get winning offer: %w", err)
+			}
+			// Offer not found - just clear the ID
+			s.logger.Warn("winning offer not found during reopen, clearing reference",
+				zap.String("projectID", id.String()),
+				zap.String("winningOfferID", project.WinningOfferID.String()))
+		} else if offer.Phase == domain.OfferPhaseWon {
+			// Revert to sent
+			offer.Phase = domain.OfferPhaseSent
+			if err := s.offerRepo.Update(ctx, offer); err != nil {
+				return nil, fmt.Errorf("failed to revert winning offer to sent: %w", err)
+			}
+			revertedOffer = offer
+			s.logger.Info("reverted winning offer to sent",
+				zap.String("projectID", id.String()),
+				zap.String("offerID", offer.ID.String()))
+
+			// Log activity on offer
+			s.logActivityOnTarget(ctx, domain.ActivityTargetOffer, offer.ID,
+				"Offer reverted to sent",
+				fmt.Sprintf("Offer '%s' was reverted from won to sent (project '%s' reopened)", offer.Title, project.Name))
+		}
+
+		// Clear WinningOfferID if going to tilbud or working
+		if req.TargetPhase == domain.ProjectPhaseTilbud || req.TargetPhase == domain.ProjectPhaseWorking {
+			project.WinningOfferID = nil
+			project.InheritedOfferNumber = ""
+			project.WonAt = nil
+			response.ClearedOfferID = true
+			response.ClearedOfferValue = true
+		}
+	}
+
+	// Set StartDate if going to working and not already set
+	if req.TargetPhase == domain.ProjectPhaseWorking && project.StartDate.IsZero() {
+		project.StartDate = time.Now()
+		s.logger.Info("auto-set StartDate for working phase",
+			zap.String("projectID", id.String()),
+			zap.Time("startDate", project.StartDate))
+	}
+
+	// Update phase and status
+	project.Phase = req.TargetPhase
+
+	// Set appropriate status
+	switch req.TargetPhase {
+	case domain.ProjectPhaseTilbud:
+		project.Status = domain.ProjectStatusPlanning
+	case domain.ProjectPhaseWorking:
+		project.Status = domain.ProjectStatusActive
+	}
+
+	// Save project
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, fmt.Errorf("failed to update project: %w", err)
+	}
+
+	// Reload project
+	project, err = s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload project after reopen", zap.Error(err))
+	}
+
+	// Log activity
+	activityBody := fmt.Sprintf("Project reopened from '%s' to '%s'", previousPhase, req.TargetPhase)
+	if req.Notes != "" {
+		activityBody = fmt.Sprintf("%s. Notes: %s", activityBody, req.Notes)
+	}
+	if response.ClearedOfferID {
+		activityBody = fmt.Sprintf("%s. Winning offer reference cleared.", activityBody)
+	}
+	if revertedOffer != nil {
+		activityBody = fmt.Sprintf("%s. Winning offer '%s' reverted to sent.", activityBody, revertedOffer.Title)
+	}
+	s.logActivity(ctx, project.ID, "Project reopened", activityBody)
+
+	// Build response
+	projectDTO := mapper.ToProjectDTO(project)
+	response.Project = &projectDTO
+
+	if revertedOffer != nil {
+		offerDTO := mapper.ToOfferDTO(revertedOffer)
+		response.RevertedOffer = &offerDTO
+	}
+
+	return response, nil
 }
 
 // UpdateManager updates only the project manager
@@ -1113,8 +1317,11 @@ func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, manage
 		return nil, err
 	}
 
-	oldManager := project.ManagerID
-	project.ManagerID = managerID
+	oldManager := ""
+	if project.ManagerID != nil {
+		oldManager = *project.ManagerID
+	}
+	project.ManagerID = &managerID
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project manager: %w", err)
@@ -1156,8 +1363,9 @@ func (s *ProjectService) UpdateDates(ctx context.Context, id uuid.UUID, startDat
 	return &dto, nil
 }
 
-// UpdateBudget updates only the project budget (only allowed in active phase)
-func (s *ProjectService) UpdateBudget(ctx context.Context, id uuid.UUID, budget float64) (*domain.ProjectDTO, error) {
+// UpdateBudget updates only the project value (only allowed in active phase)
+// Note: This is named UpdateBudget for backwards compatibility but actually updates Value
+func (s *ProjectService) UpdateBudget(ctx context.Context, id uuid.UUID, value float64) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1170,19 +1378,19 @@ func (s *ProjectService) UpdateBudget(ctx context.Context, id uuid.UUID, budget 
 		return nil, err
 	}
 
-	// Budget is read-only during tilbud phase
+	// Value is read-only during tilbud phase
 	if project.Phase == domain.ProjectPhaseTilbud {
 		return nil, ErrProjectEconomicsNotEditable
 	}
 
-	oldBudget := project.Budget
-	project.Budget = budget
+	oldValue := project.Value
+	project.Value = value
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
-		return nil, fmt.Errorf("failed to update project budget: %w", err)
+		return nil, fmt.Errorf("failed to update project value: %w", err)
 	}
 
-	// Recalculate health after budget change
+	// Recalculate health after value change
 	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
 		s.logger.Warn("failed to recalculate project health", zap.Error(err))
 	}
@@ -1190,7 +1398,7 @@ func (s *ProjectService) UpdateBudget(ctx context.Context, id uuid.UUID, budget 
 	// Reload project to get updated health
 	project, _ = s.projectRepo.GetByID(ctx, id)
 
-	s.logActivity(ctx, project.ID, "Project budget updated", fmt.Sprintf("Project budget changed from %.2f to %.2f", oldBudget, budget))
+	s.logActivity(ctx, project.ID, "Project value updated", fmt.Sprintf("Project value changed from %.2f to %.2f", oldValue, value))
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
@@ -1374,4 +1582,70 @@ func (s *ProjectService) UpdateCompanyID(ctx context.Context, id uuid.UUID, comp
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
+}
+
+// ResyncFromBestOffer syncs project economics (value, cost) from the best connected offer.
+// This is useful when:
+// - Offer data has been updated and you want the project to reflect those changes
+// - Project numbers have been changed and you want to reset from offer data
+// Returns the updated project and the offer that was used for syncing.
+func (s *ProjectService) ResyncFromBestOffer(ctx context.Context, id uuid.UUID) (*domain.ProjectDTO, *domain.Offer, error) {
+	project, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, ErrProjectNotFound
+		}
+		return nil, nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if err := s.checkProjectPermission(ctx, project); err != nil {
+		return nil, nil, err
+	}
+
+	// Get best offer for this project
+	if s.offerRepo == nil {
+		return nil, nil, fmt.Errorf("offer repository not available")
+	}
+
+	bestOffer, err := s.offerRepo.GetBestOfferForProject(ctx, id)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get best offer: %w", err)
+	}
+
+	if bestOffer == nil {
+		return nil, nil, fmt.Errorf("no offers found for project")
+	}
+
+	// Store old values for activity logging
+	oldValue := project.Value
+	oldCost := project.Cost
+
+	// Sync economics from offer
+	project.Value = bestOffer.Value
+	project.Cost = bestOffer.Cost
+	project.CalculatedOfferValue = bestOffer.Value
+
+	// If offer has project number, sync that too (for won offers)
+	if bestOffer.Phase == domain.OfferPhaseWon && bestOffer.ExternalReference != "" {
+		project.InheritedOfferNumber = bestOffer.ExternalReference
+	}
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return nil, nil, fmt.Errorf("failed to update project: %w", err)
+	}
+
+	// Recalculate health after economic changes
+	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
+		s.logger.Warn("failed to recalculate project health", zap.Error(err))
+	}
+
+	// Reload project
+	project, _ = s.projectRepo.GetByID(ctx, id)
+
+	s.logActivity(ctx, project.ID, "Project synced from offer",
+		fmt.Sprintf("Project economics synced from offer '%s': value %.2f -> %.2f, cost %.2f -> %.2f",
+			bestOffer.Title, oldValue, project.Value, oldCost, project.Cost))
+
+	dto := mapper.ToProjectDTO(project)
+	return &dto, bestOffer, nil
 }

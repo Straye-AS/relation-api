@@ -623,8 +623,9 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				CompanyID:    offer.CompanyID,
 				Status:       domain.ProjectStatusPlanning,
 				StartDate:    time.Now(),
-				Budget:       offer.Value,
-				ManagerID:    managerID,
+				Value:        offer.Value,
+				Cost:         offer.Cost,
+				ManagerID:    &managerID,
 				OfferID:      &offer.ID,
 				Description:  offer.Description,
 			}
@@ -856,8 +857,8 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 		}
 		expiredOfferIDs = expiredIDs
 
-		// 4. Update the project to active phase with winning offer details
-		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, wonAt); err != nil {
+		// 4. Update the project to active phase with winning offer details (value, cost, margin)
+		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, wonAt); err != nil {
 			return fmt.Errorf("failed to update project with winning offer: %w", err)
 		}
 
@@ -1051,6 +1052,45 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 		activityBody = fmt.Sprintf("%s. Project was cancelled (no remaining active offers).", activityBody)
 	}
 	s.logActivity(ctx, offer.ID, "Offer expired", activityBody)
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// RevertToSent transitions a won offer back to sent phase
+// This is used when reopening a project - the winning offer reverts to sent
+// so that it can be won again or managed as a normal sent offer.
+// Note: This does NOT remove the _P suffix from the offer number.
+func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Can only revert won offers
+	if offer.Phase != domain.OfferPhaseWon {
+		return nil, fmt.Errorf("can only revert won offers to sent (current phase: %s)", offer.Phase)
+	}
+
+	oldPhase := offer.Phase
+	offer.Phase = domain.OfferPhaseSent
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	// Reload with relations
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after revert", zap.Error(err))
+	}
+
+	// Log activity
+	s.logActivity(ctx, offer.ID, "Offer reverted to sent",
+		fmt.Sprintf("Offer '%s' was reverted from %s to sent (project reopening)", offer.Title, oldPhase))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1573,8 +1613,9 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		Status:       domain.ProjectStatusPlanning,
 		Phase:        domain.ProjectPhaseTilbud,
 		StartDate:    time.Now(),
-		Budget:       offer.Value, // Initial budget from offer value
-		ManagerID:    managerID,
+		Value:        offer.Value, // Initial value from offer
+		Cost:         offer.Cost,  // Initial cost from offer
+		ManagerID:    &managerID,
 		Description:  offer.Description,
 		// CalculatedOfferValue will be set when economics are synced
 	}
@@ -2077,7 +2118,7 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 }
 
 // UnlinkFromProject removes the project link from an offer
-// Note: Non-draft offers cannot be unlinked from their project (per offer-project lifecycle spec)
+// Note: Closed offers (won/lost/expired) cannot be unlinked as their lifecycle is complete
 func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, offerID)
 	if err != nil {
@@ -2089,11 +2130,6 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 
 	if s.isClosedPhase(offer.Phase) {
 		return nil, ErrOfferAlreadyClosed
-	}
-
-	// Non-draft offers cannot be unlinked from their project
-	if !s.isDraftPhase(offer.Phase) {
-		return nil, ErrCannotUnlinkNonDraftOffer
 	}
 
 	if offer.ProjectID == nil {

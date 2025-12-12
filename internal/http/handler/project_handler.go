@@ -38,7 +38,7 @@ func NewProjectHandler(projectService *service.ProjectService, offerService *ser
 // @Param pageSize query int false "Items per page (max 200)" default(20)
 // @Param customerId query string false "Filter by customer ID" format(uuid)
 // @Param status query string false "Filter by status" Enums(planning, active, on_hold, completed, cancelled)
-// @Param phase query string false "Filter by phase" Enums(tilbud, active, completed, cancelled)
+// @Param phase query string false "Filter by phase" Enums(tilbud, working, active, completed, cancelled)
 // @Param health query string false "Filter by health" Enums(on_track, at_risk, over_budget)
 // @Param managerId query string false "Filter by manager ID"
 // @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, status, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
@@ -442,10 +442,18 @@ func (h *ProjectHandler) handleProjectError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusForbidden, "User is not the project manager")
 	case errors.Is(err, service.ErrInvalidStatusTransition):
 		respondWithError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrInvalidPhaseTransition):
+		respondWithError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, service.ErrInvalidCompletionPercent):
 		respondWithError(w, http.StatusBadRequest, "Completion percent must be between 0 and 100")
 	case errors.Is(err, service.ErrProjectEconomicsNotEditable):
 		respondWithError(w, http.StatusBadRequest, "Project economics can only be edited during active phase")
+	case errors.Is(err, service.ErrCannotReopenProject):
+		respondWithError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrWorkingPhaseRequiresStartDate):
+		respondWithError(w, http.StatusBadRequest, "Working phase requires a start date")
+	case errors.Is(err, service.ErrTilbudPhaseCannotHaveWinningOffer):
+		respondWithError(w, http.StatusBadRequest, "Project in tilbud phase cannot have a winning offer")
 	case errors.Is(err, service.ErrUnauthorized):
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
 	default:
@@ -1043,4 +1051,89 @@ func (h *ProjectHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, project)
+}
+
+// ResyncFromBestOffer godoc
+// @Summary Resync project from best offer
+// @Description Syncs project economics (value, cost, margin) from the best connected offer
+// @Tags Projects
+// @Produce json
+// @Param id path string true "Project ID"
+// @Success 200 {object} domain.ResyncFromOfferResponse "Updated project with synced values"
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID or no offers found"
+// @Failure 404 {object} domain.ErrorResponse "Project not found"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /projects/{id}/resync-from-offer [post]
+func (h *ProjectHandler) ResyncFromBestOffer(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
+		return
+	}
+
+	project, offer, err := h.projectService.ResyncFromBestOffer(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to resync project from offer", zap.Error(err), zap.String("project_id", id.String()))
+		h.handleProjectError(w, err)
+		return
+	}
+
+	response := domain.ResyncFromOfferResponse{
+		Project:     project,
+		OfferID:     offer.ID,
+		OfferTitle:  offer.Title,
+		OfferPhase:  string(offer.Phase),
+		SyncedValue: project.Value,
+		SyncedCost:  project.Cost,
+	}
+
+	respondJSON(w, http.StatusOK, response)
+}
+
+// ReopenProject godoc
+// @Summary Reopen a completed or cancelled project
+// @Description Reopens a project that was completed or cancelled. Can reopen to tilbud or working phase.
+// @Description When reopening a project with a winning offer, that offer is reverted to sent phase.
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Param id path string true "Project ID" format(uuid)
+// @Param request body domain.ReopenProjectRequest true "Reopen configuration"
+// @Success 200 {object} domain.ReopenProjectResponse
+// @Failure 400 {object} domain.APIError "Invalid request, phase transition, or project not in closed state"
+// @Failure 401 {object} domain.APIError
+// @Failure 403 {object} domain.APIError "User is not the project manager"
+// @Failure 404 {object} domain.APIError "Project not found"
+// @Failure 500 {object} domain.APIError
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /projects/{id}/reopen [post]
+func (h *ProjectHandler) ReopenProject(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.ReopenProjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	result, err := h.projectService.ReopenProject(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to reopen project", zap.Error(err), zap.String("project_id", id.String()))
+		h.handleProjectError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
 }
