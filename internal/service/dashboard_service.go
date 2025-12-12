@@ -41,6 +41,10 @@ func NewDashboardService(
 // GetMetrics returns dashboard metrics with configurable time range
 // timeRange can be "rolling12months" (default) or "allTime"
 // All metrics exclude draft and expired offers from calculations
+//
+// IMPORTANT: Pipeline and offer metrics use aggregation to avoid double-counting.
+// When a project has multiple offers, only the highest value offer per phase is counted.
+// Orphan offers (without project) are included at full value.
 func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.TimeRange) (*domain.DashboardMetrics, error) {
 	// Default to rolling 12 months if not specified or invalid
 	if timeRange == "" {
@@ -66,26 +70,30 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 		TopCustomers:     []domain.TopCustomerDTO{},
 	}
 
-	// Get offer statistics (excluding drafts and expired)
-	offerStats, err := s.offerRepo.GetDashboardOfferStats(ctx, since)
+	// Get aggregated offer statistics (using aggregation to avoid double-counting)
+	// This replaces the old GetDashboardOfferStats method
+	aggregatedStats, err := s.offerRepo.GetAggregatedOfferStats(ctx, since)
 	if err != nil {
-		s.logger.Warn("failed to get dashboard offer stats", zap.Error(err))
+		s.logger.Warn("failed to get aggregated offer stats", zap.Error(err))
 	} else {
-		metrics.TotalOfferCount = offerStats.TotalOfferCount
-		metrics.OfferReserve = offerStats.OfferReserve
-		metrics.WeightedOfferReserve = offerStats.WeightedOfferReserve
-		metrics.AverageProbability = offerStats.AverageProbability
+		metrics.TotalOfferCount = aggregatedStats.TotalOfferCount
+		metrics.TotalProjectCount = aggregatedStats.TotalProjectCount
+		metrics.OfferReserve = aggregatedStats.OfferReserve
+		metrics.WeightedOfferReserve = aggregatedStats.WeightedOfferReserve
+		metrics.AverageProbability = aggregatedStats.AverageProbability
 	}
 
-	// Get pipeline statistics by phase
-	pipelineStats, err := s.offerRepo.GetDashboardPipelineStats(ctx, since)
+	// Get aggregated pipeline statistics by phase (using aggregation to avoid double-counting)
+	// This replaces the old GetDashboardPipelineStats method
+	aggregatedPipelineStats, err := s.offerRepo.GetAggregatedPipelineStats(ctx, since)
 	if err != nil {
-		s.logger.Warn("failed to get dashboard pipeline stats", zap.Error(err))
+		s.logger.Warn("failed to get aggregated pipeline stats", zap.Error(err))
 	} else {
-		for _, ps := range pipelineStats {
+		for _, ps := range aggregatedPipelineStats {
 			metrics.Pipeline = append(metrics.Pipeline, domain.PipelinePhaseData{
 				Phase:         ps.Phase,
-				Count:         ps.Count,
+				Count:         ps.OfferCount,
+				ProjectCount:  ps.ProjectCount,
 				TotalValue:    ps.TotalValue,
 				WeightedValue: ps.WeightedValue,
 			})

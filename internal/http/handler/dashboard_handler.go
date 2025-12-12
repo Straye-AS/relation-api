@@ -24,18 +24,27 @@ func NewDashboardHandler(dashboardService *service.DashboardService, logger *zap
 // @Summary Get dashboard metrics
 // @Description Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.
 // @Description
+// @Description **IMPORTANT: Aggregation Logic (Avoids Double-Counting)**
+// @Description When a project has multiple offers, only the highest value offer per phase is counted.
+// @Description Orphan offers (without project) are included at full value.
+// @Description Example: Project A has offers 23M and 25M in "sent" phase - totalValue shows 25M, not 48M.
+// @Description
 // @Description **Time Range Options:**
 // @Description - `rolling12months` (default): Uses a rolling 12-month window from the current date
 // @Description - `allTime`: Calculates metrics without any date filter
 // @Description
 // @Description **Offer Metrics:**
 // @Description - `totalOfferCount`: Count of offers excluding drafts and expired
-// @Description - `offerReserve`: Total value of active offers (in_progress, sent)
+// @Description - `totalProjectCount`: Count of unique projects with offers (excludes orphan offers)
+// @Description - `offerReserve`: Total value of active offers - best per project (avoids double-counting)
 // @Description - `weightedOfferReserve`: Sum of (value * probability/100) for active offers
 // @Description - `averageProbability`: Average probability of active offers
 // @Description
 // @Description **Pipeline Data:**
 // @Description - Returns phases: in_progress, sent, won, lost with counts and values
+// @Description - `count`: Total offer count in phase
+// @Description - `projectCount`: Unique projects in phase (excludes orphan offers)
+// @Description - `totalValue`: Sum of best offer value per project (avoids double-counting)
 // @Description - Excludes draft and expired offers
 // @Description
 // @Description **Win Rate Metrics:**
