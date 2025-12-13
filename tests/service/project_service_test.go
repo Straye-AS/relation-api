@@ -121,7 +121,7 @@ func (f *projectTestFixtures) createTestBudgetItem(t *testing.T, ctx context.Con
 	return item
 }
 
-func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Context, name string, status domain.ProjectStatus) (*domain.Project, *domain.Customer) {
+func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Context, name string, phase domain.ProjectPhase) (*domain.Project, *domain.Customer) {
 	customer := f.createTestCustomer(t, ctx, "Customer for "+name)
 
 	health := domain.ProjectHealthOnTrack
@@ -132,7 +132,7 @@ func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Contex
 		CustomerID:        customer.ID,
 		CustomerName:      customer.Name,
 		CompanyID:         domain.CompanyStalbygg,
-		Status:            status,
+		Phase:             phase,
 		StartDate:         startDate,
 		Value:             100000,
 		Cost:              80000,
@@ -197,7 +197,7 @@ func TestProjectService_Create(t *testing.T) {
 			Name:       "Test Project Create",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusPlanning,
+			Phase:      domain.ProjectPhaseTilbud,
 			StartDate:  &startDate,
 			Value:      150000,
 			Cost:       120000,
@@ -210,7 +210,7 @@ func TestProjectService_Create(t *testing.T) {
 		assert.Equal(t, "Test Project Create", result.Name)
 		assert.Equal(t, customer.ID, result.CustomerID)
 		assert.Equal(t, customer.Name, result.CustomerName)
-		assert.Equal(t, domain.ProjectStatusPlanning, result.Status)
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
 		assert.NotNil(t, result.Health)
 		assert.Equal(t, domain.ProjectHealthOnTrack, *result.Health)
 	})
@@ -224,7 +224,7 @@ func TestProjectService_Create(t *testing.T) {
 			Name:       "Test Project Default Health",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  &startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -244,7 +244,7 @@ func TestProjectService_Create(t *testing.T) {
 			Name:       "Test Project Bad Customer",
 			CustomerID: uuid.New(),
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusPlanning,
+			Phase:      domain.ProjectPhaseTilbud,
 			StartDate:  &startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -266,7 +266,7 @@ func TestProjectService_GetByID(t *testing.T) {
 	ctx := createProjectTestContext()
 
 	t.Run("get project by id successfully", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Get Project", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Get Project", domain.ProjectPhaseActive)
 
 		result, err := svc.GetByID(ctx, project.ID)
 		require.NoError(t, err)
@@ -291,14 +291,13 @@ func TestProjectService_Update(t *testing.T) {
 	t.Run("update project as manager", func(t *testing.T) {
 		// Create context with matching manager ID
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Update Project", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Update Project", domain.ProjectPhaseTilbud)
 
 		startDate := time.Now()
 		managerID := "test-manager-id"
 		req := &domain.UpdateProjectRequest{
 			Name:      "Test Updated Project Name",
 			CompanyID: domain.CompanyStalbygg,
-			Status:    domain.ProjectStatusActive,
 			StartDate: &startDate,
 			Value:     200000,
 			Cost:      160000,
@@ -310,20 +309,19 @@ func TestProjectService_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "Test Updated Project Name", result.Name)
-		assert.Equal(t, domain.ProjectStatusActive, result.Status)
+		assert.Equal(t, domain.ProjectPhaseActive, result.Phase)
 		assert.Equal(t, float64(200000), result.Value)
 	})
 
 	t.Run("update project as admin", func(t *testing.T) {
 		ctx := createProjectTestContext() // Manager role allows update
-		project, _ := fixtures.createTestProject(t, ctx, "Test Update Admin", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Update Admin", domain.ProjectPhaseTilbud)
 
 		startDate := time.Now()
 		managerID := "different-manager"
 		req := &domain.UpdateProjectRequest{
 			Name:      "Test Updated By Admin",
 			CompanyID: domain.CompanyStalbygg,
-			Status:    domain.ProjectStatusActive,
 			StartDate: &startDate,
 			Value:     150000,
 			Cost:      120000,
@@ -342,7 +340,6 @@ func TestProjectService_Update(t *testing.T) {
 		req := &domain.UpdateProjectRequest{
 			Name:      "Test Non-Existent",
 			CompanyID: domain.CompanyStalbygg,
-			Status:    domain.ProjectStatusActive,
 			StartDate: &startDate,
 			Value:     100000,
 			Cost:      80000,
@@ -363,7 +360,7 @@ func TestProjectService_Delete(t *testing.T) {
 
 	t.Run("delete project as manager", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Delete Project", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Delete Project", domain.ProjectPhaseTilbud)
 
 		err := svc.Delete(ctx, project.ID)
 		require.NoError(t, err)
@@ -391,7 +388,7 @@ func TestProjectService_List(t *testing.T) {
 	t.Run("list projects with pagination", func(t *testing.T) {
 		// Create multiple projects
 		for i := 0; i < 5; i++ {
-			fixtures.createTestProject(t, ctx, "Test List Project", domain.ProjectStatusActive)
+			fixtures.createTestProject(t, ctx, "Test List Project", domain.ProjectPhaseActive)
 		}
 
 		result, err := svc.List(ctx, 1, 3, nil, nil)
@@ -402,18 +399,18 @@ func TestProjectService_List(t *testing.T) {
 	})
 
 	t.Run("list projects filtered by status", func(t *testing.T) {
-		fixtures.createTestProject(t, ctx, "Test Active Project Filter", domain.ProjectStatusActive)
-		fixtures.createTestProject(t, ctx, "Test Planning Project Filter", domain.ProjectStatusPlanning)
+		fixtures.createTestProject(t, ctx, "Test Active Project Filter", domain.ProjectPhaseActive)
+		fixtures.createTestProject(t, ctx, "Test Planning Project Filter", domain.ProjectPhaseTilbud)
 
-		activeStatus := domain.ProjectStatusActive
-		result, err := svc.List(ctx, 1, 100, nil, &activeStatus)
+		activePhase := domain.ProjectPhaseActive
+		result, err := svc.List(ctx, 1, 100, nil, &activePhase)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
 		// All returned projects should be active
 		projects := result.Data.([]domain.ProjectDTO)
 		for _, p := range projects {
-			assert.Equal(t, domain.ProjectStatusActive, p.Status)
+			assert.Equal(t, domain.ProjectPhaseActive, p.Phase)
 		}
 	})
 }
@@ -438,7 +435,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 50, 1)        // Revenue=45000
 
 		// Create project without inherited budget
-		project, _ := fixtures.createTestProject(t, ctx, "Test Inherit Project", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Inherit Project", domain.ProjectPhaseTilbud)
 		assert.False(t, project.HasDetailedBudget)
 
 		// Inherit budget
@@ -471,7 +468,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 	t.Run("cannot inherit from non-won offer", func(t *testing.T) {
 		customer := fixtures.createTestCustomer(t, ctx, "Test Non-Won Customer")
 		offer := fixtures.createTestOffer(t, ctx, "Test Non-Won Offer", domain.OfferPhaseDraft, customer.ID)
-		project, _ := fixtures.createTestProject(t, ctx, "Test Non-Won Project", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Non-Won Project", domain.ProjectPhaseTilbud)
 
 		_, err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
 		assert.Error(t, err)
@@ -488,7 +485,7 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 	})
 
 	t.Run("offer not found", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Offer NotFound Project", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Offer NotFound Project", domain.ProjectPhaseTilbud)
 
 		_, err := svc.InheritBudgetFromOffer(ctx, project.ID, uuid.New())
 		assert.Error(t, err)
@@ -504,7 +501,7 @@ func TestProjectService_GetBudgetSummary(t *testing.T) {
 	ctx := createProjectTestContext()
 
 	t.Run("get budget summary for project with budget items", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Budget Summary", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Budget Summary", domain.ProjectPhaseActive)
 
 		// Add budget items
 		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentProject, project.ID, "Item 1", 10000, 50, 0) // Revenue=15000
@@ -530,76 +527,73 @@ func TestProjectService_GetBudgetSummary(t *testing.T) {
 }
 
 // ============================================================================
-// Status Lifecycle Tests
+// Phase Lifecycle Tests
 // ============================================================================
 
-func TestProjectService_UpdateStatus(t *testing.T) {
+func TestProjectService_UpdatePhase(t *testing.T) {
 	db := setupProjectTestDB(t)
 	svc, fixtures := setupProjectTestService(t, db)
 	t.Cleanup(func() { fixtures.cleanup(t) })
 
-	t.Run("valid status transition planning to active", func(t *testing.T) {
+	t.Run("valid phase transition tilbud to active", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Status Planning Active", domain.ProjectStatusPlanning)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Phase Tilbud Active", domain.ProjectPhaseTilbud)
 
-		result, err := svc.UpdateStatus(ctx, project.ID, domain.ProjectStatusActive)
+		result, err := svc.UpdatePhase(ctx, project.ID, domain.ProjectPhaseActive)
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProjectStatusActive, result.Status)
+		assert.Equal(t, domain.ProjectPhaseActive, result.Phase)
 	})
 
-	t.Run("valid status transition active to completed", func(t *testing.T) {
+	t.Run("valid phase transition active to completed", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Status Active Complete", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Phase Active Complete", domain.ProjectPhaseActive)
 
-		result, err := svc.UpdateStatus(ctx, project.ID, domain.ProjectStatusCompleted)
+		result, err := svc.UpdatePhase(ctx, project.ID, domain.ProjectPhaseCompleted)
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProjectStatusCompleted, result.Status)
-		// Completion percent should be auto-set to 100
-		assert.NotNil(t, result.CompletionPercent)
-		assert.Equal(t, float64(100), *result.CompletionPercent)
+		assert.Equal(t, domain.ProjectPhaseCompleted, result.Phase)
 	})
 
-	t.Run("valid status transition active to on_hold", func(t *testing.T) {
+	t.Run("valid phase transition tilbud to working", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Status Active Hold", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Phase Tilbud Working", domain.ProjectPhaseTilbud)
 
-		result, err := svc.UpdateStatus(ctx, project.ID, domain.ProjectStatusOnHold)
+		result, err := svc.UpdatePhase(ctx, project.ID, domain.ProjectPhaseWorking)
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProjectStatusOnHold, result.Status)
+		assert.Equal(t, domain.ProjectPhaseWorking, result.Phase)
 	})
 
-	t.Run("invalid status transition from completed", func(t *testing.T) {
+	t.Run("invalid phase transition from completed", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Status Completed Invalid", domain.ProjectStatusCompleted)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Phase Completed Invalid", domain.ProjectPhaseCompleted)
 
-		result, err := svc.UpdateStatus(ctx, project.ID, domain.ProjectStatusActive)
+		result, err := svc.UpdatePhase(ctx, project.ID, domain.ProjectPhaseActive)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrInvalidStatusTransition)
+		assert.ErrorIs(t, err, service.ErrInvalidPhaseTransition)
 	})
 
-	t.Run("invalid status transition from cancelled", func(t *testing.T) {
+	t.Run("invalid phase transition from cancelled", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Status Cancelled Invalid", domain.ProjectStatusCancelled)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Phase Cancelled Invalid", domain.ProjectPhaseCancelled)
 
-		result, err := svc.UpdateStatus(ctx, project.ID, domain.ProjectStatusActive)
+		result, err := svc.UpdatePhase(ctx, project.ID, domain.ProjectPhaseActive)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrInvalidStatusTransition)
+		assert.ErrorIs(t, err, service.ErrInvalidPhaseTransition)
 	})
 
-	t.Run("same status is valid", func(t *testing.T) {
+	t.Run("same phase is valid", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Status Same", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Phase Same", domain.ProjectPhaseActive)
 
-		result, err := svc.UpdateStatus(ctx, project.ID, domain.ProjectStatusActive)
+		result, err := svc.UpdatePhase(ctx, project.ID, domain.ProjectPhaseActive)
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProjectStatusActive, result.Status)
+		assert.Equal(t, domain.ProjectPhaseActive, result.Phase)
 	})
 
 	t.Run("project not found", func(t *testing.T) {
 		ctx := createProjectTestContext()
-		result, err := svc.UpdateStatus(ctx, uuid.New(), domain.ProjectStatusActive)
+		result, err := svc.UpdatePhase(ctx, uuid.New(), domain.ProjectPhaseActive)
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.ErrorIs(t, err, service.ErrProjectNotFound)
@@ -617,7 +611,7 @@ func TestProjectService_UpdateCompletionPercent(t *testing.T) {
 
 	t.Run("update completion percent successfully", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Completion Update", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Completion Update", domain.ProjectPhaseActive)
 
 		result, err := svc.UpdateCompletionPercent(ctx, project.ID, 50.0)
 		require.NoError(t, err)
@@ -627,17 +621,17 @@ func TestProjectService_UpdateCompletionPercent(t *testing.T) {
 
 	t.Run("setting 100% auto-completes active project", func(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
-		project, _ := fixtures.createTestProject(t, ctx, "Test Completion 100", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Completion 100", domain.ProjectPhaseActive)
 
 		result, err := svc.UpdateCompletionPercent(ctx, project.ID, 100.0)
 		require.NoError(t, err)
 		assert.Equal(t, float64(100), *result.CompletionPercent)
-		assert.Equal(t, domain.ProjectStatusCompleted, result.Status)
+		assert.Equal(t, domain.ProjectPhaseCompleted, result.Phase)
 	})
 
 	t.Run("reject negative percent", func(t *testing.T) {
 		ctx := createProjectTestContext()
-		project, _ := fixtures.createTestProject(t, ctx, "Test Completion Negative", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Completion Negative", domain.ProjectPhaseActive)
 
 		result, err := svc.UpdateCompletionPercent(ctx, project.ID, -10.0)
 		assert.Error(t, err)
@@ -647,7 +641,7 @@ func TestProjectService_UpdateCompletionPercent(t *testing.T) {
 
 	t.Run("reject percent over 100", func(t *testing.T) {
 		ctx := createProjectTestContext()
-		project, _ := fixtures.createTestProject(t, ctx, "Test Completion Over100", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Completion Over100", domain.ProjectPhaseActive)
 
 		result, err := svc.UpdateCompletionPercent(ctx, project.ID, 150.0)
 		assert.Error(t, err)
@@ -676,7 +670,7 @@ func TestProjectService_RecalculateHealth(t *testing.T) {
 	ctx := createProjectTestContext()
 
 	t.Run("health on_track when under budget", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Health OnTrack", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Health OnTrack", domain.ProjectPhaseActive)
 		// Budget: 100000, Spent: 0 -> 0% variance -> on_track
 		fixtures.db.Model(project).Updates(map[string]interface{}{"spent": 50000})
 
@@ -687,7 +681,7 @@ func TestProjectService_RecalculateHealth(t *testing.T) {
 	})
 
 	t.Run("health at_risk when approaching budget", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Health AtRisk", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Health AtRisk", domain.ProjectPhaseActive)
 		// Budget: 100000, Spent: 115000 -> 115% variance -> at_risk (110-120%)
 		fixtures.db.Model(project).Updates(map[string]interface{}{"spent": 115000})
 
@@ -698,7 +692,7 @@ func TestProjectService_RecalculateHealth(t *testing.T) {
 	})
 
 	t.Run("health over_budget when exceeding threshold", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Health OverBudget", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Health OverBudget", domain.ProjectPhaseActive)
 		// Budget: 100000, Spent: 125000 -> 125% variance -> over_budget (>120%)
 		fixtures.db.Model(project).Updates(map[string]interface{}{"spent": 125000})
 
@@ -736,7 +730,7 @@ func TestProjectService_GetByManager(t *testing.T) {
 			Name:       "Test Manager Project 1",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -748,7 +742,7 @@ func TestProjectService_GetByManager(t *testing.T) {
 			Name:       "Test Manager Project 2",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -784,7 +778,7 @@ func TestProjectService_GetByHealth(t *testing.T) {
 			Name:       "Test AtRisk Project",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -824,7 +818,7 @@ func TestProjectService_GetHealthSummary(t *testing.T) {
 			Name:       "Test Summary OnTrack",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -836,7 +830,7 @@ func TestProjectService_GetHealthSummary(t *testing.T) {
 			Name:       "Test Summary AtRisk",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -864,7 +858,7 @@ func TestProjectService_GetActivities(t *testing.T) {
 	ctx := createProjectTestContext()
 
 	t.Run("get project activities", func(t *testing.T) {
-		project, _ := fixtures.createTestProject(t, ctx, "Test Activity Project", domain.ProjectStatusActive)
+		project, _ := fixtures.createTestProject(t, ctx, "Test Activity Project", domain.ProjectPhaseActive)
 
 		// The creation should have logged an activity
 		activities, err := svc.GetActivities(ctx, project.ID, 10)

@@ -15,7 +15,6 @@ import (
 // ProjectFilters defines filter options for project listing
 type ProjectFilters struct {
 	CustomerID *uuid.UUID
-	Status     *domain.ProjectStatus
 	Phase      *domain.ProjectPhase
 	Health     *domain.ProjectHealth
 	ManagerID  *string
@@ -27,7 +26,6 @@ var projectSortableFields = map[string]string{
 	"createdAt":    "created_at",
 	"updatedAt":    "updated_at",
 	"name":         "name",
-	"status":       "status",
 	"phase":        "phase",
 	"health":       "health",
 	"budget":       "budget",
@@ -82,10 +80,10 @@ func (r *ProjectRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 // List returns a paginated list of projects with optional filters
 // Deprecated: Use ListWithFilters for new code
-func (r *ProjectRepository) List(ctx context.Context, page, pageSize int, customerID *uuid.UUID, status *domain.ProjectStatus) ([]domain.Project, int64, error) {
+func (r *ProjectRepository) List(ctx context.Context, page, pageSize int, customerID *uuid.UUID, phase *domain.ProjectPhase) ([]domain.Project, int64, error) {
 	filters := &ProjectFilters{
 		CustomerID: customerID,
-		Status:     status,
+		Phase:      phase,
 	}
 	return r.ListWithFilters(ctx, page, pageSize, filters, DefaultSortConfig())
 }
@@ -117,10 +115,6 @@ func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize 
 			query = query.Where("customer_id = ?", *filters.CustomerID)
 		}
 
-		if filters.Status != nil {
-			query = query.Where("status = ?", *filters.Status)
-		}
-
 		if filters.Phase != nil {
 			query = query.Where("phase = ?", *filters.Phase)
 		}
@@ -150,7 +144,7 @@ func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize 
 func (r *ProjectRepository) CountActive(ctx context.Context) (int, error) {
 	var count int64
 	query := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("status = ?", domain.ProjectStatusActive)
+		Where("phase IN (?)", []domain.ProjectPhase{domain.ProjectPhaseWorking, domain.ProjectPhaseActive})
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Count(&count).Error
 	return int(count), err
@@ -385,7 +379,7 @@ func (r *ProjectRepository) CountByHealth(ctx context.Context) (map[domain.Proje
 	query := r.db.WithContext(ctx).
 		Model(&domain.Project{}).
 		Select("health, COUNT(*) as count").
-		Where("status = ?", domain.ProjectStatusActive). // Only count active projects
+		Where("phase IN (?)", []domain.ProjectPhase{domain.ProjectPhaseWorking, domain.ProjectPhaseActive}). // Only count active projects
 		Group("health")
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Scan(&results).Error
@@ -406,7 +400,7 @@ func (r *ProjectRepository) CountByHealth(ctx context.Context) (map[domain.Proje
 func (r *ProjectRepository) GetActiveProjects(ctx context.Context, limit int) ([]domain.Project, error) {
 	var projects []domain.Project
 	query := r.db.WithContext(ctx).
-		Where("status = ?", domain.ProjectStatusActive).
+		Where("phase IN (?)", []domain.ProjectPhase{domain.ProjectPhaseWorking, domain.ProjectPhaseActive}).
 		Order("updated_at DESC").
 		Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
@@ -437,9 +431,9 @@ func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since 
 	stats := &DashboardProjectStats{}
 
 	// Order reserve: sum of (budget - spent) on active projects
-	// Only count projects with status "active"
+	// Only count projects with phase "working" or "active"
 	reserveQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("status = ?", domain.ProjectStatusActive)
+		Where("phase IN (?)", []domain.ProjectPhase{domain.ProjectPhaseWorking, domain.ProjectPhaseActive})
 	reserveQuery = ApplyCompanyFilter(ctx, reserveQuery)
 	if err := reserveQuery.Select("COALESCE(SUM(budget - spent), 0)").Scan(&stats.OrderReserve).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate order reserve: %w", err)
@@ -513,7 +507,6 @@ func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.
 		"customer_id":            customerID,   // Propagate customer from winning offer
 		"customer_name":          customerName, // Propagate customer name from winning offer
 		"won_at":                 wonAt,
-		"status":                 domain.ProjectStatusActive, // Also update status to active
 	}
 
 	query := r.db.WithContext(ctx).
@@ -591,11 +584,10 @@ func (r *ProjectRepository) CountByPhase(ctx context.Context) (map[domain.Projec
 	return counts, nil
 }
 
-// CancelProject updates the project status and phase to cancelled
+// CancelProject updates the project phase to cancelled
 func (r *ProjectRepository) CancelProject(ctx context.Context, projectID uuid.UUID) error {
 	updates := map[string]interface{}{
-		"phase":  domain.ProjectPhaseCancelled,
-		"status": domain.ProjectStatusCancelled,
+		"phase": domain.ProjectPhaseCancelled,
 	}
 
 	query := r.db.WithContext(ctx).

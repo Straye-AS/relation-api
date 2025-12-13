@@ -256,10 +256,10 @@ func (r *CustomerRepository) GetCustomerStats(ctx context.Context, customerID uu
 	}
 	stats.ActiveDeals = int(dealsCount)
 
-	// Get active projects count
+	// Get active projects count (tilbud, working, or active phases)
 	var projectsCount int64
 	err = r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("customer_id = ? AND status IN (?, ?)", customerID, domain.ProjectStatusPlanning, domain.ProjectStatusActive).
+		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseActive}).
 		Count(&projectsCount).Error
 	if err != nil {
 		return nil, err
@@ -296,10 +296,10 @@ func (r *CustomerRepository) GetCustomerWithRelations(ctx context.Context, id uu
 
 // HasActiveRelations checks if a customer has active projects, offers, or deals
 func (r *CustomerRepository) HasActiveRelations(ctx context.Context, customerID uuid.UUID) (bool, string, error) {
-	// Check for active projects
+	// Check for active projects (tilbud, working, or active phases)
 	var projectCount int64
 	err := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("customer_id = ? AND status IN (?, ?)", customerID, domain.ProjectStatusPlanning, domain.ProjectStatusActive).
+		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseActive}).
 		Count(&projectCount).Error
 	if err != nil {
 		return false, "", err

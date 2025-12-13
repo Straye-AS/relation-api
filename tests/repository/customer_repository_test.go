@@ -325,10 +325,10 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 		startDate := time.Now()
 		managerID := "mgr-1"
 		projects := []*domain.Project{
-			{Name: "Active Project 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusActive, ManagerID: &managerID, StartDate: startDate},
-			{Name: "Planning Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusPlanning, ManagerID: &managerID, StartDate: startDate},
-			{Name: "Completed Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusCompleted, ManagerID: &managerID, StartDate: startDate},
-			{Name: "On Hold Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Status: domain.ProjectStatusOnHold, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Active Project 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseActive, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Tilbud Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseTilbud, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Completed Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseCompleted, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Working Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseWorking, ManagerID: &managerID, StartDate: startDate},
 		}
 		for _, p := range projects {
 			err := db.Create(p).Error
@@ -338,8 +338,8 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 		stats, err := customerRepo.GetCustomerStats(context.Background(), customer.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, stats)
-		// Active projects = Active + Planning (OnHold and Completed not counted as active per the repo query)
-		assert.Equal(t, 2, stats.ActiveProjects)
+		// Active projects = Active + Tilbud + Working (Completed not counted as active per the repo query)
+		assert.Equal(t, 3, stats.ActiveProjects)
 	})
 
 	t.Run("non-existent customer", func(t *testing.T) {

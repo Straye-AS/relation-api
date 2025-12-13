@@ -541,7 +541,7 @@ func TestCustomerHandler_Delete(t *testing.T) {
 			CustomerID:   customer.ID,
 			CustomerName: customer.Name,
 			CompanyID:    domain.CompanyStalbygg,
-			Status:       domain.ProjectStatusActive,
+			Phase:        domain.ProjectPhaseActive,
 			ManagerID:    &managerID,
 			Value:        100000,
 			Cost:         80000,

@@ -315,8 +315,8 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 
 	// Get active projects if projectRepo is available
 	if s.projectRepo != nil {
-		activeStatus := domain.ProjectStatusActive
-		projects, _, err := s.projectRepo.List(ctx, 1, 5, &id, &activeStatus)
+		activePhase := domain.ProjectPhaseActive
+		projects, _, err := s.projectRepo.List(ctx, 1, 5, &id, &activePhase)
 		if err == nil {
 			result.ActiveProjects = make([]domain.ProjectDTO, len(projects))
 			for i, project := range projects {
@@ -955,4 +955,3 @@ func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID,
 		s.activityRepo.Create(ctx, activity)
 	}
 }
-

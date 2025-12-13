@@ -362,7 +362,7 @@ func TestDealService_WinDeal(t *testing.T) {
 		require.NotNil(t, project, "project should be created when createProject=true")
 		assert.Equal(t, domain.DealStageWon, wonDeal.Stage)
 		assert.Equal(t, deal.Title, project.Name)
-		assert.Equal(t, domain.ProjectStatusPlanning, project.Status)
+		assert.Equal(t, domain.ProjectPhaseTilbud, project.Phase)
 	})
 
 	t.Run("win deal not in negotiation", func(t *testing.T) {

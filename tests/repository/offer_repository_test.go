@@ -690,7 +690,6 @@ func createOfferTestProject(t *testing.T, db *gorm.DB, name string, customerID u
 		CustomerID:   customerID,
 		CustomerName: customerName,
 		CompanyID:    domain.CompanyStalbygg,
-		Status:       domain.ProjectStatusPlanning,
 		Phase:        domain.ProjectPhaseTilbud,
 		ManagerID:    &managerID,
 	}

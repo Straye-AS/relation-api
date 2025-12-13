@@ -37,11 +37,10 @@ func NewProjectHandler(projectService *service.ProjectService, offerService *ser
 // @Param page query int false "Page number" default(1)
 // @Param pageSize query int false "Items per page (max 200)" default(20)
 // @Param customerId query string false "Filter by customer ID" format(uuid)
-// @Param status query string false "Filter by status" Enums(planning, active, on_hold, completed, cancelled)
 // @Param phase query string false "Filter by phase" Enums(tilbud, working, active, completed, cancelled)
 // @Param health query string false "Filter by health" Enums(on_track, at_risk, over_budget)
 // @Param managerId query string false "Filter by manager ID"
-// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, status, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
+// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
 // @Param sortOrder query string false "Sort order" Enums(asc, desc) default(desc)
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.ProjectDTO}
 // @Failure 400 {object} domain.APIError
@@ -71,12 +70,6 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		if id, err := uuid.Parse(cid); err == nil {
 			filters.CustomerID = &id
 		}
-	}
-
-	// Parse status filter
-	if s := r.URL.Query().Get("status"); s != "" {
-		st := domain.ProjectStatus(s)
-		filters.Status = &st
 	}
 
 	// Parse phase filter
@@ -261,31 +254,31 @@ func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UpdateStatus godoc
-// @Summary Update project status
-// @Description Update project status with optional health override. Requires manager or admin permissions.
+// UpdateHealth godoc
+// @Summary Update project health
+// @Description Update project health and completion percent. Requires manager or admin permissions.
 // @Tags Projects
 // @Accept json
 // @Produce json
 // @Param id path string true "Project ID" format(uuid)
-// @Param request body domain.UpdateProjectStatusRequest true "Status update data"
+// @Param request body domain.UpdateProjectHealthRequest true "Health update data"
 // @Success 200 {object} domain.ProjectDTO
-// @Failure 400 {object} domain.APIError "Invalid status transition"
+// @Failure 400 {object} domain.APIError "Invalid request"
 // @Failure 401 {object} domain.APIError
 // @Failure 403 {object} domain.APIError "User is not the project manager"
 // @Failure 404 {object} domain.APIError
 // @Failure 500 {object} domain.APIError
 // @Security BearerAuth
 // @Security ApiKeyAuth
-// @Router /projects/{id}/status [put]
-func (h *ProjectHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+// @Router /projects/{id}/health [put]
+func (h *ProjectHandler) UpdateHealth(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
 		return
 	}
 
-	var req domain.UpdateProjectStatusRequest
+	var req domain.UpdateProjectHealthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
 		return
@@ -296,9 +289,9 @@ func (h *ProjectHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project, err := h.projectService.UpdateStatusAndHealth(r.Context(), id, &req)
+	project, err := h.projectService.UpdateHealthAndCompletion(r.Context(), id, &req)
 	if err != nil {
-		h.logger.Error("failed to update project status", zap.Error(err), zap.String("project_id", id.String()))
+		h.logger.Error("failed to update project health", zap.Error(err), zap.String("project_id", id.String()))
 		h.handleProjectError(w, err)
 		return
 	}
@@ -830,50 +823,6 @@ func (h *ProjectHandler) UpdateTeamMembers(w http.ResponseWriter, r *http.Reques
 	}
 
 	project, err := h.projectService.UpdateTeamMembers(r.Context(), id, req.TeamMembers)
-	if err != nil {
-		h.handleProjectError(w, err)
-		return
-	}
-
-	respondJSON(w, http.StatusOK, project)
-}
-
-// UpdateHealth godoc
-// @Summary Update project health
-// @Description Update only the health status of a project
-// @Tags Projects
-// @Accept json
-// @Produce json
-// @Param id path string true "Project ID" format(uuid)
-// @Param request body domain.UpdateProjectHealthRequest true "Health data"
-// @Success 200 {object} domain.ProjectDTO
-// @Failure 400 {object} domain.APIError
-// @Failure 401 {object} domain.APIError
-// @Failure 403 {object} domain.APIError
-// @Failure 404 {object} domain.APIError
-// @Failure 500 {object} domain.APIError
-// @Security BearerAuth
-// @Security ApiKeyAuth
-// @Router /projects/{id}/health [put]
-func (h *ProjectHandler) UpdateHealthEndpoint(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid project ID: must be a valid UUID")
-		return
-	}
-
-	var req domain.UpdateProjectHealthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
-		return
-	}
-
-	if err := validate.Struct(req); err != nil {
-		respondValidationError(w, err)
-		return
-	}
-
-	project, err := h.projectService.UpdateHealth(r.Context(), id, req.Health)
 	if err != nil {
 		h.handleProjectError(w, err)
 		return

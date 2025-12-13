@@ -488,7 +488,7 @@ func TestCustomerService_Delete(t *testing.T) {
 			Name:       "Active Project",
 			CustomerID: created.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusActive,
+			Phase:      domain.ProjectPhaseActive,
 			StartDate:  startDate,
 			ManagerID:  &managerID,
 		}

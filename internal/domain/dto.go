@@ -228,7 +228,6 @@ type ProjectDTO struct {
 	CustomerID              uuid.UUID      `json:"customerId"`
 	CustomerName            string         `json:"customerName,omitempty"`
 	CompanyID               CompanyID      `json:"companyId"`
-	Status                  ProjectStatus  `json:"status"`
 	Phase                   ProjectPhase   `json:"phase"`
 	StartDate               string         `json:"startDate,omitempty"` // ISO 8601
 	EndDate                 string         `json:"endDate,omitempty"`   // ISO 8601
@@ -665,8 +664,7 @@ type CreateProjectRequest struct {
 	Description             string         `json:"description,omitempty"`
 	CustomerID              uuid.UUID      `json:"customerId" validate:"required"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
-	Status                  ProjectStatus  `json:"status" validate:"required,oneof=planning active on_hold completed cancelled"`
-	Phase                   ProjectPhase   `json:"phase,omitempty" validate:"omitempty,oneof=tilbud active completed cancelled"`
+	Phase                   ProjectPhase   `json:"phase,omitempty" validate:"omitempty,oneof=tilbud working active completed cancelled"`
 	StartDate               *time.Time     `json:"startDate,omitempty"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
 	Value                   float64        `json:"value" validate:"gte=0"`
@@ -688,7 +686,6 @@ type UpdateProjectRequest struct {
 	Summary                 string         `json:"summary,omitempty"`
 	Description             string         `json:"description,omitempty"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
-	Status                  ProjectStatus  `json:"status" validate:"required"`
 	StartDate               *time.Time     `json:"startDate,omitempty"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
 	Value                   float64        `json:"value" validate:"gte=0"`
@@ -1113,9 +1110,8 @@ type CreateFollowUpRequest struct {
 
 // Project Request DTOs
 
-// UpdateProjectStatusRequest contains data for updating project status and health
-type UpdateProjectStatusRequest struct {
-	Status            ProjectStatus  `json:"status" validate:"required"`
+// UpdateProjectHealthRequest contains data for updating project health and completion
+type UpdateProjectHealthRequest struct {
 	Health            *ProjectHealth `json:"health,omitempty"`
 	CompletionPercent *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
 }
@@ -1436,11 +1432,6 @@ type UpdateProjectSpentRequest struct {
 // UpdateProjectTeamMembersRequest for updating project team members
 type UpdateProjectTeamMembersRequest struct {
 	TeamMembers []string `json:"teamMembers"`
-}
-
-// UpdateProjectHealthRequest for updating project health
-type UpdateProjectHealthRequest struct {
-	Health ProjectHealth `json:"health" validate:"required,oneof=on_track at_risk over_budget"`
 }
 
 // UpdateProjectCompletionPercentRequest for updating project completion percentage

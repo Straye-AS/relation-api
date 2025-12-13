@@ -1259,9 +1259,8 @@ func (h *CustomerHandler) ListOffers(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Customer ID" format(uuid)
 // @Param page query int false "Page number" default(1)
 // @Param pageSize query int false "Items per page (max 200)" default(20)
-// @Param status query string false "Filter by status" Enums(active, completed, cancelled, on_hold)
 // @Param phase query string false "Filter by phase" Enums(tilbud, active, working, completed, cancelled)
-// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, status, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
+// @Param sortBy query string false "Sort field" Enums(createdAt, updatedAt, name, phase, health, budget, spent, startDate, endDate, customerName, wonAt)
 // @Param sortOrder query string false "Sort order" Enums(asc, desc) default(desc)
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.ProjectDTO}
 // @Failure 400 {object} domain.ErrorResponse
@@ -1292,12 +1291,6 @@ func (h *CustomerHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	// Build filters
 	filters := &repository.ProjectFilters{
 		CustomerID: &customerID,
-	}
-
-	// Parse optional status filter
-	if status := r.URL.Query().Get("status"); status != "" {
-		s := domain.ProjectStatus(status)
-		filters.Status = &s
 	}
 
 	// Parse optional phase filter

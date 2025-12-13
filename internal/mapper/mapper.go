@@ -162,7 +162,6 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		CustomerID:           project.CustomerID,
 		CustomerName:         project.CustomerName,
 		CompanyID:            project.CompanyID,
-		Status:               project.Status,
 		Phase:                phase,
 		Value:                project.Value,
 		Cost:                 project.Cost,
