@@ -49,6 +49,7 @@ type ProjectService struct {
 	customerRepo     *repository.CustomerRepository
 	budgetItemRepo   *repository.BudgetItemRepository
 	activityRepo     *repository.ActivityRepository
+	userRepo         *repository.UserRepository
 	companyService   *CompanyService
 	numberSeqService *NumberSequenceService
 	logger           *zap.Logger
@@ -77,6 +78,7 @@ func NewProjectServiceWithDeps(
 	customerRepo *repository.CustomerRepository,
 	budgetItemRepo *repository.BudgetItemRepository,
 	activityRepo *repository.ActivityRepository,
+	userRepo *repository.UserRepository,
 	companyService *CompanyService,
 	numberSeqService *NumberSequenceService,
 	logger *zap.Logger,
@@ -88,6 +90,7 @@ func NewProjectServiceWithDeps(
 		customerRepo:     customerRepo,
 		budgetItemRepo:   budgetItemRepo,
 		activityRepo:     activityRepo,
+		userRepo:         userRepo,
 		companyService:   companyService,
 		numberSeqService: numberSeqService,
 		logger:           logger,
@@ -1198,6 +1201,16 @@ func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, manage
 	}
 
 	// Permission check removed - anyone can update project manager
+
+	// If managerName not provided, try to look it up from the user repository
+	if managerName == "" && managerID != "" && s.userRepo != nil {
+		user, err := s.userRepo.GetByStringID(ctx, managerID)
+		if err == nil && user != nil {
+			managerName = user.DisplayName
+		} else {
+			s.logger.Debug("could not look up manager name", zap.String("managerID", managerID), zap.Error(err))
+		}
+	}
 
 	oldManager := project.ManagerName
 	if oldManager == "" && project.ManagerID != nil {
