@@ -507,6 +507,61 @@ func (s *CustomerService) ListWithFilters(ctx context.Context, page, pageSize in
 	}, nil
 }
 
+// FuzzySearchBestMatch finds the single best matching customer for a query
+// Uses multiple matching strategies including exact, prefix, contains, and trigram similarity
+// Returns the best match with a confidence score
+// Special case: query "all" returns all customers (limited to 1000)
+func (s *CustomerService) FuzzySearchBestMatch(ctx context.Context, query string) (*domain.FuzzyCustomerSearchResponse, error) {
+	// Validate query length (max 200 characters)
+	if len(query) > 200 {
+		return nil, fmt.Errorf("query too long: maximum 200 characters allowed")
+	}
+
+	// Special case: return all customers when query is "all"
+	if strings.ToLower(strings.TrimSpace(query)) == "all" {
+		customers, err := s.customerRepo.GetAllMinimal(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get all customers: %w", err)
+		}
+
+		dtos := make([]domain.CustomerMinimalDTO, len(customers))
+		for i, c := range customers {
+			dtos[i] = domain.CustomerMinimalDTO{
+				ID:   c.ID,
+				Name: c.Name,
+			}
+		}
+
+		return &domain.FuzzyCustomerSearchResponse{
+			Customers: dtos,
+			Found:     len(dtos) > 0,
+		}, nil
+	}
+
+	result, err := s.customerRepo.FuzzySearchBestMatch(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search customer: %w", err)
+	}
+
+	if result == nil {
+		return &domain.FuzzyCustomerSearchResponse{
+			Customer:   nil,
+			Confidence: 0,
+			Found:      false,
+		}, nil
+	}
+
+	minimalDTO := domain.CustomerMinimalDTO{
+		ID:   result.Customer.ID,
+		Name: result.Customer.Name,
+	}
+	return &domain.FuzzyCustomerSearchResponse{
+		Customer:   &minimalDTO,
+		Confidence: result.Similarity,
+		Found:      true,
+	}, nil
+}
+
 // ListWithSort returns a paginated list of customers with filter and sort options using SortConfig
 func (s *CustomerService) ListWithSort(ctx context.Context, page, pageSize int, filters *repository.CustomerFilters, sort repository.SortConfig) (*domain.PaginatedResponse, error) {
 	// Clamp page size
@@ -900,3 +955,4 @@ func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID,
 		s.activityRepo.Create(ctx, activity)
 	}
 }
+

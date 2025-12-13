@@ -184,6 +184,7 @@ func (rt *Router) Setup() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public routes (no auth required)
 		r.Get("/companies", rt.companyHandler.List)
+		r.Get("/customers/search", rt.customerHandler.FuzzySearch) // Fuzzy customer search (no auth)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {

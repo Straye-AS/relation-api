@@ -61,6 +61,21 @@ type ErrorResponse struct {
 	Code    int    `json:"code,omitempty"`
 }
 
+// CustomerMinimalDTO represents a customer with minimal fields (id and name only)
+type CustomerMinimalDTO struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// FuzzyCustomerSearchResponse represents the result of a fuzzy customer search
+// Returns either a single match (customer + confidence) or all customers (customers array)
+type FuzzyCustomerSearchResponse struct {
+	Customer   *CustomerMinimalDTO  `json:"customer,omitempty"`   // Single best match
+	Customers  []CustomerMinimalDTO `json:"customers,omitempty"`  // All customers (when query is "all")
+	Confidence float64              `json:"confidence,omitempty"` // 0-1 score indicating match quality
+	Found      bool                 `json:"found"`
+}
+
 type ContactDTO struct {
 	ID                     uuid.UUID                `json:"id"`
 	FirstName              string                   `json:"firstName"`

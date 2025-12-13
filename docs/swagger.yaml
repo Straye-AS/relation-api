@@ -1025,6 +1025,13 @@ definitions:
     - CustomerIndustryPublicSector
     - CustomerIndustryRealEstate
     - CustomerIndustryOther
+  domain.CustomerMinimalDTO:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
   domain.CustomerStatsDTO:
     properties:
       activeDeals:
@@ -1298,6 +1305,23 @@ definitions:
         type: string
       size:
         type: integer
+    type: object
+  domain.FuzzyCustomerSearchResponse:
+    properties:
+      confidence:
+        description: 0-1 score indicating match quality
+        type: number
+      customer:
+        allOf:
+        - $ref: '#/definitions/domain.CustomerMinimalDTO'
+        description: Single best match
+      customers:
+        description: All customers (when query is "all")
+        items:
+          $ref: '#/definitions/domain.CustomerMinimalDTO'
+        type: array
+      found:
+        type: boolean
     type: object
   domain.InheritBudgetRequest:
     properties:
@@ -5299,6 +5323,39 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update customer tier
+      tags:
+      - Customers
+  /customers/search:
+    get:
+      consumes:
+      - application/json
+      description: Find the single best matching customer for a query using fuzzy
+        matching (handles typos, abbreviations, partial matches). Use q=all to get
+        all customers. Returns minimal customer data (id and name only). Also supports
+        email domain matching (e.g., 'hauk@straye.no' matches 'Straye').
+      parameters:
+      - description: Search query (e.g., 'AF', 'NTN', 'Veidikke', 'all' for all customers,
+          or email like 'user@company.no')
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.FuzzyCustomerSearchResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      summary: Fuzzy search for best matching customer
       tags:
       - Customers
   /dashboard/metrics:

@@ -2222,6 +2222,50 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/search": {
+            "get": {
+                "description": "Find the single best matching customer for a query using fuzzy matching (handles typos, abbreviations, partial matches). Use q=all to get all customers. Returns minimal customer data (id and name only). Also supports email domain matching (e.g., 'hauk@straye.no' matches 'Straye').",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Fuzzy search for best matching customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query (e.g., 'AF', 'NTN', 'Veidikke', 'all' for all customers, or email like 'user@company.no')",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.FuzzyCustomerSearchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers/{id}": {
             "get": {
                 "security": [
@@ -11017,6 +11061,17 @@ const docTemplate = `{
                 "CustomerIndustryOther"
             ]
         },
+        "domain.CustomerMinimalDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.CustomerStatsDTO": {
             "type": "object",
             "properties": {
@@ -11411,6 +11466,33 @@ const docTemplate = `{
                 },
                 "size": {
                     "type": "integer"
+                }
+            }
+        },
+        "domain.FuzzyCustomerSearchResponse": {
+            "type": "object",
+            "properties": {
+                "confidence": {
+                    "description": "0-1 score indicating match quality",
+                    "type": "number"
+                },
+                "customer": {
+                    "description": "Single best match",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CustomerMinimalDTO"
+                        }
+                    ]
+                },
+                "customers": {
+                    "description": "All customers (when query is \"all\")",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.CustomerMinimalDTO"
+                    }
+                },
+                "found": {
+                    "type": "boolean"
                 }
             }
         },
