@@ -236,6 +236,7 @@ type ProjectDTO struct {
 	Cost                    float64        `json:"cost"`
 	MarginPercent           float64        `json:"marginPercent"`
 	Spent                   float64        `json:"spent"`
+	Invoiced                float64        `json:"invoiced"` // Amount invoiced to customer (hittil fakturert)
 	ManagerID               *string        `json:"managerId,omitempty"`
 	ManagerName             string         `json:"managerName,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`

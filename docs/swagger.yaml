@@ -1766,6 +1766,9 @@ definitions:
         type: string
       inheritedOfferNumber:
         type: string
+      invoiced:
+        description: Amount invoiced to customer (hittil fakturert)
+        type: number
       isEconomicsEditable:
         type: boolean
       managerId:
@@ -1885,6 +1888,9 @@ definitions:
         type: string
       inheritedOfferNumber:
         type: string
+      invoiced:
+        description: Amount invoiced to customer (hittil fakturert)
+        type: number
       isEconomicsEditable:
         type: boolean
       managerId:

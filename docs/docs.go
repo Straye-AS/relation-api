@@ -12152,6 +12152,10 @@ const docTemplate = `{
                 "inheritedOfferNumber": {
                     "type": "string"
                 },
+                "invoiced": {
+                    "description": "Amount invoiced to customer (hittil fakturert)",
+                    "type": "number"
+                },
                 "isEconomicsEditable": {
                     "type": "boolean"
                 },
@@ -12316,6 +12320,10 @@ const docTemplate = `{
                 },
                 "inheritedOfferNumber": {
                     "type": "string"
+                },
+                "invoiced": {
+                    "description": "Amount invoiced to customer (hittil fakturert)",
+                    "type": "number"
                 },
                 "isEconomicsEditable": {
                     "type": "boolean"

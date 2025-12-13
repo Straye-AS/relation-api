@@ -168,6 +168,7 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		Cost:                 project.Cost,
 		MarginPercent:        project.MarginPercent,
 		Spent:                project.Spent,
+		Invoiced:             project.Invoiced,
 		ManagerID:            project.ManagerID,
 		ManagerName:          project.ManagerName,
 		TeamMembers:          project.TeamMembers,
