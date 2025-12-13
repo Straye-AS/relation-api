@@ -2558,6 +2558,9 @@ definitions:
       managerId:
         maxLength: 100
         type: string
+      managerName:
+        maxLength: 200
+        type: string
     type: object
   domain.UpdateProjectNameRequest:
     properties:

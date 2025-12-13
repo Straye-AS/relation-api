@@ -13203,6 +13203,10 @@ const docTemplate = `{
                 "managerId": {
                     "type": "string",
                     "maxLength": 100
+                },
+                "managerName": {
+                    "type": "string",
+                    "maxLength": 200
                 }
             }
         },

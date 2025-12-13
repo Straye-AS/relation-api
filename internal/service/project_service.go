@@ -1188,7 +1188,7 @@ func (s *ProjectService) ReopenProject(ctx context.Context, id uuid.UUID, req *d
 }
 
 // UpdateManager updates only the project manager
-func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, managerID string) (*domain.ProjectDTO, error) {
+func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, managerID, managerName string) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1199,17 +1199,18 @@ func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, manage
 
 	// Permission check removed - anyone can update project manager
 
-	oldManager := ""
-	if project.ManagerID != nil {
+	oldManager := project.ManagerName
+	if oldManager == "" && project.ManagerID != nil {
 		oldManager = *project.ManagerID
 	}
 	project.ManagerID = &managerID
+	project.ManagerName = managerName
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project manager: %w", err)
 	}
 
-	s.logActivity(ctx, project.ID, "Project manager updated", fmt.Sprintf("Project manager changed from '%s' to '%s'", oldManager, managerID))
+	s.logActivity(ctx, project.ID, "Project manager updated", fmt.Sprintf("Project manager changed from '%s' to '%s'", oldManager, managerName))
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
