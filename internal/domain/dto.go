@@ -689,7 +689,7 @@ type UpdateProjectRequest struct {
 
 type CreateOfferRequest struct {
 	Title             string                   `json:"title" validate:"required,max=200"`
-	CustomerID        uuid.UUID                `json:"customerId" validate:"required"`
+	CustomerID        *uuid.UUID               `json:"customerId,omitempty"` // Optional if projectId is provided (inherits from project)
 	CompanyID         CompanyID                `json:"companyId,omitempty"`
 	Phase             OfferPhase               `json:"phase,omitempty"`
 	Probability       *int                     `json:"probability,omitempty" validate:"omitempty,min=0,max=100"`

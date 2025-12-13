@@ -5346,6 +5346,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Creates a new offer. Defaults to in_progress phase (use /inquiries for draft phase).\nSupports three scenarios for customer/project association:\n- customerId only: Creates offer with that customer, auto-creates project\n- projectId only: Inherits customer from the existing project\n- Both: Uses provided customer, links to specified project",
                 "consumes": [
                     "application/json"
                 ],
@@ -5372,6 +5373,18 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error (missing customerId/projectId, project has no customer, etc.)",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer or project not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -10741,7 +10754,6 @@ const docTemplate = `{
         "domain.CreateOfferRequest": {
             "type": "object",
             "required": [
-                "customerId",
                 "title"
             ],
             "properties": {
@@ -10753,6 +10765,7 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "customerId": {
+                    "description": "Optional if projectId is provided (inherits from project)",
                     "type": "string"
                 },
                 "description": {

@@ -151,4 +151,10 @@ var (
 
 	// ErrNoActiveOffersRemaining is returned when no active offers remain after losing an offer
 	ErrNoActiveOffersRemaining = errors.New("no active offers remaining in project")
+
+	// ErrMissingCustomerOrProject is returned when neither customerId nor projectId is provided
+	ErrMissingCustomerOrProject = errors.New("either customerId or projectId must be provided")
+
+	// ErrProjectHasNoCustomer is returned when trying to inherit customer from a project that has no customer
+	ErrProjectHasNoCustomer = errors.New("project has no customer to inherit from")
 )

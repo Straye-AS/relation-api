@@ -67,14 +67,57 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 }
 
 // CreateWithProjectResponse creates a new offer and returns both the offer and any auto-created project
+// Supports three scenarios:
+//   - CustomerID only: Current behavior - creates/links project with that customer
+//   - ProjectID only: Inherits customer from existing project
+//   - Both IDs: Uses provided customer, links to specified project
 func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domain.CreateOfferRequest) (*domain.OfferWithProjectResponse, error) {
-	// Verify customer exists
-	customer, err := s.customerRepo.GetByID(ctx, req.CustomerID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCustomerNotFound
+	// Validate: at least one of customerId or projectId must be provided
+	if req.CustomerID == nil && req.ProjectID == nil {
+		return nil, ErrMissingCustomerOrProject
+	}
+
+	var customer *domain.Customer
+	var customerID uuid.UUID
+	var customerName string
+	var err error
+
+	// Scenario B: ProjectID only - inherit customer from project
+	if req.CustomerID == nil && req.ProjectID != nil {
+		project, err := s.projectRepo.GetByID(ctx, *req.ProjectID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrProjectNotFound
+			}
+			return nil, fmt.Errorf("failed to get project for customer inheritance: %w", err)
 		}
-		return nil, fmt.Errorf("failed to verify customer: %w", err)
+
+		// Project must have a customer to inherit from
+		if project.CustomerID == uuid.Nil {
+			return nil, ErrProjectHasNoCustomer
+		}
+
+		// Fetch the customer to get full details
+		customer, err = s.customerRepo.GetByID(ctx, project.CustomerID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrCustomerNotFound
+			}
+			return nil, fmt.Errorf("failed to get customer from project: %w", err)
+		}
+		customerID = customer.ID
+		customerName = customer.Name
+	} else {
+		// Scenario A or C: CustomerID is provided
+		customer, err = s.customerRepo.GetByID(ctx, *req.CustomerID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrCustomerNotFound
+			}
+			return nil, fmt.Errorf("failed to verify customer: %w", err)
+		}
+		customerID = customer.ID
+		customerName = customer.Name
 	}
 
 	// Calculate value from items (if provided)
@@ -105,7 +148,9 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 
 	phase := req.Phase
 	if phase == "" {
-		phase = domain.OfferPhaseDraft
+		// Default to in_progress phase for POST /offers
+		// Draft phase is reserved for inquiries via /inquiries endpoint
+		phase = domain.OfferPhaseInProgress
 	}
 
 	status := req.Status
@@ -148,8 +193,8 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 
 	offer := &domain.Offer{
 		Title:               req.Title,
-		CustomerID:          req.CustomerID,
-		CustomerName:        customer.Name,
+		CustomerID:          customerID,
+		CustomerName:        customerName,
 		CompanyID:           companyID,
 		Phase:               phase,
 		Probability:         probability,
@@ -857,8 +902,8 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 		}
 		expiredOfferIDs = expiredIDs
 
-		// 4. Update the project to active phase with winning offer details (value, cost, margin)
-		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, wonAt); err != nil {
+		// 4. Update the project to active phase with winning offer details (value, cost, margin, customer)
+		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, wonAt); err != nil {
 			return fmt.Errorf("failed to update project with winning offer: %w", err)
 		}
 
