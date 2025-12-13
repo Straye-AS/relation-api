@@ -122,15 +122,14 @@ func createProjectTestContext() context.Context {
 	return auth.WithUserContext(context.Background(), userCtx)
 }
 
-func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer, name string, status domain.ProjectStatus, managerID string) *domain.Project {
+func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer, name string, phase domain.ProjectPhase, managerID string) *domain.Project {
 	startDate := time.Now()
 	project := &domain.Project{
 		Name:         name,
 		CustomerID:   customer.ID,
 		CustomerName: customer.Name,
 		CompanyID:    domain.CompanyStalbygg,
-		Status:       status,
-		Phase:        domain.ProjectPhaseActive, // Set to active to allow budget updates in tests
+		Phase:        phase,
 		StartDate:    startDate,
 		Value:        100000,
 		Cost:         80000,
@@ -152,22 +151,22 @@ func TestProjectHandler_List(t *testing.T) {
 	customer1 := testutil.CreateTestCustomer(t, db, "Customer One")
 	customer2 := testutil.CreateTestCustomer(t, db, "Customer Two")
 
-	// Create test projects with various statuses and health values
+	// Create test projects with various phases and health values
 	projects := []struct {
 		customer  *domain.Customer
 		name      string
-		status    domain.ProjectStatus
+		phase     domain.ProjectPhase
 		managerID string
 	}{
-		{customer1, "Alpha Project", domain.ProjectStatusActive, userCtx.UserID.String()},
-		{customer1, "Beta Project", domain.ProjectStatusPlanning, userCtx.UserID.String()},
-		{customer1, "Gamma Project", domain.ProjectStatusCompleted, "other-manager"},
-		{customer2, "Delta Project", domain.ProjectStatusActive, userCtx.UserID.String()},
-		{customer2, "Epsilon Project", domain.ProjectStatusOnHold, "other-manager"},
+		{customer1, "Alpha Project", domain.ProjectPhaseActive, userCtx.UserID.String()},
+		{customer1, "Beta Project", domain.ProjectPhaseTilbud, userCtx.UserID.String()},
+		{customer1, "Gamma Project", domain.ProjectPhaseCompleted, "other-manager"},
+		{customer2, "Delta Project", domain.ProjectPhaseActive, userCtx.UserID.String()},
+		{customer2, "Epsilon Project", domain.ProjectPhaseWorking, "other-manager"},
 	}
 
 	for _, p := range projects {
-		createTestProject(t, db, p.customer, p.name, p.status, p.managerID)
+		createTestProject(t, db, p.customer, p.name, p.phase, p.managerID)
 	}
 
 	t.Run("list all projects", func(t *testing.T) {
@@ -273,7 +272,7 @@ func TestProjectHandler_GetByID(t *testing.T) {
 	userCtx, _ := auth.FromContext(ctx)
 
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
-	project := createTestProject(t, db, customer, "Test Project", domain.ProjectStatusActive, userCtx.UserID.String())
+	project := createTestProject(t, db, customer, "Test Project", domain.ProjectPhaseActive, userCtx.UserID.String())
 
 	t.Run("get existing project", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/projects/"+project.ID.String(), nil)
@@ -342,7 +341,7 @@ func TestProjectHandler_Create(t *testing.T) {
 			Name:       "New Project",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusPlanning,
+			Phase:      domain.ProjectPhaseTilbud,
 			StartDate:  &startDate,
 			Value:      150000,
 			Cost:       120000,
@@ -403,7 +402,7 @@ func TestProjectHandler_Create(t *testing.T) {
 			Name:       "Project Without Customer",
 			CustomerID: uuid.New(), // Non-existent customer
 			CompanyID:  domain.CompanyStalbygg,
-			Status:     domain.ProjectStatusPlanning,
+			Phase:      domain.ProjectPhaseTilbud,
 			StartDate:  &startDate,
 			Value:      100000,
 			Cost:       80000,
@@ -430,7 +429,7 @@ func TestProjectHandler_Update(t *testing.T) {
 	userCtx, _ := auth.FromContext(ctx)
 
 	customer := testutil.CreateTestCustomer(t, db, "Update Customer")
-	project := createTestProject(t, db, customer, "Original Project", domain.ProjectStatusPlanning, userCtx.UserID.String())
+	project := createTestProject(t, db, customer, "Original Project", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 	t.Run("update project successfully", func(t *testing.T) {
 		startDate := time.Now()
@@ -438,7 +437,6 @@ func TestProjectHandler_Update(t *testing.T) {
 		reqBody := domain.UpdateProjectRequest{
 			Name:      "Updated Project Name",
 			CompanyID: domain.CompanyStalbygg,
-			Status:    domain.ProjectStatusActive,
 			StartDate: &startDate,
 			Value:     200000,
 			Cost:      160000,
@@ -473,7 +471,6 @@ func TestProjectHandler_Update(t *testing.T) {
 		reqBody := domain.UpdateProjectRequest{
 			Name:      "Updated Name",
 			CompanyID: domain.CompanyStalbygg,
-			Status:    domain.ProjectStatusActive,
 			StartDate: &startDate,
 			Value:     100000,
 			Cost:      80000,
@@ -526,7 +523,7 @@ func TestProjectHandler_Delete(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "Delete Customer")
 
 	t.Run("delete project successfully", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Project To Delete", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project To Delete", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 		req := httptest.NewRequest(http.MethodDelete, "/projects/"+project.ID.String(), nil)
 		req = req.WithContext(ctx)
@@ -576,53 +573,25 @@ func TestProjectHandler_Delete(t *testing.T) {
 	})
 }
 
-// TestProjectHandler_UpdateStatus tests the UpdateStatus endpoint
-func TestProjectHandler_UpdateStatus(t *testing.T) {
+// TestProjectHandler_UpdateHealth tests the UpdateHealth endpoint
+func TestProjectHandler_UpdateHealth(t *testing.T) {
 	db := setupProjectHandlerTestDB(t)
 	h := createProjectHandler(t, db)
 	ctx := createProjectTestContext()
 	userCtx, _ := auth.FromContext(ctx)
 
-	customer := testutil.CreateTestCustomer(t, db, "Status Customer")
+	customer := testutil.CreateTestCustomer(t, db, "Health Customer")
 
-	t.Run("update status successfully", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Status Project", domain.ProjectStatusPlanning, userCtx.UserID.String())
-
-		reqBody := domain.UpdateProjectStatusRequest{
-			Status: domain.ProjectStatusActive,
-		}
-		body, _ := json.Marshal(reqBody)
-
-		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/status", bytes.NewReader(body))
-		req = req.WithContext(ctx)
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", project.ID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		rr := httptest.NewRecorder()
-		h.UpdateStatus(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		var result domain.ProjectDTO
-		err := json.Unmarshal(rr.Body.Bytes(), &result)
-		assert.NoError(t, err)
-		assert.Equal(t, domain.ProjectStatusActive, result.Status)
-	})
-
-	t.Run("update status with health override", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Health Project", domain.ProjectStatusPlanning, userCtx.UserID.String())
+	t.Run("update health successfully", func(t *testing.T) {
+		project := createTestProject(t, db, customer, "Health Project", domain.ProjectPhaseActive, userCtx.UserID.String())
 
 		health := domain.ProjectHealthAtRisk
-		reqBody := domain.UpdateProjectStatusRequest{
-			Status: domain.ProjectStatusActive,
+		reqBody := domain.UpdateProjectHealthRequest{
 			Health: &health,
 		}
 		body, _ := json.Marshal(reqBody)
 
-		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/status", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/health", bytes.NewReader(body))
 		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -631,51 +600,26 @@ func TestProjectHandler_UpdateStatus(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 		rr := httptest.NewRecorder()
-		h.UpdateStatus(rr, req)
+		h.UpdateHealth(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var result domain.ProjectDTO
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
-		assert.Equal(t, domain.ProjectStatusActive, result.Status)
 		assert.Equal(t, domain.ProjectHealthAtRisk, *result.Health)
 	})
 
-	t.Run("invalid status transition", func(t *testing.T) {
-		// Create a completed project - cannot transition from completed
-		project := createTestProject(t, db, customer, "Completed Project", domain.ProjectStatusCompleted, userCtx.UserID.String())
-
-		reqBody := domain.UpdateProjectStatusRequest{
-			Status: domain.ProjectStatusActive, // Invalid transition from completed
-		}
-		body, _ := json.Marshal(reqBody)
-
-		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/status", bytes.NewReader(body))
-		req = req.WithContext(ctx)
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", project.ID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		rr := httptest.NewRecorder()
-		h.UpdateStatus(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("update status with completion percent", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Percent Project", domain.ProjectStatusActive, userCtx.UserID.String())
+	t.Run("update completion percent", func(t *testing.T) {
+		project := createTestProject(t, db, customer, "Percent Project", domain.ProjectPhaseActive, userCtx.UserID.String())
 
 		percent := 75.0
-		reqBody := domain.UpdateProjectStatusRequest{
-			Status:            domain.ProjectStatusActive,
+		reqBody := domain.UpdateProjectHealthRequest{
 			CompletionPercent: &percent,
 		}
 		body, _ := json.Marshal(reqBody)
 
-		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/status", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/health", bytes.NewReader(body))
 		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -684,7 +628,7 @@ func TestProjectHandler_UpdateStatus(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 		rr := httptest.NewRecorder()
-		h.UpdateStatus(rr, req)
+		h.UpdateHealth(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -694,14 +638,46 @@ func TestProjectHandler_UpdateStatus(t *testing.T) {
 		assert.Equal(t, 75.0, *result.CompletionPercent)
 	})
 
-	t.Run("update status non-existent project", func(t *testing.T) {
-		nonExistentID := uuid.New()
-		reqBody := domain.UpdateProjectStatusRequest{
-			Status: domain.ProjectStatusActive,
+	t.Run("update health and completion percent together", func(t *testing.T) {
+		project := createTestProject(t, db, customer, "Combined Project", domain.ProjectPhaseActive, userCtx.UserID.String())
+
+		health := domain.ProjectHealthOnTrack
+		percent := 50.0
+		reqBody := domain.UpdateProjectHealthRequest{
+			Health:            &health,
+			CompletionPercent: &percent,
 		}
 		body, _ := json.Marshal(reqBody)
 
-		req := httptest.NewRequest(http.MethodPut, "/projects/"+nonExistentID.String()+"/status", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/projects/"+project.ID.String()+"/health", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", project.ID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		rr := httptest.NewRecorder()
+		h.UpdateHealth(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.Equal(t, domain.ProjectHealthOnTrack, *result.Health)
+		assert.Equal(t, 50.0, *result.CompletionPercent)
+	})
+
+	t.Run("update health non-existent project", func(t *testing.T) {
+		nonExistentID := uuid.New()
+		health := domain.ProjectHealthOnTrack
+		reqBody := domain.UpdateProjectHealthRequest{
+			Health: &health,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/projects/"+nonExistentID.String()+"/health", bytes.NewReader(body))
 		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -710,7 +686,7 @@ func TestProjectHandler_UpdateStatus(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 		rr := httptest.NewRecorder()
-		h.UpdateStatus(rr, req)
+		h.UpdateHealth(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
@@ -724,7 +700,7 @@ func TestProjectHandler_GetBudget(t *testing.T) {
 	userCtx, _ := auth.FromContext(ctx)
 
 	customer := testutil.CreateTestCustomer(t, db, "Budget Customer")
-	project := createTestProject(t, db, customer, "Budget Project", domain.ProjectStatusActive, userCtx.UserID.String())
+	project := createTestProject(t, db, customer, "Budget Project", domain.ProjectPhaseActive, userCtx.UserID.String())
 	// Update spent amount
 	db.Model(project).Update("spent", 25000)
 
@@ -774,7 +750,7 @@ func TestProjectHandler_GetActivities(t *testing.T) {
 	userCtx, _ := auth.FromContext(ctx)
 
 	customer := testutil.CreateTestCustomer(t, db, "Activity Customer")
-	project := createTestProject(t, db, customer, "Activity Project", domain.ProjectStatusActive, userCtx.UserID.String())
+	project := createTestProject(t, db, customer, "Activity Project", domain.ProjectPhaseActive, userCtx.UserID.String())
 
 	// Create some test activities
 	for i := 0; i < 3; i++ {
@@ -903,7 +879,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		createTestBudgetItems(t, db, offer.ID, 3)
 
 		// Create a project to inherit into
-		project := createTestProject(t, db, customer, "Project for Inheritance", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project for Inheritance", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 		reqBody := domain.InheritBudgetRequest{
 			OfferID: offer.ID,
@@ -940,7 +916,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		offer := createTestOfferForProject(t, db, customer, "Won Offer No Items", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
 
 		// Create a project to inherit into
-		project := createTestProject(t, db, customer, "Project No Items", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project No Items", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 		reqBody := domain.InheritBudgetRequest{
 			OfferID: offer.ID,
@@ -973,7 +949,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		// Create an offer in draft phase (not won)
 		offer := createTestOfferForProject(t, db, customer, "Draft Offer", domain.OfferPhaseDraft, 50000, userCtx.UserID.String())
 
-		project := createTestProject(t, db, customer, "Project Draft Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project Draft Offer", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 		reqBody := domain.InheritBudgetRequest{
 			OfferID: offer.ID,
@@ -995,7 +971,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 	})
 
 	t.Run("inherit budget fails for non-existent offer", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Project No Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project No Offer", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 		nonExistentOfferID := uuid.New()
 
 		reqBody := domain.InheritBudgetRequest{
@@ -1061,7 +1037,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 	})
 
 	t.Run("inherit budget with invalid JSON body", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Project Invalid JSON", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project Invalid JSON", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/inherit-budget", bytes.NewReader([]byte("invalid json")))
 		req = req.WithContext(ctx)
@@ -1078,7 +1054,7 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 	})
 
 	t.Run("inherit budget with missing offer ID", func(t *testing.T) {
-		project := createTestProject(t, db, customer, "Project Missing Offer", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project Missing Offer", domain.ProjectPhaseTilbud, userCtx.UserID.String())
 
 		// Empty request body - missing required offerId
 		reqBody := map[string]interface{}{}

@@ -3519,18 +3519,6 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "active",
-                            "completed",
-                            "cancelled",
-                            "on_hold"
-                        ],
-                        "type": "string",
-                        "description": "Filter by status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
                             "tilbud",
                             "active",
                             "working",
@@ -3547,7 +3535,6 @@ const docTemplate = `{
                             "createdAt",
                             "updatedAt",
                             "name",
-                            "status",
                             "phase",
                             "health",
                             "budget",
@@ -7556,19 +7543,6 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "planning",
-                            "active",
-                            "on_hold",
-                            "completed",
-                            "cancelled"
-                        ],
-                        "type": "string",
-                        "description": "Filter by status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
                             "tilbud",
                             "working",
                             "active",
@@ -7602,7 +7576,6 @@ const docTemplate = `{
                             "createdAt",
                             "updatedAt",
                             "name",
-                            "status",
                             "phase",
                             "health",
                             "budget",
@@ -8574,7 +8547,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update only the health status of a project",
+                "description": "Update project health and completion percent. Requires manager or admin permissions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8595,7 +8568,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Health data",
+                        "description": "Health update data",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -8612,7 +8585,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -8624,7 +8597,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "User is not the project manager",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -9302,86 +9275,6 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/status": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update project status with optional health override. Requires manager or admin permissions.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project status",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Status update data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectStatusRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid status transition",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "User is not the project manager",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -10867,8 +10760,7 @@ const docTemplate = `{
             "required": [
                 "companyId",
                 "customerId",
-                "name",
-                "status"
+                "name"
             ],
             "properties": {
                 "companyId": {
@@ -10917,6 +10809,7 @@ const docTemplate = `{
                 "phase": {
                     "enum": [
                         "tilbud",
+                        "working",
                         "active",
                         "completed",
                         "cancelled"
@@ -10937,20 +10830,6 @@ const docTemplate = `{
                 },
                 "startDate": {
                     "type": "string"
-                },
-                "status": {
-                    "enum": [
-                        "planning",
-                        "active",
-                        "on_hold",
-                        "completed",
-                        "cancelled"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/domain.ProjectStatus"
-                        }
-                    ]
                 },
                 "summary": {
                     "type": "string"
@@ -12187,9 +12066,6 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
-                "status": {
-                    "$ref": "#/definitions/domain.ProjectStatus"
-                },
                 "summary": {
                     "type": "string"
                 },
@@ -12246,23 +12122,6 @@ const docTemplate = `{
                 "ProjectPhaseActive",
                 "ProjectPhaseCompleted",
                 "ProjectPhaseCancelled"
-            ]
-        },
-        "domain.ProjectStatus": {
-            "type": "string",
-            "enum": [
-                "planning",
-                "active",
-                "on_hold",
-                "completed",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "ProjectStatusPlanning",
-                "ProjectStatusActive",
-                "ProjectStatusOnHold",
-                "ProjectStatusCompleted",
-                "ProjectStatusCancelled"
             ]
         },
         "domain.ProjectWithDetailsDTO": {
@@ -12364,9 +12223,6 @@ const docTemplate = `{
                 "startDate": {
                     "description": "ISO 8601",
                     "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/domain.ProjectStatus"
                 },
                 "summary": {
                     "type": "string"
@@ -13330,21 +13186,14 @@ const docTemplate = `{
         },
         "domain.UpdateProjectHealthRequest": {
             "type": "object",
-            "required": [
-                "health"
-            ],
             "properties": {
+                "completionPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
                 "health": {
-                    "enum": [
-                        "on_track",
-                        "at_risk",
-                        "over_budget"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/domain.ProjectHealth"
-                        }
-                    ]
+                    "$ref": "#/definitions/domain.ProjectHealth"
                 }
             }
         },
@@ -13405,8 +13254,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "companyId",
-                "name",
-                "status"
+                "name"
             ],
             "properties": {
                 "companyId": {
@@ -13457,9 +13305,6 @@ const docTemplate = `{
                 "startDate": {
                     "type": "string"
                 },
-                "status": {
-                    "$ref": "#/definitions/domain.ProjectStatus"
-                },
                 "summary": {
                     "type": "string"
                 },
@@ -13481,25 +13326,6 @@ const docTemplate = `{
                 "spent": {
                     "type": "number",
                     "minimum": 0
-                }
-            }
-        },
-        "domain.UpdateProjectStatusRequest": {
-            "type": "object",
-            "required": [
-                "status"
-            ],
-            "properties": {
-                "completionPercent": {
-                    "type": "number",
-                    "maximum": 100,
-                    "minimum": 0
-                },
-                "health": {
-                    "$ref": "#/definitions/domain.ProjectHealth"
-                },
-                "status": {
-                    "$ref": "#/definitions/domain.ProjectStatus"
                 }
             }
         },

@@ -913,6 +913,7 @@ definitions:
         - $ref: '#/definitions/domain.ProjectPhase'
         enum:
         - tilbud
+        - working
         - active
         - completed
         - cancelled
@@ -924,15 +925,6 @@ definitions:
         type: number
       startDate:
         type: string
-      status:
-        allOf:
-        - $ref: '#/definitions/domain.ProjectStatus'
-        enum:
-        - planning
-        - active
-        - on_hold
-        - completed
-        - cancelled
       summary:
         type: string
       teamMembers:
@@ -946,7 +938,6 @@ definitions:
     - companyId
     - customerId
     - name
-    - status
     type: object
   domain.CustomerDTO:
     properties:
@@ -1790,8 +1781,6 @@ definitions:
       startDate:
         description: ISO 8601
         type: string
-      status:
-        $ref: '#/definitions/domain.ProjectStatus'
       summary:
         type: string
       teamMembers:
@@ -1836,20 +1825,6 @@ definitions:
     - ProjectPhaseActive
     - ProjectPhaseCompleted
     - ProjectPhaseCancelled
-  domain.ProjectStatus:
-    enum:
-    - planning
-    - active
-    - on_hold
-    - completed
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - ProjectStatusPlanning
-    - ProjectStatusActive
-    - ProjectStatusOnHold
-    - ProjectStatusCompleted
-    - ProjectStatusCancelled
   domain.ProjectWithDetailsDTO:
     properties:
       budgetSummary:
@@ -1918,8 +1893,6 @@ definitions:
       startDate:
         description: ISO 8601
         type: string
-      status:
-        $ref: '#/definitions/domain.ProjectStatus'
       summary:
         type: string
       teamMembers:
@@ -2573,15 +2546,12 @@ definitions:
     type: object
   domain.UpdateProjectHealthRequest:
     properties:
+      completionPercent:
+        maximum: 100
+        minimum: 0
+        type: number
       health:
-        allOf:
-        - $ref: '#/definitions/domain.ProjectHealth'
-        enum:
-        - on_track
-        - at_risk
-        - over_budget
-    required:
-    - health
+        $ref: '#/definitions/domain.ProjectHealth'
     type: object
   domain.UpdateProjectManagerRequest:
     properties:
@@ -2654,8 +2624,6 @@ definitions:
         type: number
       startDate:
         type: string
-      status:
-        $ref: '#/definitions/domain.ProjectStatus'
       summary:
         type: string
       teamMembers:
@@ -2668,26 +2636,12 @@ definitions:
     required:
     - companyId
     - name
-    - status
     type: object
   domain.UpdateProjectSpentRequest:
     properties:
       spent:
         minimum: 0
         type: number
-    type: object
-  domain.UpdateProjectStatusRequest:
-    properties:
-      completionPercent:
-        maximum: 100
-        minimum: 0
-        type: number
-      health:
-        $ref: '#/definitions/domain.ProjectHealth'
-      status:
-        $ref: '#/definitions/domain.ProjectStatus'
-    required:
-    - status
     type: object
   domain.UpdateProjectTeamMembersRequest:
     properties:
@@ -5161,15 +5115,6 @@ paths:
         in: query
         name: pageSize
         type: integer
-      - description: Filter by status
-        enum:
-        - active
-        - completed
-        - cancelled
-        - on_hold
-        in: query
-        name: status
-        type: string
       - description: Filter by phase
         enum:
         - tilbud
@@ -5185,7 +5130,6 @@ paths:
         - createdAt
         - updatedAt
         - name
-        - status
         - phase
         - health
         - budget
@@ -7783,16 +7727,6 @@ paths:
         in: query
         name: customerId
         type: string
-      - description: Filter by status
-        enum:
-        - planning
-        - active
-        - on_hold
-        - completed
-        - cancelled
-        in: query
-        name: status
-        type: string
       - description: Filter by phase
         enum:
         - tilbud
@@ -7820,7 +7754,6 @@ paths:
         - createdAt
         - updatedAt
         - name
-        - status
         - phase
         - health
         - budget
@@ -8446,7 +8379,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Update only the health status of a project
+      description: Update project health and completion percent. Requires manager
+        or admin permissions.
       parameters:
       - description: Project ID
         format: uuid
@@ -8454,7 +8388,7 @@ paths:
         name: id
         required: true
         type: string
-      - description: Health data
+      - description: Health update data
         in: body
         name: request
         required: true
@@ -8468,7 +8402,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.ProjectDTO'
         "400":
-          description: Bad Request
+          description: Invalid request
           schema:
             $ref: '#/definitions/domain.APIError'
         "401":
@@ -8476,7 +8410,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.APIError'
         "403":
-          description: Forbidden
+          description: User is not the project manager
           schema:
             $ref: '#/definitions/domain.APIError'
         "404":
@@ -8927,58 +8861,6 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update project spent amount
-      tags:
-      - Projects
-  /projects/{id}/status:
-    put:
-      consumes:
-      - application/json
-      description: Update project status with optional health override. Requires manager
-        or admin permissions.
-      parameters:
-      - description: Project ID
-        format: uuid
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Status update data
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/domain.UpdateProjectStatusRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/domain.ProjectDTO'
-        "400":
-          description: Invalid status transition
-          schema:
-            $ref: '#/definitions/domain.APIError'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/domain.APIError'
-        "403":
-          description: User is not the project manager
-          schema:
-            $ref: '#/definitions/domain.APIError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/domain.APIError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/domain.APIError'
-      security:
-      - BearerAuth: []
-      - ApiKeyAuth: []
-      summary: Update project status
       tags:
       - Projects
   /projects/{id}/team-members:

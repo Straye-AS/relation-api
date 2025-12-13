@@ -161,7 +161,6 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		Value:                   req.Value,
 		Cost:                    req.Cost,
 		Spent:                   req.Spent,
-		Status:                  req.Status,
 		Phase:                   phase,
 		EndDate:                 req.EndDate,
 		CompanyID:               req.CompanyID,
@@ -261,8 +260,8 @@ func (s *ProjectService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) (
 	return &dto, nil
 }
 
-// UpdateStatusAndHealth updates project status with optional health override
-func (s *ProjectService) UpdateStatusAndHealth(ctx context.Context, id uuid.UUID, req *domain.UpdateProjectStatusRequest) (*domain.ProjectDTO, error) {
+// UpdateHealth updates project health with optional completion percent
+func (s *ProjectService) UpdateHealthAndCompletion(ctx context.Context, id uuid.UUID, req *domain.UpdateProjectHealthRequest) (*domain.ProjectDTO, error) {
 	project, err := s.projectRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -276,18 +275,16 @@ func (s *ProjectService) UpdateStatusAndHealth(ctx context.Context, id uuid.UUID
 		return nil, err
 	}
 
-	// Validate status transition
-	if !s.isValidStatusTransition(project.Status, req.Status) {
-		return nil, fmt.Errorf("%w: cannot transition from %s to %s",
-			ErrInvalidStatusTransition, project.Status, req.Status)
-	}
-
-	oldStatus := project.Status
-	project.Status = req.Status
+	changes := []string{}
 
 	// Handle health update
 	if req.Health != nil {
+		oldHealth := "unknown"
+		if project.Health != nil {
+			oldHealth = string(*project.Health)
+		}
 		project.Health = req.Health
+		changes = append(changes, fmt.Sprintf("health: %s -> %s", oldHealth, *req.Health))
 	}
 
 	// Handle completion percent update
@@ -295,17 +292,22 @@ func (s *ProjectService) UpdateStatusAndHealth(ctx context.Context, id uuid.UUID
 		if *req.CompletionPercent < 0 || *req.CompletionPercent > 100 {
 			return nil, ErrInvalidCompletionPercent
 		}
+		oldPercent := float64(0)
+		if project.CompletionPercent != nil {
+			oldPercent = *project.CompletionPercent
+		}
 		project.CompletionPercent = req.CompletionPercent
-	}
+		changes = append(changes, fmt.Sprintf("completion: %.0f%% -> %.0f%%", oldPercent, *req.CompletionPercent))
 
-	// Auto-update completion percent on completion
-	if req.Status == domain.ProjectStatusCompleted {
-		hundred := 100.0
-		project.CompletionPercent = &hundred
+		// Auto-transition to completed phase when reaching 100%
+		if *req.CompletionPercent == 100 && project.Phase.IsActivePhase() {
+			project.Phase = domain.ProjectPhaseCompleted
+			changes = append(changes, "phase: auto-completed")
+		}
 	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
-		return nil, fmt.Errorf("failed to update project status: %w", err)
+		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
 
 	// Recalculate health if not explicitly set
@@ -318,12 +320,14 @@ func (s *ProjectService) UpdateStatusAndHealth(ctx context.Context, id uuid.UUID
 	// Reload project
 	project, err = s.projectRepo.GetByID(ctx, id)
 	if err != nil {
-		s.logger.Warn("failed to reload project after status update", zap.String("project_id", id.String()), zap.Error(err))
+		s.logger.Warn("failed to reload project after update", zap.String("project_id", id.String()), zap.Error(err))
 	}
 
 	// Log activity
-	s.logActivity(ctx, project.ID, "Project status changed",
-		fmt.Sprintf("Project '%s' status changed from %s to %s", project.Name, oldStatus, req.Status))
+	if len(changes) > 0 {
+		s.logActivity(ctx, project.ID, "Project updated",
+			fmt.Sprintf("Project '%s' updated: %s", project.Name, changes))
+	}
 
 	dto := mapper.ToProjectDTO(project)
 	return &dto, nil
@@ -371,7 +375,6 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 		project.Spent = req.Spent
 	}
 
-	project.Status = req.Status
 	if req.StartDate != nil {
 		project.StartDate = *req.StartDate
 	}
@@ -467,10 +470,10 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // List returns a paginated list of projects with optional filters and default sorting
-func (s *ProjectService) List(ctx context.Context, page, pageSize int, customerID *uuid.UUID, status *domain.ProjectStatus) (*domain.PaginatedResponse, error) {
+func (s *ProjectService) List(ctx context.Context, page, pageSize int, customerID *uuid.UUID, phase *domain.ProjectPhase) (*domain.PaginatedResponse, error) {
 	filters := &repository.ProjectFilters{
 		CustomerID: customerID,
-		Status:     status,
+		Phase:      phase,
 	}
 	return s.ListWithSort(ctx, page, pageSize, filters, repository.DefaultSortConfig())
 }
@@ -700,61 +703,8 @@ func (s *ProjectService) GetBudgetMetrics(ctx context.Context, id uuid.UUID) (*r
 }
 
 // ============================================================================
-// Status and Lifecycle Methods
+// Lifecycle Methods
 // ============================================================================
-
-// UpdateStatus updates the project status with validation and health recalculation
-func (s *ProjectService) UpdateStatus(ctx context.Context, id uuid.UUID, newStatus domain.ProjectStatus) (*domain.ProjectDTO, error) {
-	project, err := s.projectRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrProjectNotFound
-		}
-		return nil, fmt.Errorf("failed to get project: %w", err)
-	}
-
-	// Check permissions
-	if err := s.checkProjectPermission(ctx, project); err != nil {
-		return nil, err
-	}
-
-	// Validate status transition
-	if !s.isValidStatusTransition(project.Status, newStatus) {
-		return nil, fmt.Errorf("%w: cannot transition from %s to %s",
-			ErrInvalidStatusTransition, project.Status, newStatus)
-	}
-
-	oldStatus := project.Status
-	project.Status = newStatus
-
-	// Auto-update completion percent on completion
-	if newStatus == domain.ProjectStatusCompleted {
-		hundred := 100.0
-		project.CompletionPercent = &hundred
-	}
-
-	if err := s.projectRepo.Update(ctx, project); err != nil {
-		return nil, fmt.Errorf("failed to update project status: %w", err)
-	}
-
-	// Recalculate health after status change
-	if err := s.projectRepo.UpdateHealth(ctx, id); err != nil {
-		s.logger.Warn("failed to update project health", zap.Error(err))
-	}
-
-	// Reload project
-	project, err = s.projectRepo.GetByID(ctx, id)
-	if err != nil {
-		s.logger.Warn("failed to reload project after status change", zap.String("project_id", id.String()), zap.Error(err))
-	}
-
-	// Log activity
-	s.logActivity(ctx, project.ID, "Project status changed",
-		fmt.Sprintf("Project '%s' status changed from %s to %s", project.Name, oldStatus, newStatus))
-
-	dto := mapper.ToProjectDTO(project)
-	return &dto, nil
-}
 
 // UpdateCompletionPercent updates the project completion percentage with validation
 func (s *ProjectService) UpdateCompletionPercent(ctx context.Context, id uuid.UUID, percent float64) (*domain.ProjectDTO, error) {
@@ -783,9 +733,9 @@ func (s *ProjectService) UpdateCompletionPercent(ctx context.Context, id uuid.UU
 
 	project.CompletionPercent = &percent
 
-	// Auto-update status when reaching 100%
-	if percent == 100 && project.Status == domain.ProjectStatusActive {
-		project.Status = domain.ProjectStatusCompleted
+	// Auto-transition to completed phase when reaching 100%
+	if percent == 100 && project.Phase.IsActivePhase() {
+		project.Phase = domain.ProjectPhaseCompleted
 	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
@@ -938,61 +888,12 @@ func (s *ProjectService) checkProjectPermission(ctx context.Context, project *do
 	return ErrProjectNotManager
 }
 
-// isValidStatusTransition validates project status transitions
-func (s *ProjectService) isValidStatusTransition(from, to domain.ProjectStatus) bool {
-	// Define valid transitions
-	validTransitions := map[domain.ProjectStatus][]domain.ProjectStatus{
-		domain.ProjectStatusPlanning: {
-			domain.ProjectStatusActive,
-			domain.ProjectStatusOnHold,
-			domain.ProjectStatusCancelled,
-		},
-		domain.ProjectStatusActive: {
-			domain.ProjectStatusOnHold,
-			domain.ProjectStatusCompleted,
-			domain.ProjectStatusCancelled,
-		},
-		domain.ProjectStatusOnHold: {
-			domain.ProjectStatusActive,
-			domain.ProjectStatusCancelled,
-			domain.ProjectStatusPlanning,
-		},
-		domain.ProjectStatusCompleted: {
-			// Terminal state - no transitions allowed
-		},
-		domain.ProjectStatusCancelled: {
-			// Terminal state - no transitions allowed
-		},
-	}
-
-	// Same status is always valid
-	if from == to {
-		return true
-	}
-
-	allowed, exists := validTransitions[from]
-	if !exists {
-		return false
-	}
-
-	for _, validTo := range allowed {
-		if validTo == to {
-			return true
-		}
-	}
-
-	return false
-}
-
 // trackChanges creates a summary of changes between the project and update request
 func (s *ProjectService) trackChanges(project *domain.Project, req *domain.UpdateProjectRequest) string {
 	var changes []string
 
 	if project.Name != req.Name {
 		changes = append(changes, fmt.Sprintf("name: '%s' -> '%s'", project.Name, req.Name))
-	}
-	if project.Status != req.Status {
-		changes = append(changes, fmt.Sprintf("status: %s -> %s", project.Status, req.Status))
 	}
 	if project.Value != req.Value {
 		changes = append(changes, fmt.Sprintf("value: %.2f -> %.2f", project.Value, req.Value))
@@ -1154,15 +1055,6 @@ func (s *ProjectService) UpdatePhase(ctx context.Context, id uuid.UUID, phase do
 	oldPhase := project.Phase
 	project.Phase = phase
 
-	// Update status to match phase where appropriate
-	if phase == domain.ProjectPhaseWorking || phase == domain.ProjectPhaseActive {
-		project.Status = domain.ProjectStatusActive
-	} else if phase == domain.ProjectPhaseCancelled {
-		project.Status = domain.ProjectStatusCancelled
-	} else if phase == domain.ProjectPhaseCompleted {
-		project.Status = domain.ProjectStatusCompleted
-	}
-
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project phase: %w", err)
 	}
@@ -1256,16 +1148,8 @@ func (s *ProjectService) ReopenProject(ctx context.Context, id uuid.UUID, req *d
 			zap.Time("startDate", project.StartDate))
 	}
 
-	// Update phase and status
+	// Update phase
 	project.Phase = req.TargetPhase
-
-	// Set appropriate status
-	switch req.TargetPhase {
-	case domain.ProjectPhaseTilbud:
-		project.Status = domain.ProjectStatusPlanning
-	case domain.ProjectPhaseWorking:
-		project.Status = domain.ProjectStatusActive
-	}
 
 	// Save project
 	if err := s.projectRepo.Update(ctx, project); err != nil {

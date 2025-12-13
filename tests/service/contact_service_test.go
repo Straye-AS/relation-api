@@ -72,7 +72,7 @@ func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer) *do
 		CustomerID:   customer.ID,
 		CustomerName: customer.Name,
 		CompanyID:    domain.CompanyStalbygg,
-		Status:       domain.ProjectStatusActive,
+		Phase:        domain.ProjectPhaseActive,
 		StartDate:    startDate,
 		Value:        500000,
 		Cost:         400000,

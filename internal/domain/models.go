@@ -256,17 +256,6 @@ func (DealStageHistory) TableName() string {
 	return "deal_stage_history"
 }
 
-// ProjectStatus represents the status of a project
-type ProjectStatus string
-
-const (
-	ProjectStatusPlanning  ProjectStatus = "planning"
-	ProjectStatusActive    ProjectStatus = "active"
-	ProjectStatusOnHold    ProjectStatus = "on_hold"
-	ProjectStatusCompleted ProjectStatus = "completed"
-	ProjectStatusCancelled ProjectStatus = "cancelled"
-)
-
 // ProjectHealth represents the health status of a project
 type ProjectHealth string
 
@@ -373,7 +362,6 @@ type Project struct {
 	Customer                *Customer      `gorm:"foreignKey:CustomerID"`
 	CustomerName            string         `gorm:"type:varchar(200)"`
 	CompanyID               CompanyID      `gorm:"type:varchar(50);not null;index"`
-	Status                  ProjectStatus  `gorm:"type:varchar(50);not null;index"`
 	Phase                   ProjectPhase   `gorm:"type:project_phase;not null;default:'tilbud';index"`
 	StartDate               time.Time      `gorm:"type:date"`
 	EndDate                 *time.Time     `gorm:"type:date"`

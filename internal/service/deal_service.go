@@ -411,7 +411,6 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 			CustomerID:   deal.CustomerID,
 			CustomerName: deal.CustomerName,
 			CompanyID:    deal.CompanyID,
-			Status:       domain.ProjectStatusPlanning,
 			StartDate:    closeDate,
 			Value:        budget,
 			ManagerID:    &managerID,

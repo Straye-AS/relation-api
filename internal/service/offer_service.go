@@ -666,7 +666,6 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				CustomerID:   offer.CustomerID,
 				CustomerName: offer.CustomerName,
 				CompanyID:    offer.CompanyID,
-				Status:       domain.ProjectStatusPlanning,
 				StartDate:    time.Now(),
 				Value:        offer.Value,
 				Cost:         offer.Cost,
@@ -1655,7 +1654,6 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		CustomerID:   offer.CustomerID,
 		CustomerName: offer.CustomerName,
 		CompanyID:    offer.CompanyID,
-		Status:       domain.ProjectStatusPlanning,
 		Phase:        domain.ProjectPhaseTilbud,
 		StartDate:    time.Now(),
 		Value:        offer.Value, // Initial value from offer
