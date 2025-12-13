@@ -1410,7 +1410,8 @@ type UpdateProjectPhaseRequest struct {
 
 // UpdateProjectManagerRequest for updating project manager
 type UpdateProjectManagerRequest struct {
-	ManagerID string `json:"managerId" validate:"max=100"`
+	ManagerID   string `json:"managerId" validate:"max=100"`
+	ManagerName string `json:"managerName" validate:"max=200"`
 }
 
 // UpdateProjectDatesRequest for updating project start and end dates

@@ -656,7 +656,7 @@ func (h *ProjectHandler) UpdateManager(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project, err := h.projectService.UpdateManager(r.Context(), id, req.ManagerID)
+	project, err := h.projectService.UpdateManager(r.Context(), id, req.ManagerID, req.ManagerName)
 	if err != nil {
 		h.handleProjectError(w, err)
 		return
