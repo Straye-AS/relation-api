@@ -12146,6 +12146,10 @@
                 "inheritedOfferNumber": {
                     "type": "string"
                 },
+                "invoiced": {
+                    "description": "Amount invoiced to customer (hittil fakturert)",
+                    "type": "number"
+                },
                 "isEconomicsEditable": {
                     "type": "boolean"
                 },
@@ -12310,6 +12314,10 @@
                 },
                 "inheritedOfferNumber": {
                     "type": "string"
+                },
+                "invoiced": {
+                    "description": "Amount invoiced to customer (hittil fakturert)",
+                    "type": "number"
                 },
                 "isEconomicsEditable": {
                     "type": "boolean"
