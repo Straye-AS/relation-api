@@ -684,6 +684,12 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Project must be in tilbud phase to win an offer")
 	case errors.Is(err, service.ErrOfferCannotClone):
 		respondWithError(w, http.StatusBadRequest, "Cannot clone this offer")
+	case errors.Is(err, service.ErrOfferMissingResponsible):
+		respondWithError(w, http.StatusBadRequest, "Offer must have a responsible user or company with default responsible user to advance to in_progress")
+	case errors.Is(err, service.ErrInvalidCompanyID):
+		respondWithError(w, http.StatusBadRequest, "Invalid company ID")
+	case errors.Is(err, service.ErrOfferNumberGenerationFailed):
+		respondWithError(w, http.StatusInternalServerError, "Failed to generate offer number")
 	case errors.Is(err, service.ErrProjectCreationFailed):
 		respondWithError(w, http.StatusInternalServerError, "Failed to create project from offer")
 	case errors.Is(err, service.ErrCustomerNotFound):
