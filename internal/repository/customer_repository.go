@@ -491,12 +491,14 @@ func (r *CustomerRepository) FuzzySearchBestMatch(ctx context.Context, query str
 }
 
 // GetAllMinimal returns all active customers with minimal fields (id and name)
+// Limited to 1000 results to prevent unbounded queries
 func (r *CustomerRepository) GetAllMinimal(ctx context.Context) ([]domain.Customer, error) {
 	var customers []domain.Customer
 	err := r.db.WithContext(ctx).
 		Select("id, name").
 		Where("status != ?", domain.CustomerStatusInactive).
 		Order("name ASC").
+		Limit(1000).
 		Find(&customers).Error
 	return customers, err
 }

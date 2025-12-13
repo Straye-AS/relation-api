@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -127,6 +128,14 @@ func (h *CustomerHandler) FuzzySearch(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.customerService.FuzzySearchBestMatch(r.Context(), query)
 	if err != nil {
+		// Check for validation errors (400) vs internal errors (500)
+		if strings.Contains(err.Error(), "query too long") {
+			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+				Error:   "Bad Request",
+				Message: err.Error(),
+			})
+			return
+		}
 		h.logger.Error("failed to fuzzy search customer", zap.Error(err), zap.String("query", query))
 		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
 			Error:   "Internal Server Error",

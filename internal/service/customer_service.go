@@ -495,8 +495,13 @@ func (s *CustomerService) ListWithFilters(ctx context.Context, page, pageSize in
 // FuzzySearchBestMatch finds the single best matching customer for a query
 // Uses multiple matching strategies including exact, prefix, contains, and trigram similarity
 // Returns the best match with a confidence score
-// Special case: query "all" returns all customers
+// Special case: query "all" returns all customers (limited to 1000)
 func (s *CustomerService) FuzzySearchBestMatch(ctx context.Context, query string) (*domain.FuzzyCustomerSearchResponse, error) {
+	// Validate query length (max 200 characters)
+	if len(query) > 200 {
+		return nil, fmt.Errorf("query too long: maximum 200 characters allowed")
+	}
+
 	// Special case: return all customers when query is "all"
 	if strings.ToLower(strings.TrimSpace(query)) == "all" {
 		customers, err := s.customerRepo.GetAllMinimal(ctx)
