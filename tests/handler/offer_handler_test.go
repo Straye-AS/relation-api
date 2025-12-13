@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -23,7 +25,7 @@ import (
 )
 
 func setupOfferHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -36,22 +38,24 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 	offerItemRepo := repository.NewOfferItemRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
-	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
-	companyRepo := repository.NewCompanyRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
-	companyService := service.NewCompanyService(companyRepo, logger)
+	companyService := service.NewCompanyService(logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
 	offerService := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
 		customerRepo,
 		projectRepo,
-		budgetDimensionRepo,
+		budgetItemRepo,
 		fileRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		logger,
 		db,
 	)
@@ -69,7 +73,12 @@ func createOfferTestContext() context.Context {
 	return auth.WithUserContext(context.Background(), userCtx)
 }
 
+// testOfferCounter is used to generate unique offer numbers for tests
+var testOfferCounter int64
+
 func createTestOffer(t *testing.T, db *gorm.DB, customer *domain.Customer, phase domain.OfferPhase) *domain.Offer {
+	testOfferCounter++
+
 	offer := &domain.Offer{
 		Title:        "Test Offer",
 		CustomerID:   customer.ID,
@@ -80,6 +89,13 @@ func createTestOffer(t *testing.T, db *gorm.DB, customer *domain.Customer, phase
 		Probability:  50,
 		Value:        100000,
 	}
+
+	// For non-draft offers, we need a unique offer number due to the unique constraint
+	// idx_offers_company_offer_number ON offers(company_id, offer_number) WHERE offer_number IS NOT NULL
+	if phase != domain.OfferPhaseDraft {
+		offer.OfferNumber = fmt.Sprintf("TEST-%d-%d", time.Now().UnixNano(), testOfferCounter)
+	}
+
 	err := db.Create(offer).Error
 	require.NoError(t, err)
 	return offer
@@ -627,10 +643,10 @@ func TestOfferHandler_Clone(t *testing.T) {
 	t.Run("clone offer with new title", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
 
-		includeDimensions := true
+		includeBudget := true
 		reqBody := domain.CloneOfferRequest{
-			NewTitle:          "Cloned Offer",
-			IncludeDimensions: &includeDimensions,
+			NewTitle:      "Cloned Offer",
+			IncludeBudget: &includeBudget,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -655,9 +671,9 @@ func TestOfferHandler_Clone(t *testing.T) {
 	t.Run("clone offer without title uses default", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseDraft)
 
-		includeDimensions := true
+		includeBudget := true
 		reqBody := domain.CloneOfferRequest{
-			IncludeDimensions: &includeDimensions,
+			IncludeBudget: &includeBudget,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -741,8 +757,8 @@ func TestOfferHandler_GetBudgetSummary(t *testing.T) {
 	})
 }
 
-// TestOfferHandler_GetWithBudgetDimensions tests the GetWithBudgetDimensions endpoint
-func TestOfferHandler_GetWithBudgetDimensions(t *testing.T) {
+// TestOfferHandler_GetWithBudgetItems tests the GetWithBudgetItems endpoint
+func TestOfferHandler_GetWithBudgetItems(t *testing.T) {
 	db := setupOfferHandlerTestDB(t)
 	h := createOfferHandler(t, db)
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
@@ -755,7 +771,7 @@ func TestOfferHandler_GetWithBudgetDimensions(t *testing.T) {
 		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
 
 		rr := httptest.NewRecorder()
-		h.GetWithBudgetDimensions(rr, req)
+		h.GetWithBudgetItems(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -770,7 +786,7 @@ func TestOfferHandler_GetWithBudgetDimensions(t *testing.T) {
 		req = req.WithContext(withChiContext(ctx, map[string]string{"id": uuid.New().String()}))
 
 		rr := httptest.NewRecorder()
-		h.GetWithBudgetDimensions(rr, req)
+		h.GetWithBudgetItems(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})

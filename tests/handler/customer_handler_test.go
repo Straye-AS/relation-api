@@ -23,7 +23,8 @@ import (
 )
 
 func setupCustomerHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	// Use clean DB to ensure test isolation for handler tests
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -35,11 +36,23 @@ func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	contactRepo := repository.NewContactRepository(db)
+	offerRepo := repository.NewOfferRepository(db)
+	offerItemRepo := repository.NewOfferItemRepository(db)
+	projectRepo := repository.NewProjectRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	companyRepo := repository.NewCompanyRepository(db)
+	userRepo := repository.NewUserRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	customerService := service.NewCustomerService(customerRepo, activityRepo, logger)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, logger)
+	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, companyService, numberSequenceService, logger, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetItemRepo, activityRepo, companyService, numberSequenceService, logger, db)
 
-	return handler.NewCustomerHandler(customerService, contactService, logger)
+	return handler.NewCustomerHandler(customerService, contactService, offerService, projectService, logger)
 }
 
 func createCustomerTestContext() context.Context {
@@ -159,7 +172,7 @@ func TestCustomerHandler_List(t *testing.T) {
 	})
 
 	t.Run("list with sort by name asc", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/customers?sortBy=name_asc", nil)
+		req := httptest.NewRequest(http.MethodGet, "/customers?sortBy=name&sortOrder=asc", nil)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
@@ -522,14 +535,16 @@ func TestCustomerHandler_Delete(t *testing.T) {
 
 		// Create an active project for this customer
 		userCtx, _ := auth.FromContext(ctx)
+		managerID := userCtx.UserID.String()
 		project := &domain.Project{
 			Name:         "Active Project",
 			CustomerID:   customer.ID,
 			CustomerName: customer.Name,
 			CompanyID:    domain.CompanyStalbygg,
 			Status:       domain.ProjectStatusActive,
-			ManagerID:    userCtx.UserID.String(),
-			Budget:       100000,
+			ManagerID:    &managerID,
+			Value:        100000,
+			Cost:         80000,
 		}
 		err := db.Create(project).Error
 		require.NoError(t, err)
@@ -562,7 +577,7 @@ func TestCustomerHandler_ListContacts(t *testing.T) {
 	// Create a test customer
 	customer := testutil.CreateTestCustomer(t, db, "Customer With Contacts")
 
-	// Create some contacts for the customer
+	// Create some contacts and link them to the customer via ContactRelationship
 	contacts := []domain.Contact{
 		{
 			FirstName:         "John",
@@ -579,8 +594,20 @@ func TestCustomerHandler_ListContacts(t *testing.T) {
 			IsActive:          true,
 		},
 	}
-	for _, c := range contacts {
-		err := db.Create(&c).Error
+	for i := range contacts {
+		err := db.Create(&contacts[i]).Error
+		require.NoError(t, err)
+
+		// Create a ContactRelationship to link the contact to the customer
+		// The ListByCustomer endpoint uses ContactRelationship, not PrimaryCustomerID
+		rel := domain.ContactRelationship{
+			ContactID:  contacts[i].ID,
+			EntityType: domain.ContactEntityCustomer,
+			EntityID:   customer.ID,
+			Role:       "Contact",
+			IsPrimary:  i == 0, // First contact is primary
+		}
+		err = db.Create(&rel).Error
 		require.NoError(t, err)
 	}
 

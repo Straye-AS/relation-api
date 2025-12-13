@@ -22,7 +22,7 @@ import (
 )
 
 func setupNotificationHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})

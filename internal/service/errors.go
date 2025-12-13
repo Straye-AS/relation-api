@@ -93,4 +93,62 @@ var (
 
 	// ErrProjectNotFound is returned when a project is not found
 	ErrProjectNotFound = errors.New("project not found")
+
+	// ErrInvalidCompanyID is returned when an invalid company ID is provided
+	ErrInvalidCompanyID = errors.New("invalid company ID")
+
+	// ErrOfferNumberGenerationFailed is returned when offer number generation fails
+	ErrOfferNumberGenerationFailed = errors.New("failed to generate offer number")
+
+	// ErrOfferNumberConflict is returned when an offer number already exists
+	ErrOfferNumberConflict = errors.New("offer number already exists")
+
+	// ErrExternalReferenceConflict is returned when an external reference already exists within a company
+	ErrExternalReferenceConflict = errors.New("external reference already exists for this company")
+
+	// ErrDraftOfferCannotHaveNumber is returned when trying to set an offer number on a draft offer
+	ErrDraftOfferCannotHaveNumber = errors.New("draft offers cannot have an offer number")
+
+	// ErrNonDraftOfferMustHaveNumber is returned when a non-draft offer is missing an offer number
+	ErrNonDraftOfferMustHaveNumber = errors.New("non-draft offers must have an offer number")
+
+	// ErrExpirationDateBeforeSentDate is returned when the expiration date is before the sent date
+	ErrExpirationDateBeforeSentDate = errors.New("expiration date cannot be before sent date")
+
+	// Project Phase errors
+
+	// ErrOfferNotInProject is returned when trying to win an offer that is not linked to a project
+	ErrOfferNotInProject = errors.New("offer must be linked to a project to be won through this endpoint")
+
+	// ErrOfferAlreadyWon is returned when trying to win an offer that is already won
+	ErrOfferAlreadyWon = errors.New("offer is already won")
+
+	// ErrProjectNotInTilbudPhase is returned when trying to win an offer for a project not in tilbud phase
+	ErrProjectNotInTilbudPhase = errors.New("project must be in tilbud phase to win an offer")
+
+	// ErrProjectEconomicsNotEditable is returned when trying to edit economics for a project not in active phase
+	ErrProjectEconomicsNotEditable = errors.New("project economics can only be edited during active phase")
+
+	// Offer-Project lifecycle errors
+
+	// ErrNonDraftOfferRequiresProject is returned when trying to create/update a non-draft offer without a project
+	ErrNonDraftOfferRequiresProject = errors.New("non-draft offers must be linked to a project")
+
+	// ErrCannotAddOfferToCancelledProject is returned when trying to add an offer to a cancelled project
+	ErrCannotAddOfferToCancelledProject = errors.New("cannot add offer to cancelled project")
+
+	// ErrProjectCustomerMismatch is returned when project and offer have different customers
+	ErrProjectCustomerMismatch = errors.New("project customer does not match offer customer")
+
+	// ErrProjectCompanyMismatch is returned when project and offer have different companies
+	ErrProjectCompanyMismatch = errors.New("project company does not match offer company")
+
+	// ErrCannotChangeOfferCustomerWhenLinked is returned when trying to change customer of a linked offer
+	ErrCannotChangeOfferCustomerWhenLinked = errors.New("cannot change customer of offer linked to project")
+
+	// ErrCannotChangeOfferCompanyWhenLinked is returned when trying to change company of a linked offer
+	ErrCannotChangeOfferCompanyWhenLinked = errors.New("cannot change company of offer linked to project")
+
+	// ErrNoActiveOffersRemaining is returned when no active offers remain after losing an offer
+	ErrNoActiveOffersRemaining = errors.New("no active offers remaining in project")
 )

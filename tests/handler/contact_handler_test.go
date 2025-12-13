@@ -23,7 +23,7 @@ import (
 )
 
 func setupContactHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -387,10 +387,11 @@ func TestContactHandler_DeleteContact(t *testing.T) {
 
 		assert.Equal(t, http.StatusNoContent, rr.Code)
 
-		// Verify deleted
+		// Verify soft-deleted (is_active = false)
 		var found domain.Contact
 		err := db.Where("id = ?", contact.ID).First(&found).Error
-		assert.Error(t, err)
+		assert.NoError(t, err)
+		assert.False(t, found.IsActive, "contact should be soft-deleted (is_active = false)")
 	})
 
 	t.Run("delete with invalid ID", func(t *testing.T) {

@@ -36,7 +36,7 @@ type Router struct {
 	companyHandler          *handler.CompanyHandler
 	auditHandler            *handler.AuditHandler
 	contactHandler          *handler.ContactHandler
-	budgetDimensionHandler  *handler.BudgetDimensionHandler
+	budgetItemHandler       *handler.BudgetItemHandler
 	notificationHandler     *handler.NotificationHandler
 	activityHandler         *handler.ActivityHandler
 }
@@ -60,7 +60,7 @@ func NewRouter(
 	companyHandler *handler.CompanyHandler,
 	auditHandler *handler.AuditHandler,
 	contactHandler *handler.ContactHandler,
-	budgetDimensionHandler *handler.BudgetDimensionHandler,
+	budgetItemHandler *handler.BudgetItemHandler,
 	notificationHandler *handler.NotificationHandler,
 	activityHandler *handler.ActivityHandler,
 ) *Router {
@@ -83,7 +83,7 @@ func NewRouter(
 		companyHandler:          companyHandler,
 		auditHandler:            auditHandler,
 		contactHandler:          contactHandler,
-		budgetDimensionHandler:  budgetDimensionHandler,
+		budgetItemHandler:       budgetItemHandler,
 		notificationHandler:     notificationHandler,
 		activityHandler:         activityHandler,
 	}
@@ -221,6 +221,22 @@ func (rt *Router) Setup() http.Handler {
 				r.Delete("/{id}", rt.customerHandler.Delete)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Post("/{id}/contacts", rt.customerHandler.CreateContact)
+				r.Get("/{id}/offers", rt.customerHandler.ListOffers)
+				r.Get("/{id}/projects", rt.customerHandler.ListProjects)
+
+				// Individual property update endpoints
+				r.Put("/{id}/status", rt.customerHandler.UpdateStatus)
+				r.Put("/{id}/tier", rt.customerHandler.UpdateTier)
+				r.Put("/{id}/industry", rt.customerHandler.UpdateIndustry)
+				r.Put("/{id}/notes", rt.customerHandler.UpdateNotes)
+				r.Put("/{id}/company", rt.customerHandler.UpdateCompany)
+				r.Put("/{id}/customer-class", rt.customerHandler.UpdateCustomerClass)
+				r.Put("/{id}/credit-limit", rt.customerHandler.UpdateCreditLimit)
+				r.Put("/{id}/is-internal", rt.customerHandler.UpdateIsInternal)
+				r.Put("/{id}/address", rt.customerHandler.UpdateAddress)
+				r.Put("/{id}/contact-info", rt.customerHandler.UpdateContactInfo)
+				r.Put("/{id}/postal-code", rt.customerHandler.UpdatePostalCode)
+				r.Put("/{id}/city", rt.customerHandler.UpdateCity)
 			})
 
 			// Contacts
@@ -244,8 +260,26 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/status", rt.projectHandler.UpdateStatus)
 				r.Get("/{id}/budget", rt.projectHandler.GetBudget)
 				r.Post("/{id}/inherit-budget", rt.projectHandler.InheritBudget)
+				r.Post("/{id}/resync-from-offer", rt.projectHandler.ResyncFromBestOffer)
+				r.Post("/{id}/reopen", rt.projectHandler.ReopenProject) // Reopen completed/cancelled project
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
+				r.Get("/{id}/offers", rt.projectHandler.GetProjectOffers) // List offers in project (offer folder model)
+
+				// Individual property update endpoints
+				r.Put("/{id}/name", rt.projectHandler.UpdateName)
+				r.Put("/{id}/description", rt.projectHandler.UpdateDescription)
+				r.Put("/{id}/phase", rt.projectHandler.UpdatePhase)
+				r.Put("/{id}/manager", rt.projectHandler.UpdateManager)
+				r.Put("/{id}/dates", rt.projectHandler.UpdateDates)
+				r.Put("/{id}/budget", rt.projectHandler.UpdateBudget)
+				r.Put("/{id}/spent", rt.projectHandler.UpdateSpent)
+				r.Put("/{id}/team-members", rt.projectHandler.UpdateTeamMembers)
+				r.Put("/{id}/health", rt.projectHandler.UpdateHealthEndpoint)
+				r.Put("/{id}/completion", rt.projectHandler.UpdateCompletionPercent)
+				r.Put("/{id}/estimated-completion-date", rt.projectHandler.UpdateEstimatedCompletionDate)
+				r.Put("/{id}/project-number", rt.projectHandler.UpdateProjectNumber)
+				r.Put("/{id}/company", rt.projectHandler.UpdateCompany)
 			})
 
 			// Inquiries (draft offers)
@@ -261,6 +295,7 @@ func (rt *Router) Setup() http.Handler {
 			r.Route("/offers", func(r chi.Router) {
 				r.Get("/", rt.offerHandler.List)
 				r.Post("/", rt.offerHandler.Create)
+				r.Get("/next-number", rt.offerHandler.GetNextNumber) // Must be before /{id} to avoid path conflict
 				r.Get("/{id}", rt.offerHandler.GetByID)
 				r.Put("/{id}", rt.offerHandler.Update)
 				r.Delete("/{id}", rt.offerHandler.Delete)
@@ -270,6 +305,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/send", rt.offerHandler.Send)
 				r.Post("/{id}/accept", rt.offerHandler.Accept)
 				r.Post("/{id}/reject", rt.offerHandler.Reject)
+				r.Post("/{id}/win", rt.offerHandler.Win) // Win offer within project (offer folder model)
 				r.Post("/{id}/clone", rt.offerHandler.Clone)
 
 				// Individual property update endpoints
@@ -279,9 +315,13 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/customer", rt.offerHandler.UpdateCustomer)
 				r.Put("/{id}/value", rt.offerHandler.UpdateValue)
 				r.Put("/{id}/due-date", rt.offerHandler.UpdateDueDate)
+				r.Put("/{id}/expiration-date", rt.offerHandler.UpdateExpirationDate)
 				r.Put("/{id}/description", rt.offerHandler.UpdateDescription)
 				r.Put("/{id}/project", rt.offerHandler.LinkToProject)
 				r.Delete("/{id}/project", rt.offerHandler.UnlinkFromProject)
+				r.Put("/{id}/customer-has-won-project", rt.offerHandler.UpdateCustomerHasWonProject)
+				r.Put("/{id}/offer-number", rt.offerHandler.UpdateOfferNumber)
+				r.Put("/{id}/external-reference", rt.offerHandler.UpdateExternalReference)
 
 				// Sub-resources
 				r.Get("/{id}/items", rt.offerHandler.GetItems)
@@ -290,16 +330,16 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/activities", rt.offerHandler.GetActivities)
 
 				// Budget endpoints
-				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetDimensions)
-				r.Get("/{id}/budget", rt.budgetDimensionHandler.GetOfferBudgetWithDimensions)
+				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetItems)
+				r.Get("/{id}/budget", rt.budgetItemHandler.GetOfferBudgetWithDimensions)
 				r.Post("/{id}/recalculate", rt.offerHandler.RecalculateTotals)
 
-				// Budget dimension sub-resources
-				r.Get("/{id}/budget/dimensions", rt.budgetDimensionHandler.ListOfferDimensions)
-				r.Post("/{id}/budget/dimensions", rt.budgetDimensionHandler.AddToOffer)
-				r.Put("/{id}/budget/dimensions/{dimensionId}", rt.budgetDimensionHandler.UpdateOfferDimension)
-				r.Delete("/{id}/budget/dimensions/{dimensionId}", rt.budgetDimensionHandler.DeleteOfferDimension)
-				r.Put("/{id}/budget/reorder", rt.budgetDimensionHandler.ReorderOfferDimensions)
+				// Budget item sub-resources
+				r.Get("/{id}/budget/dimensions", rt.budgetItemHandler.ListOfferDimensions)
+				r.Post("/{id}/budget/dimensions", rt.budgetItemHandler.AddToOffer)
+				r.Put("/{id}/budget/dimensions/{dimensionId}", rt.budgetItemHandler.UpdateOfferDimension)
+				r.Delete("/{id}/budget/dimensions/{dimensionId}", rt.budgetItemHandler.DeleteOfferDimension)
+				r.Put("/{id}/budget/reorder", rt.budgetItemHandler.ReorderOfferDimensions)
 			})
 
 			// Deals

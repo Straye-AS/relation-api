@@ -18,6 +18,8 @@ import (
 // ErrDuplicateContactEmail is returned when trying to create a contact with an existing email
 var ErrDuplicateContactEmail = errors.New("contact with this email already exists")
 
+// Note: ErrInvalidEmailFormat and emailRegex are defined in customer_service.go
+
 type ContactService struct {
 	contactRepo  *repository.ContactRepository
 	customerRepo *repository.CustomerRepository
@@ -40,8 +42,13 @@ func NewContactService(
 }
 
 func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRequest) (*domain.ContactDTO, error) {
-	// Check for duplicate email if provided
+	// Validate email format if provided
 	if req.Email != "" {
+		if !emailRegex.MatchString(req.Email) {
+			return nil, ErrInvalidEmailFormat
+		}
+
+		// Check for duplicate email
 		existing, err := s.contactRepo.GetByEmail(ctx, req.Email)
 		if err == nil && existing != nil {
 			return nil, ErrDuplicateContactEmail
@@ -115,6 +122,9 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 func (s *ContactService) GetByID(ctx context.Context, id uuid.UUID) (*domain.ContactDTO, error) {
 	contact, err := s.contactRepo.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("contact not found: %w", err)
+		}
 		return nil, fmt.Errorf("failed to get contact: %w", err)
 	}
 

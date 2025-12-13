@@ -2088,16 +2088,30 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "name_asc",
-                            "name_desc",
-                            "created_desc",
-                            "created_asc",
-                            "city_asc",
-                            "city_desc"
+                            "createdAt",
+                            "updatedAt",
+                            "name",
+                            "city",
+                            "country",
+                            "status",
+                            "tier",
+                            "industry",
+                            "orgNumber"
                         ],
                         "type": "string",
-                        "description": "Sort option",
+                        "description": "Sort field",
                         "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
                         "in": "query"
                     }
                 ],
@@ -2455,6 +2469,302 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/address": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the address fields of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer address",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Address data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerAddressRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/city": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the city of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer city",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "City data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerCityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/company": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Assign or unassign a customer to/from a company",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer company assignment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Company data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerCompanyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/contact-info": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the contact person, email, and phone of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer contact information",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Contact info data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerContactInfoRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers/{id}/contacts": {
             "get": {
                 "security": [
@@ -2589,6 +2899,872 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/credit-limit": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the credit limit of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer credit limit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Credit limit data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerCreditLimitRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/customer-class": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the customer class",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer class",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Customer class data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerClassRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/industry": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the industry of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer industry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Industry data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerIndustryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/is-internal": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the internal flag of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer internal flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Internal flag data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerIsInternalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/notes": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the notes of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer notes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Notes data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerNotesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/offers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get paginated list of offers associated with a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List offers for a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page (max 200)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "draft",
+                            "in_progress",
+                            "sent",
+                            "won",
+                            "lost",
+                            "expired"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "title",
+                            "value",
+                            "probability",
+                            "phase",
+                            "status",
+                            "dueDate",
+                            "customerName"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.OfferDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/postal-code": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the postal code of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer postal code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Postal code data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerPostalCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/projects": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get paginated list of projects associated with a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List projects for a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page (max 200)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "completed",
+                            "cancelled",
+                            "on_hold"
+                        ],
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "tilbud",
+                            "active",
+                            "working",
+                            "completed",
+                            "cancelled"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "name",
+                            "status",
+                            "phase",
+                            "health",
+                            "budget",
+                            "spent",
+                            "startDate",
+                            "endDate",
+                            "customerName",
+                            "wonAt"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.ProjectDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the status of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/tier": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the tier of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer tier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tier data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerTierRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/dashboard/metrics": {
             "get": {
                 "security": [
@@ -2599,7 +3775,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns dashboard metrics using a rolling 12-month window. All metrics exclude draft and expired offers.\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers (in_progress, sent)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in 12-month window\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** 12-month window, limit 10 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
+                "description": "Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.\n\n**IMPORTANT: Aggregation Logic (Avoids Double-Counting)**\nWhen a project has multiple offers, only the highest value offer per phase is counted.\nOrphan offers (without project) are included at full value.\nExample: Project A has offers 23M and 25M in \"sent\" phase - totalValue shows 25M, not 48M.\n\n**Time Range Options:**\n- ` + "`" + `rolling12months` + "`" + ` (default): Uses a rolling 12-month window from the current date\n- ` + "`" + `allTime` + "`" + `: Calculates metrics without any date filter\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `totalProjectCount` + "`" + `: Count of unique projects with offers (excludes orphan offers)\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers - best per project (avoids double-counting)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- ` + "`" + `count` + "`" + `: Total offer count in phase\n- ` + "`" + `projectCount` + "`" + `: Unique projects in phase (excludes orphan offers)\n- ` + "`" + `totalValue` + "`" + `: Sum of best offer value per project (avoids double-counting)\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in the time range\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** Limit 5 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
                 "produces": [
                     "application/json"
                 ],
@@ -2607,11 +3783,30 @@ const docTemplate = `{
                     "Dashboard"
                 ],
                 "summary": "Get dashboard metrics",
+                "parameters": [
+                    {
+                        "enum": [
+                            "rolling12months",
+                            "allTime"
+                        ],
+                        "type": "string",
+                        "default": "rolling12months",
+                        "description": "Time range for metrics",
+                        "name": "timeRange",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.DashboardMetrics"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid timeRange value",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4147,6 +5342,34 @@ const docTemplate = `{
                         "description": "Filter by phase",
                         "name": "phase",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "title",
+                            "value",
+                            "probability",
+                            "phase",
+                            "status",
+                            "dueDate",
+                            "customerName"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4193,6 +5416,63 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/next-number": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a preview of what the next offer number would be for a company without consuming the sequence. Useful for UI display.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get next offer number preview",
+                "parameters": [
+                    {
+                        "enum": [
+                            "gruppen",
+                            "stalbygg",
+                            "hybridbygg",
+                            "industri",
+                            "tak",
+                            "montasje"
+                        ],
+                        "type": "string",
+                        "description": "Company ID",
+                        "name": "companyId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.NextOfferNumberResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid or missing company ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -4493,19 +5773,20 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get the complete budget breakdown for an offer including all dimensions and summary",
+                "description": "Get budget summary and all budget items for an offer",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Offer Budget"
+                    "offers",
+                    "budget"
                 ],
-                "summary": "Get offer budget breakdown",
+                "summary": "Get offer budget with items",
                 "parameters": [
                     {
                         "type": "string",
@@ -4517,27 +5798,28 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Budget breakdown with dimensions and summary",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handler.OfferBudgetResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Invalid offer ID",
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "404": {
-                        "description": "Offer not found",
+                        "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4548,19 +5830,20 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all budget dimensions for a specific offer with pagination",
+                "description": "Get all budget items belonging to a specific offer",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Offer Budget"
+                    "offers",
+                    "budget"
                 ],
-                "summary": "List offer budget dimensions",
+                "summary": "List budget items for an offer",
                 "parameters": [
                     {
                         "type": "string",
@@ -4568,39 +5851,34 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Page size",
-                        "name": "pageSize",
-                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of budget dimensions",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.PaginatedResponse"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.BudgetItemDTO"
+                            }
                         }
                     },
                     "400": {
-                        "description": "Invalid offer ID",
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4609,12 +5887,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Add a new budget dimension to an offer. Either categoryId or customName must be provided.",
+                "description": "Add a new budget item to a specific offer",
                 "consumes": [
                     "application/json"
                 ],
@@ -4622,9 +5897,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Offer Budget"
+                    "offers",
+                    "budget"
                 ],
-                "summary": "Add budget dimension to offer",
+                "summary": "Add budget item to offer",
                 "parameters": [
                     {
                         "type": "string",
@@ -4634,38 +5910,38 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Dimension data",
+                        "description": "Budget item details",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.AddOfferBudgetDimensionRequest"
+                            "$ref": "#/definitions/domain.AddOfferBudgetItemRequest"
                         }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created budget dimension",
+                        "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                            "$ref": "#/definitions/domain.BudgetItemDTO"
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "404": {
-                        "description": "Offer not found",
+                        "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4676,12 +5952,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an existing budget dimension for an offer",
+                "description": "Update a budget item belonging to a specific offer",
                 "consumes": [
                     "application/json"
                 ],
@@ -4689,9 +5962,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Offer Budget"
+                    "offers",
+                    "budget"
                 ],
-                "summary": "Update offer budget dimension",
+                "summary": "Update offer budget item",
                 "parameters": [
                     {
                         "type": "string",
@@ -4702,44 +5976,44 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Dimension ID",
+                        "description": "Budget Item ID",
                         "name": "dimensionId",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Dimension data",
+                        "description": "Updated budget item details",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.UpdateBudgetDimensionRequest"
+                            "$ref": "#/definitions/domain.UpdateBudgetItemRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Updated budget dimension",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                            "$ref": "#/definitions/domain.BudgetItemDTO"
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "404": {
-                        "description": "Dimension not found",
+                        "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4748,16 +6022,20 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a budget dimension from an offer",
-                "tags": [
-                    "Offer Budget"
+                "description": "Delete a budget item from a specific offer",
+                "consumes": [
+                    "application/json"
                 ],
-                "summary": "Delete offer budget dimension",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "offers",
+                    "budget"
+                ],
+                "summary": "Delete offer budget item",
                 "parameters": [
                     {
                         "type": "string",
@@ -4768,7 +6046,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Dimension ID",
+                        "description": "Budget Item ID",
                         "name": "dimensionId",
                         "in": "path",
                         "required": true
@@ -4779,21 +6057,21 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "Invalid ID",
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "404": {
-                        "description": "Dimension not found",
+                        "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -4804,12 +6082,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Reorder the budget dimensions for an offer. All dimension IDs must be provided.",
+                "description": "Reorder budget items for a specific offer by providing ordered IDs",
                 "consumes": [
                     "application/json"
                 ],
@@ -4817,9 +6092,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Offer Budget"
+                    "offers",
+                    "budget"
                 ],
-                "summary": "Reorder offer budget dimensions",
+                "summary": "Reorder offer budget items",
                 "parameters": [
                     {
                         "type": "string",
@@ -4829,41 +6105,35 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Ordered dimension IDs",
+                        "description": "Ordered list of budget item IDs",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.ReorderDimensionsRequest"
+                            "$ref": "#/definitions/domain.ReorderBudgetItemsRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Reordered budget dimensions",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/domain.BudgetDimensionDTO"
-                            }
-                        }
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
-                        "description": "Invalid request or count mismatch",
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "404": {
-                        "description": "Offer not found",
+                        "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -5003,6 +6273,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/customer-has-won-project": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the flag indicating whether the customer has won their project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update customer has won project flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Customer has won project data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferCustomerHasWonProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or offer closed",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/description": {
             "put": {
                 "security": [
@@ -5080,7 +6417,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get an offer including budget dimensions and summary calculations",
+                "description": "Get an offer including budget items and summary calculations",
                 "produces": [
                     "application/json"
                 ],
@@ -5179,6 +6516,146 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/expiration-date": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the expiration date of a sent offer. Used to extend the validity period for the customer to accept.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer expiration date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Expiration date data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferExpirationDateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID, offer not sent, or invalid date",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/external-reference": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the external/customer reference number. Returns 409 if reference already exists for this company.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update external reference",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "External reference data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferExternalReferenceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "External reference already exists for this company",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -5311,6 +6788,79 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferItemDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/offer-number": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the internal offer number (e.g., \"TK-2025-001\"). Returns 409 if number already exists.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer number",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Offer number data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferNumberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Offer number already exists",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -5881,6 +7431,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/win": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer to won phase within a project context. This also transitions the project from tilbud to active phase, expires sibling offers, and sets the winning offer's number on the project.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Win an offer within a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Win options",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.WinOfferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Won offer with project and expired sibling offers",
+                        "schema": {
+                            "$ref": "#/definitions/domain.WinOfferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, offer not in project, or project not in tilbud phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/projects": {
             "get": {
                 "security": [
@@ -5939,6 +7556,19 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
+                            "tilbud",
+                            "working",
+                            "active",
+                            "completed",
+                            "cancelled"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
                             "on_track",
                             "at_risk",
                             "over_budget"
@@ -5952,6 +7582,37 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Filter by manager ID",
                         "name": "managerId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "name",
+                            "status",
+                            "phase",
+                            "health",
+                            "budget",
+                            "spent",
+                            "startDate",
+                            "endDate",
+                            "customerName",
+                            "wonAt"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
                         "in": "query"
                     }
                 ],
@@ -6410,6 +8071,564 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the budget of a project (only allowed in active phase)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project budget",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Budget data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectBudgetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Cannot edit budget in tilbud phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/company": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the company assignment of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project company",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Company data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectCompanyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/completion": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the completion percentage of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project completion percentage",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Completion percent data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectCompletionPercentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/dates": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the start and end dates of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project dates",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Dates data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectDatesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/description": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the summary and description of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project description",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Description data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectDescriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/estimated-completion-date": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the estimated completion date of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project estimated completion date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Estimated completion date data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectEstimatedCompletionDateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/health": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the health status of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project health",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Health data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectHealthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
             }
         },
         "/projects/{id}/inherit-budget": {
@@ -6492,6 +8711,603 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{id}/manager": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the manager of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project manager",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Manager data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectManagerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/name": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the name of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project name",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectNameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/offers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all offers linked to a project (offer folder model)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Get offers for a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.OfferDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/phase": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the phase of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project phase",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phase data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectPhaseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/project-number": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the project number of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project number",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Project number data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectNumberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/reopen": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reopens a project that was completed or cancelled. Can reopen to tilbud or working phase.\nWhen reopening a project with a winning offer, that offer is reverted to sent phase.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Reopen a completed or cancelled project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reopen configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReopenProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReopenProjectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request, phase transition, or project not in closed state",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/resync-from-offer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Syncs project economics (value, cost, margin) from the best connected offer",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Resync project from best offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated project with synced values",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ResyncFromOfferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or no offers found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/spent": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the spent amount of a project (only allowed in active phase)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project spent amount",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Spent data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectSpentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Cannot edit spent in tilbud phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{id}/status": {
             "put": {
                 "security": [
@@ -6553,6 +9369,86 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "User is not the project manager",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{id}/team-members": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the team members of a project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "Update project team members",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Team members data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateProjectTeamMembersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ProjectDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -6940,20 +9836,12 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.AddOfferBudgetDimensionRequest": {
+        "domain.AddOfferBudgetItemRequest": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
-                "categoryId": {
-                    "type": "string",
-                    "maxLength": 50
-                },
-                "cost": {
-                    "type": "number"
-                },
-                "customName": {
-                    "type": "string",
-                    "maxLength": 200
-                },
                 "description": {
                     "type": "string"
                 },
@@ -6961,24 +9849,26 @@ const docTemplate = `{
                     "type": "integer",
                     "minimum": 0
                 },
-                "marginOverride": {
-                    "type": "boolean"
+                "expectedCost": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "expectedMargin": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "pricePerItem": {
+                    "type": "number",
+                    "minimum": 0
                 },
                 "quantity": {
                     "type": "number",
                     "minimum": 0
-                },
-                "revenue": {
-                    "type": "number",
-                    "minimum": 0
-                },
-                "targetMarginPercent": {
-                    "type": "number",
-                    "minimum": 0
-                },
-                "unit": {
-                    "type": "string",
-                    "maxLength": 50
                 }
             }
         },
@@ -6990,6 +9880,10 @@ const docTemplate = `{
             "properties": {
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
+                },
+                "projectId": {
+                    "description": "Link to existing project (auto-created if not provided and advancing to in_progress)",
+                    "type": "string"
                 }
             }
         },
@@ -7115,61 +10009,34 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.BudgetDimensionCategoryDTO": {
+        "domain.BudgetItemDTO": {
             "type": "object",
             "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "displayOrder": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "isActive": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "domain.BudgetDimensionDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "$ref": "#/definitions/domain.BudgetDimensionCategoryDTO"
-                },
-                "categoryId": {
-                    "type": "string"
-                },
-                "cost": {
-                    "type": "number"
-                },
                 "createdAt": {
                     "type": "string"
                 },
-                "customName": {
-                    "type": "string"
-                },
                 "description": {
                     "type": "string"
                 },
                 "displayOrder": {
                     "type": "integer"
                 },
+                "expectedCost": {
+                    "type": "number"
+                },
+                "expectedMargin": {
+                    "type": "number"
+                },
+                "expectedProfit": {
+                    "type": "number"
+                },
+                "expectedRevenue": {
+                    "type": "number"
+                },
                 "id": {
                     "type": "string"
                 },
-                "marginOverride": {
-                    "type": "boolean"
-                },
-                "marginPercent": {
-                    "type": "number"
-                },
                 "name": {
-                    "description": "Resolved name (category or custom)",
                     "type": "string"
                 },
                 "parentId": {
@@ -7178,17 +10045,11 @@ const docTemplate = `{
                 "parentType": {
                     "$ref": "#/definitions/domain.BudgetParentType"
                 },
+                "pricePerItem": {
+                    "type": "number"
+                },
                 "quantity": {
                     "type": "number"
-                },
-                "revenue": {
-                    "type": "number"
-                },
-                "targetMarginPercent": {
-                    "type": "number"
-                },
-                "unit": {
-                    "type": "string"
                 },
                 "updatedAt": {
                     "type": "string"
@@ -7209,10 +10070,10 @@ const docTemplate = `{
         "domain.BudgetSummaryDTO": {
             "type": "object",
             "properties": {
-                "dimensionCount": {
+                "itemCount": {
                     "type": "integer"
                 },
-                "overallMarginPercent": {
+                "marginPercent": {
                     "type": "number"
                 },
                 "parentId": {
@@ -7235,8 +10096,8 @@ const docTemplate = `{
         "domain.CloneOfferRequest": {
             "type": "object",
             "properties": {
-                "includeDimensions": {
-                    "description": "Default true - clone budget dimensions (nil treated as true)",
+                "includeBudget": {
+                    "description": "Default true - clone budget items (nil treated as true)",
                     "type": "boolean"
                 },
                 "includeFiles": {
@@ -7682,8 +10543,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "country",
-                "name",
-                "orgNumber"
+                "name"
             ],
             "properties": {
                 "address": {
@@ -7709,15 +10569,36 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "county": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
+                    "type": "string",
+                    "maxLength": 50
+                },
                 "email": {
                     "type": "string"
                 },
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
+                },
+                "notes": {
+                    "type": "string"
                 },
                 "orgNumber": {
                     "type": "string",
@@ -7911,6 +10792,10 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
+                },
                 "customerId": {
                     "type": "string"
                 },
@@ -7920,11 +10805,19 @@ const docTemplate = `{
                 "dueDate": {
                     "type": "string"
                 },
+                "expirationDate": {
+                    "description": "Optional, defaults to 60 days after sent date",
+                    "type": "string"
+                },
                 "items": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.CreateOfferItemRequest"
                     }
+                },
+                "location": {
+                    "type": "string",
+                    "maxLength": 200
                 },
                 "notes": {
                     "type": "string"
@@ -7937,7 +10830,14 @@ const docTemplate = `{
                     "maximum": 100,
                     "minimum": 0
                 },
+                "projectId": {
+                    "description": "Link to existing project (auto-created if not provided and phase != draft)",
+                    "type": "string"
+                },
                 "responsibleUserId": {
+                    "type": "string"
+                },
+                "sentDate": {
                     "type": "string"
                 },
                 "status": {
@@ -7954,22 +10854,20 @@ const docTemplate = `{
             "required": [
                 "companyId",
                 "customerId",
-                "managerId",
                 "name",
-                "startDate",
                 "status"
             ],
             "properties": {
-                "budget": {
-                    "type": "number",
-                    "minimum": 0
-                },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
                     "type": "number",
                     "maximum": 100,
+                    "minimum": 0
+                },
+                "cost": {
+                    "type": "number",
                     "minimum": 0
                 },
                 "customerId": {
@@ -8002,6 +10900,19 @@ const docTemplate = `{
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "phase": {
+                    "enum": [
+                        "tilbud",
+                        "active",
+                        "completed",
+                        "cancelled"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectPhase"
+                        }
+                    ]
                 },
                 "projectNumber": {
                     "type": "string",
@@ -8036,6 +10947,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "value": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },
@@ -8063,8 +10978,17 @@ const docTemplate = `{
                 "country": {
                     "type": "string"
                 },
+                "county": {
+                    "type": "string"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
                     "type": "string"
                 },
                 "email": {
@@ -8076,7 +11000,16 @@ const docTemplate = `{
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string"
+                },
                 "name": {
+                    "type": "string"
+                },
+                "notes": {
                     "type": "string"
                 },
                 "orgNumber": {
@@ -8231,8 +11164,17 @@ const docTemplate = `{
                 "country": {
                     "type": "string"
                 },
+                "county": {
+                    "type": "string"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
                     "type": "string"
                 },
                 "email": {
@@ -8244,7 +11186,16 @@ const docTemplate = `{
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string"
+                },
                 "name": {
+                    "type": "string"
+                },
+                "notes": {
                     "type": "string"
                 },
                 "orgNumber": {
@@ -8282,7 +11233,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "offerReserve": {
-                    "description": "Total value of active offers (in_progress, sent)",
+                    "description": "Total value of active offers - best per project (avoids double-counting)",
                     "type": "number"
                 },
                 "orderReserve": {
@@ -8290,7 +11241,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "pipeline": {
-                    "description": "Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)",
+                    "description": "Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)\nUses aggregation: for projects with multiple offers, only the highest value per phase is counted",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.PipelinePhaseData"
@@ -8304,7 +11255,7 @@ const docTemplate = `{
                     }
                 },
                 "recentOffers": {
-                    "description": "Recent Lists (12-month window, limit 10 each)",
+                    "description": "Recent Lists (limit 5 each)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.OfferDTO"
@@ -8317,8 +11268,16 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.ProjectDTO"
                     }
                 },
+                "timeRange": {
+                    "description": "TimeRange indicates the time range used for the metrics",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.TimeRange"
+                        }
+                    ]
+                },
                 "topCustomers": {
-                    "description": "Top Customers (12-month window, limit 10)",
+                    "description": "Top Customers (limit 5)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.TopCustomerDTO"
@@ -8329,7 +11288,11 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "totalOfferCount": {
-                    "description": "Offer Metrics (12-month window, excluding drafts and expired)",
+                    "description": "Offer Metrics (excluding drafts and expired)",
+                    "type": "integer"
+                },
+                "totalProjectCount": {
+                    "description": "Count of unique projects with offers (excludes orphan offers)",
                     "type": "integer"
                 },
                 "totalValue": {
@@ -8341,7 +11304,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "winRateMetrics": {
-                    "description": "Win Rate Metrics (12-month window)",
+                    "description": "Win Rate Metrics",
                     "allOf": [
                         {
                             "$ref": "#/definitions/domain.WinRateMetrics"
@@ -8549,7 +11512,7 @@ const docTemplate = `{
         "domain.InheritBudgetResponse": {
             "type": "object",
             "properties": {
-                "dimensionsCount": {
+                "itemsCount": {
                     "type": "integer"
                 },
                 "project": {
@@ -8604,6 +11567,27 @@ const docTemplate = `{
                 "LossReasonOther"
             ]
         },
+        "domain.NextOfferNumberResponse": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "description": "The company ID this number is for",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CompanyID"
+                        }
+                    ]
+                },
+                "nextOfferNumber": {
+                    "description": "The next offer number that would be assigned, e.g., \"TK-2025-001\"",
+                    "type": "string"
+                },
+                "year": {
+                    "description": "The year component of the number",
+                    "type": "integer"
+                }
+            }
+        },
         "domain.NotificationDTO": {
             "type": "object",
             "properties": {
@@ -8640,9 +11624,17 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "cost": {
+                    "description": "Internal cost",
+                    "type": "number"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "customerHasWonProject": {
+                    "description": "Whether customer has won their project",
+                    "type": "boolean"
                 },
                 "customerId": {
                     "type": "string"
@@ -8657,6 +11649,14 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "expirationDate": {
+                    "description": "ISO 8601 - When offer expires (default 60 days after sent)",
+                    "type": "string"
+                },
+                "externalReference": {
+                    "description": "External/customer reference number",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -8666,11 +11666,22 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.OfferItemDTO"
                     }
                 },
+                "location": {
+                    "type": "string"
+                },
+                "margin": {
+                    "description": "Calculated: Value - Cost",
+                    "type": "number"
+                },
+                "marginPercent": {
+                    "description": "Dekningsgrad: (Value - Cost) / Value * 100",
+                    "type": "number"
+                },
                 "notes": {
                     "type": "string"
                 },
                 "offerNumber": {
-                    "description": "Unique per company, e.g., \"STB-2024-001\"",
+                    "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
                 },
                 "phase": {
@@ -8683,10 +11694,17 @@ const docTemplate = `{
                     "description": "Link to project (nullable)",
                     "type": "string"
                 },
+                "projectName": {
+                    "type": "string"
+                },
                 "responsibleUserId": {
                     "type": "string"
                 },
                 "responsibleUserName": {
+                    "type": "string"
+                },
+                "sentDate": {
+                    "description": "ISO 8601",
                     "type": "string"
                 },
                 "status": {
@@ -8707,10 +11725,10 @@ const docTemplate = `{
         "domain.OfferDetailDTO": {
             "type": "object",
             "properties": {
-                "budgetDimensions": {
+                "budgetItems": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.BudgetDimensionDTO"
+                        "$ref": "#/definitions/domain.BudgetItemDTO"
                     }
                 },
                 "budgetSummary": {
@@ -8719,9 +11737,17 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "cost": {
+                    "description": "Internal cost",
+                    "type": "number"
+                },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "customerHasWonProject": {
+                    "description": "Whether customer has won their project",
+                    "type": "boolean"
                 },
                 "customerId": {
                     "type": "string"
@@ -8736,6 +11762,14 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "expirationDate": {
+                    "description": "ISO 8601 - When offer expires (default 60 days after sent)",
+                    "type": "string"
+                },
+                "externalReference": {
+                    "description": "External/customer reference number",
+                    "type": "string"
+                },
                 "filesCount": {
                     "type": "integer"
                 },
@@ -8748,11 +11782,22 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.OfferItemDTO"
                     }
                 },
+                "location": {
+                    "type": "string"
+                },
+                "margin": {
+                    "description": "Calculated: Value - Cost",
+                    "type": "number"
+                },
+                "marginPercent": {
+                    "description": "Dekningsgrad: (Value - Cost) / Value * 100",
+                    "type": "number"
+                },
                 "notes": {
                     "type": "string"
                 },
                 "offerNumber": {
-                    "description": "Unique per company, e.g., \"STB-2024-001\"",
+                    "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
                 },
                 "phase": {
@@ -8765,10 +11810,17 @@ const docTemplate = `{
                     "description": "Link to project (nullable)",
                     "type": "string"
                 },
+                "projectName": {
+                    "type": "string"
+                },
                 "responsibleUserId": {
                     "type": "string"
                 },
                 "responsibleUserName": {
+                    "type": "string"
+                },
+                "sentDate": {
+                    "description": "ISO 8601",
                     "type": "string"
                 },
                 "status": {
@@ -8988,6 +12040,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "count": {
+                    "description": "Total offer count in this phase",
                     "type": "integer"
                 },
                 "offers": {
@@ -8999,10 +12052,16 @@ const docTemplate = `{
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
                 },
+                "projectCount": {
+                    "description": "Unique projects in this phase (excludes orphan offers)",
+                    "type": "integer"
+                },
                 "totalValue": {
+                    "description": "Sum of best offer value per project (avoids double-counting)",
                     "type": "number"
                 },
                 "weightedValue": {
+                    "description": "Weighted by probability",
                     "type": "number"
                 }
             }
@@ -9010,7 +12069,10 @@ const docTemplate = `{
         "domain.ProjectBudgetDTO": {
             "type": "object",
             "properties": {
-                "budget": {
+                "cost": {
+                    "type": "number"
+                },
+                "marginPercent": {
                     "type": "number"
                 },
                 "percentUsed": {
@@ -9021,19 +12083,25 @@ const docTemplate = `{
                 },
                 "spent": {
                     "type": "number"
+                },
+                "value": {
+                    "type": "number"
                 }
             }
         },
         "domain.ProjectDTO": {
             "type": "object",
             "properties": {
-                "budget": {
+                "calculatedOfferValue": {
                     "type": "number"
                 },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
+                    "type": "number"
+                },
+                "cost": {
                     "type": "number"
                 },
                 "createdAt": {
@@ -9068,17 +12136,29 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "inheritedOfferNumber": {
+                    "type": "string"
+                },
+                "isEconomicsEditable": {
+                    "type": "boolean"
+                },
                 "managerId": {
                     "type": "string"
                 },
                 "managerName": {
                     "type": "string"
                 },
+                "marginPercent": {
+                    "type": "number"
+                },
                 "name": {
                     "type": "string"
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.ProjectPhase"
                 },
                 "projectNumber": {
                     "type": "string"
@@ -9105,6 +12185,17 @@ const docTemplate = `{
                 "updatedAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "winningOfferId": {
+                    "description": "Phase-related fields for offer folder functionality",
+                    "type": "string"
+                },
+                "wonAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
                 }
             }
         },
@@ -9121,6 +12212,23 @@ const docTemplate = `{
                 "ProjectHealthAtRisk",
                 "ProjectHealthDelayed",
                 "ProjectHealthOverBudget"
+            ]
+        },
+        "domain.ProjectPhase": {
+            "type": "string",
+            "enum": [
+                "tilbud",
+                "working",
+                "active",
+                "completed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ProjectPhaseTilbud",
+                "ProjectPhaseWorking",
+                "ProjectPhaseActive",
+                "ProjectPhaseCompleted",
+                "ProjectPhaseCancelled"
             ]
         },
         "domain.ProjectStatus": {
@@ -9143,16 +12251,19 @@ const docTemplate = `{
         "domain.ProjectWithDetailsDTO": {
             "type": "object",
             "properties": {
-                "budget": {
-                    "type": "number"
-                },
                 "budgetSummary": {
                     "$ref": "#/definitions/domain.BudgetSummaryDTO"
+                },
+                "calculatedOfferValue": {
+                    "type": "number"
                 },
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
+                    "type": "number"
+                },
+                "cost": {
                     "type": "number"
                 },
                 "createdAt": {
@@ -9190,11 +12301,20 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "inheritedOfferNumber": {
+                    "type": "string"
+                },
+                "isEconomicsEditable": {
+                    "type": "boolean"
+                },
                 "managerId": {
                     "type": "string"
                 },
                 "managerName": {
                     "type": "string"
+                },
+                "marginPercent": {
+                    "type": "number"
                 },
                 "name": {
                     "type": "string"
@@ -9204,6 +12324,9 @@ const docTemplate = `{
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/domain.ProjectPhase"
                 },
                 "projectNumber": {
                     "type": "string"
@@ -9236,6 +12359,17 @@ const docTemplate = `{
                 "updatedAt": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "winningOfferId": {
+                    "description": "Phase-related fields for offer folder functionality",
+                    "type": "string"
+                },
+                "wonAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
                 }
             }
         },
@@ -9248,7 +12382,57 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.ReorderDimensionsRequest": {
+        "domain.ReopenProjectRequest": {
+            "type": "object",
+            "required": [
+                "targetPhase"
+            ],
+            "properties": {
+                "notes": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "targetPhase": {
+                    "enum": [
+                        "tilbud",
+                        "working"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectPhase"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.ReopenProjectResponse": {
+            "type": "object",
+            "properties": {
+                "clearedOfferId": {
+                    "description": "Whether WinningOfferID was cleared",
+                    "type": "boolean"
+                },
+                "clearedOfferValue": {
+                    "description": "Whether economic values were cleared",
+                    "type": "boolean"
+                },
+                "previousPhase": {
+                    "type": "string"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
+                },
+                "revertedOffer": {
+                    "description": "Offer that was reverted to sent (if any)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.ReorderBudgetItemsRequest": {
             "type": "object",
             "required": [
                 "orderedIds"
@@ -9260,6 +12444,29 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.ResyncFromOfferResponse": {
+            "type": "object",
+            "properties": {
+                "offerId": {
+                    "type": "string"
+                },
+                "offerPhase": {
+                    "type": "string"
+                },
+                "offerTitle": {
+                    "type": "string"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
+                },
+                "syncedCost": {
+                    "type": "number"
+                },
+                "syncedValue": {
+                    "type": "number"
                 }
             }
         },
@@ -9326,6 +12533,17 @@ const docTemplate = `{
                     "type": "number"
                 }
             }
+        },
+        "domain.TimeRange": {
+            "type": "string",
+            "enum": [
+                "rolling12months",
+                "allTime"
+            ],
+            "x-enum-varnames": [
+                "TimeRangeRolling12Months",
+                "TimeRangeAllTime"
+            ]
         },
         "domain.TopCustomerDTO": {
             "type": "object",
@@ -9403,21 +12621,12 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.UpdateBudgetDimensionRequest": {
+        "domain.UpdateBudgetItemRequest": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
-                "categoryId": {
-                    "type": "string",
-                    "maxLength": 50
-                },
-                "cost": {
-                    "type": "number",
-                    "minimum": 0
-                },
-                "customName": {
-                    "type": "string",
-                    "maxLength": 200
-                },
                 "description": {
                     "type": "string"
                 },
@@ -9425,24 +12634,26 @@ const docTemplate = `{
                     "type": "integer",
                     "minimum": 0
                 },
-                "marginOverride": {
-                    "type": "boolean"
+                "expectedCost": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "expectedMargin": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "pricePerItem": {
+                    "type": "number",
+                    "minimum": 0
                 },
                 "quantity": {
                     "type": "number",
                     "minimum": 0
-                },
-                "revenue": {
-                    "type": "number",
-                    "minimum": 0
-                },
-                "targetMarginPercent": {
-                    "type": "number",
-                    "minimum": 0
-                },
-                "unit": {
-                    "type": "string",
-                    "maxLength": 50
                 }
             }
         },
@@ -9532,12 +12743,136 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateCustomerAddressRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                }
+            }
+        },
+        "domain.UpdateCustomerCityRequest": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "domain.UpdateCustomerClassRequest": {
+            "type": "object",
+            "properties": {
+                "customerClass": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
+        "domain.UpdateCustomerCompanyRequest": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "description": "nullable to allow unassignment",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CompanyID"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateCustomerContactInfoRequest": {
+            "type": "object",
+            "properties": {
+                "contactEmail": {
+                    "type": "string"
+                },
+                "contactPerson": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "contactPhone": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
+        "domain.UpdateCustomerCreditLimitRequest": {
+            "type": "object",
+            "properties": {
+                "creditLimit": {
+                    "description": "nullable to allow clearing",
+                    "type": "number"
+                }
+            }
+        },
+        "domain.UpdateCustomerIndustryRequest": {
+            "type": "object",
+            "properties": {
+                "industry": {
+                    "enum": [
+                        "construction",
+                        "manufacturing",
+                        "retail",
+                        "logistics",
+                        "agriculture",
+                        "energy",
+                        "public_sector",
+                        "real_estate",
+                        "other"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CustomerIndustry"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateCustomerIsInternalRequest": {
+            "type": "object",
+            "properties": {
+                "isInternal": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "domain.UpdateCustomerNotesRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.UpdateCustomerPostalCodeRequest": {
+            "type": "object",
+            "properties": {
+                "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                }
+            }
+        },
         "domain.UpdateCustomerRequest": {
             "type": "object",
             "required": [
                 "country",
-                "name",
-                "orgNumber"
+                "name"
             ],
             "properties": {
                 "address": {
@@ -9563,15 +12898,36 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "county": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "creditLimit": {
+                    "type": "number"
+                },
+                "customerClass": {
+                    "type": "string",
+                    "maxLength": 50
+                },
                 "email": {
                     "type": "string"
                 },
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "municipality": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
+                },
+                "notes": {
+                    "type": "string"
                 },
                 "orgNumber": {
                     "type": "string",
@@ -9590,6 +12946,48 @@ const docTemplate = `{
                 },
                 "tier": {
                     "$ref": "#/definitions/domain.CustomerTier"
+                }
+            }
+        },
+        "domain.UpdateCustomerStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "lead",
+                        "churned"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CustomerStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateCustomerTierRequest": {
+            "type": "object",
+            "required": [
+                "tier"
+            ],
+            "properties": {
+                "tier": {
+                    "enum": [
+                        "bronze",
+                        "silver",
+                        "gold",
+                        "platinum"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CustomerTier"
+                        }
+                    ]
                 }
             }
         },
@@ -9659,6 +13057,14 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferCustomerHasWonProjectRequest": {
+            "type": "object",
+            "properties": {
+                "customerHasWonProject": {
+                    "type": "boolean"
+                }
+            }
+        },
         "domain.UpdateOfferCustomerRequest": {
             "type": "object",
             "required": [
@@ -9685,6 +13091,36 @@ const docTemplate = `{
                 "dueDate": {
                     "description": "nullable to allow clearing",
                     "type": "string"
+                }
+            }
+        },
+        "domain.UpdateOfferExpirationDateRequest": {
+            "type": "object",
+            "properties": {
+                "expirationDate": {
+                    "description": "nullable to allow clearing (though not recommended)",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.UpdateOfferExternalReferenceRequest": {
+            "type": "object",
+            "properties": {
+                "externalReference": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "domain.UpdateOfferNumberRequest": {
+            "type": "object",
+            "required": [
+                "offerNumber"
+            ],
+            "properties": {
+                "offerNumber": {
+                    "type": "string",
+                    "maxLength": 50
                 }
             }
         },
@@ -9721,11 +13157,23 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
+                },
                 "description": {
                     "type": "string"
                 },
                 "dueDate": {
                     "type": "string"
+                },
+                "expirationDate": {
+                    "description": "Optional, defaults to 60 days after sent date",
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string",
+                    "maxLength": 200
                 },
                 "notes": {
                     "type": "string"
@@ -9739,6 +13187,9 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "responsibleUserId": {
+                    "type": "string"
+                },
+                "sentDate": {
                     "type": "string"
                 },
                 "status": {
@@ -9786,26 +13237,167 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.UpdateProjectRequest": {
+        "domain.UpdateProjectBudgetRequest": {
             "type": "object",
-            "required": [
-                "companyId",
-                "managerId",
-                "name",
-                "startDate",
-                "status"
-            ],
             "properties": {
                 "budget": {
                     "type": "number",
                     "minimum": 0
+                }
+            }
+        },
+        "domain.UpdateProjectCompanyRequest": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "enum": [
+                        "gruppen",
+                        "stalbygg",
+                        "hybridbygg",
+                        "industri",
+                        "tak",
+                        "montasje"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CompanyID"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateProjectCompletionPercentRequest": {
+            "type": "object",
+            "properties": {
+                "completionPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                }
+            }
+        },
+        "domain.UpdateProjectDatesRequest": {
+            "type": "object",
+            "properties": {
+                "endDate": {
+                    "type": "string"
                 },
+                "startDate": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.UpdateProjectDescriptionRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "domain.UpdateProjectEstimatedCompletionDateRequest": {
+            "type": "object",
+            "properties": {
+                "estimatedCompletionDate": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.UpdateProjectHealthRequest": {
+            "type": "object",
+            "required": [
+                "health"
+            ],
+            "properties": {
+                "health": {
+                    "enum": [
+                        "on_track",
+                        "at_risk",
+                        "over_budget"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectHealth"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateProjectManagerRequest": {
+            "type": "object",
+            "properties": {
+                "managerId": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "domain.UpdateProjectNameRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                }
+            }
+        },
+        "domain.UpdateProjectNumberRequest": {
+            "type": "object",
+            "properties": {
+                "projectNumber": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
+        "domain.UpdateProjectPhaseRequest": {
+            "type": "object",
+            "required": [
+                "phase"
+            ],
+            "properties": {
+                "phase": {
+                    "enum": [
+                        "tilbud",
+                        "working",
+                        "active",
+                        "completed",
+                        "cancelled"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectPhase"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateProjectRequest": {
+            "type": "object",
+            "required": [
+                "companyId",
+                "name",
+                "status"
+            ],
+            "properties": {
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
                 "completionPercent": {
                     "type": "number",
                     "maximum": 100,
+                    "minimum": 0
+                },
+                "cost": {
+                    "type": "number",
                     "minimum": 0
                 },
                 "dealId": {
@@ -9855,6 +13447,19 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "value": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "domain.UpdateProjectSpentRequest": {
+            "type": "object",
+            "properties": {
+                "spent": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },
@@ -9874,6 +13479,17 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/domain.ProjectStatus"
+                }
+            }
+        },
+        "domain.UpdateProjectTeamMembersRequest": {
+            "type": "object",
+            "properties": {
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -9900,6 +13516,38 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "domain.WinOfferRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "description": "Notes is an optional note about why this offer was selected",
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "domain.WinOfferResponse": {
+            "type": "object",
+            "properties": {
+                "expiredCount": {
+                    "description": "Count of sibling offers that were expired",
+                    "type": "integer"
+                },
+                "expiredOffers": {
+                    "description": "Sibling offers that were expired",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.OfferDTO"
+                    }
+                },
+                "offer": {
+                    "$ref": "#/definitions/domain.OfferDTO"
+                },
+                "project": {
+                    "$ref": "#/definitions/domain.ProjectDTO"
                 }
             }
         },
@@ -10072,20 +13720,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/domain.DealStageHistoryDTO"
                     }
-                }
-            }
-        },
-        "handler.OfferBudgetResponse": {
-            "type": "object",
-            "properties": {
-                "dimensions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.BudgetDimensionDTO"
-                    }
-                },
-                "summary": {
-                    "$ref": "#/definitions/domain.BudgetSummaryDTO"
                 }
             }
         },

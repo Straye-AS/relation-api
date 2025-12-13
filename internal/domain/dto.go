@@ -24,6 +24,12 @@ type CustomerDTO struct {
 	Status        CustomerStatus   `json:"status"`
 	Tier          CustomerTier     `json:"tier"`
 	Industry      CustomerIndustry `json:"industry,omitempty"`
+	Notes         string           `json:"notes,omitempty"`
+	CustomerClass string           `json:"customerClass,omitempty"`
+	CreditLimit   *float64         `json:"creditLimit,omitempty"`
+	IsInternal    bool             `json:"isInternal"`
+	Municipality  string           `json:"municipality,omitempty"`
+	County        string           `json:"county,omitempty"`
 	CreatedAt     string           `json:"createdAt"` // ISO 8601
 	UpdatedAt     string           `json:"updatedAt"` // ISO 8601
 	TotalValue    float64          `json:"totalValue,omitempty"`
@@ -143,25 +149,34 @@ type DealStageHistoryDTO struct {
 }
 
 type OfferDTO struct {
-	ID                  uuid.UUID      `json:"id"`
-	Title               string         `json:"title"`
-	OfferNumber         string         `json:"offerNumber,omitempty"` // Unique per company, e.g., "STB-2024-001"
-	CustomerID          uuid.UUID      `json:"customerId"`
-	CustomerName        string         `json:"customerName,omitempty"`
-	ProjectID           *uuid.UUID     `json:"projectId,omitempty"` // Link to project (nullable)
-	CompanyID           CompanyID      `json:"companyId"`
-	Phase               OfferPhase     `json:"phase"`
-	Probability         int            `json:"probability"`
-	Value               float64        `json:"value"`
-	Status              OfferStatus    `json:"status"`
-	CreatedAt           string         `json:"createdAt"` // ISO 8601
-	UpdatedAt           string         `json:"updatedAt"` // ISO 8601
-	ResponsibleUserID   string         `json:"responsibleUserId,omitempty"`
-	ResponsibleUserName string         `json:"responsibleUserName,omitempty"`
-	Items               []OfferItemDTO `json:"items"`
-	Description         string         `json:"description,omitempty"`
-	Notes               string         `json:"notes,omitempty"`
-	DueDate             *string        `json:"dueDate,omitempty"` // ISO 8601
+	ID                    uuid.UUID      `json:"id"`
+	Title                 string         `json:"title"`
+	OfferNumber           string         `json:"offerNumber,omitempty"`       // Internal number, e.g., "TK-2025-001"
+	ExternalReference     string         `json:"externalReference,omitempty"` // External/customer reference number
+	CustomerID            uuid.UUID      `json:"customerId"`
+	CustomerName          string         `json:"customerName,omitempty"`
+	ProjectID             *uuid.UUID     `json:"projectId,omitempty"` // Link to project (nullable)
+	ProjectName           string         `json:"projectName,omitempty"`
+	CompanyID             CompanyID      `json:"companyId"`
+	Phase                 OfferPhase     `json:"phase"`
+	Probability           int            `json:"probability"`
+	Value                 float64        `json:"value"`
+	Status                OfferStatus    `json:"status"`
+	CreatedAt             string         `json:"createdAt"` // ISO 8601
+	UpdatedAt             string         `json:"updatedAt"` // ISO 8601
+	ResponsibleUserID     string         `json:"responsibleUserId,omitempty"`
+	ResponsibleUserName   string         `json:"responsibleUserName,omitempty"`
+	Items                 []OfferItemDTO `json:"items"`
+	Description           string         `json:"description,omitempty"`
+	Notes                 string         `json:"notes,omitempty"`
+	DueDate               *string        `json:"dueDate,omitempty"` // ISO 8601
+	Cost                  float64        `json:"cost"`              // Internal cost
+	Margin                float64        `json:"margin"`            // Calculated: Value - Cost
+	MarginPercent         float64        `json:"marginPercent"`     // Dekningsgrad: (Value - Cost) / Value * 100
+	Location              string         `json:"location,omitempty"`
+	SentDate              *string        `json:"sentDate,omitempty"`       // ISO 8601
+	ExpirationDate        *string        `json:"expirationDate,omitempty"` // ISO 8601 - When offer expires (default 60 days after sent)
+	CustomerHasWonProject bool           `json:"customerHasWonProject"`    // Whether customer has won their project
 }
 
 type OfferItemDTO struct {
@@ -175,45 +190,33 @@ type OfferItemDTO struct {
 	Unit        string    `json:"unit,omitempty"`
 }
 
-// Budget Dimension DTOs
+// Budget Item DTOs
 
-type BudgetDimensionCategoryDTO struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Description  string `json:"description,omitempty"`
-	DisplayOrder int    `json:"displayOrder"`
-	IsActive     bool   `json:"isActive"`
-}
-
-type BudgetDimensionDTO struct {
-	ID                  uuid.UUID                   `json:"id"`
-	ParentType          BudgetParentType            `json:"parentType"`
-	ParentID            uuid.UUID                   `json:"parentId"`
-	CategoryID          *string                     `json:"categoryId,omitempty"`
-	Category            *BudgetDimensionCategoryDTO `json:"category,omitempty"`
-	CustomName          string                      `json:"customName,omitempty"`
-	Name                string                      `json:"name"` // Resolved name (category or custom)
-	Cost                float64                     `json:"cost"`
-	Revenue             float64                     `json:"revenue"`
-	TargetMarginPercent *float64                    `json:"targetMarginPercent,omitempty"`
-	MarginOverride      bool                        `json:"marginOverride"`
-	MarginPercent       float64                     `json:"marginPercent"`
-	Description         string                      `json:"description,omitempty"`
-	Quantity            *float64                    `json:"quantity,omitempty"`
-	Unit                string                      `json:"unit,omitempty"`
-	DisplayOrder        int                         `json:"displayOrder"`
-	CreatedAt           string                      `json:"createdAt"`
-	UpdatedAt           string                      `json:"updatedAt"`
+type BudgetItemDTO struct {
+	ID              uuid.UUID        `json:"id"`
+	ParentType      BudgetParentType `json:"parentType"`
+	ParentID        uuid.UUID        `json:"parentId"`
+	Name            string           `json:"name"`
+	ExpectedCost    float64          `json:"expectedCost"`
+	ExpectedMargin  float64          `json:"expectedMargin"`
+	ExpectedRevenue float64          `json:"expectedRevenue"`
+	ExpectedProfit  float64          `json:"expectedProfit"`
+	Quantity        *float64         `json:"quantity,omitempty"`
+	PricePerItem    *float64         `json:"pricePerItem,omitempty"`
+	Description     string           `json:"description,omitempty"`
+	DisplayOrder    int              `json:"displayOrder"`
+	CreatedAt       string           `json:"createdAt"`
+	UpdatedAt       string           `json:"updatedAt"`
 }
 
 type BudgetSummaryDTO struct {
-	ParentType           BudgetParentType `json:"parentType"`
-	ParentID             uuid.UUID        `json:"parentId"`
-	DimensionCount       int              `json:"dimensionCount"`
-	TotalCost            float64          `json:"totalCost"`
-	TotalRevenue         float64          `json:"totalRevenue"`
-	OverallMarginPercent float64          `json:"overallMarginPercent"`
-	TotalProfit          float64          `json:"totalProfit"`
+	ParentType    BudgetParentType `json:"parentType,omitempty"`
+	ParentID      uuid.UUID        `json:"parentId,omitempty"`
+	TotalCost     float64          `json:"totalCost"`
+	TotalRevenue  float64          `json:"totalRevenue"`
+	TotalProfit   float64          `json:"totalProfit"`
+	MarginPercent float64          `json:"marginPercent"`
+	ItemCount     int              `json:"itemCount"`
 }
 
 type ProjectDTO struct {
@@ -226,11 +229,14 @@ type ProjectDTO struct {
 	CustomerName            string         `json:"customerName,omitempty"`
 	CompanyID               CompanyID      `json:"companyId"`
 	Status                  ProjectStatus  `json:"status"`
-	StartDate               string         `json:"startDate"`         // ISO 8601
-	EndDate                 string         `json:"endDate,omitempty"` // ISO 8601
-	Budget                  float64        `json:"budget"`
+	Phase                   ProjectPhase   `json:"phase"`
+	StartDate               string         `json:"startDate,omitempty"` // ISO 8601
+	EndDate                 string         `json:"endDate,omitempty"`   // ISO 8601
+	Value                   float64        `json:"value"`
+	Cost                    float64        `json:"cost"`
+	MarginPercent           float64        `json:"marginPercent"`
 	Spent                   float64        `json:"spent"`
-	ManagerID               string         `json:"managerId"`
+	ManagerID               *string        `json:"managerId,omitempty"`
 	ManagerName             string         `json:"managerName,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	CreatedAt               string         `json:"createdAt"` // ISO 8601
@@ -241,41 +247,49 @@ type ProjectDTO struct {
 	Health                  *ProjectHealth `json:"health,omitempty"`
 	CompletionPercent       *float64       `json:"completionPercent,omitempty"`
 	EstimatedCompletionDate string         `json:"estimatedCompletionDate,omitempty"`
+	// Phase-related fields for offer folder functionality
+	WinningOfferID       *uuid.UUID `json:"winningOfferId,omitempty"`
+	InheritedOfferNumber string     `json:"inheritedOfferNumber,omitempty"`
+	CalculatedOfferValue float64    `json:"calculatedOfferValue"`
+	WonAt                string     `json:"wonAt,omitempty"` // ISO 8601
+	IsEconomicsEditable  bool       `json:"isEconomicsEditable"`
 }
 
 // Project Actual Cost DTOs
 
 type ProjectActualCostDTO struct {
-	ID                uuid.UUID  `json:"id"`
-	ProjectID         uuid.UUID  `json:"projectId"`
-	CostType          CostType   `json:"costType"`
-	Description       string     `json:"description"`
-	Amount            float64    `json:"amount"`
-	Currency          string     `json:"currency"`
-	CostDate          string     `json:"costDate"`
-	PostingDate       string     `json:"postingDate,omitempty"`
-	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
-	ERPSource         ERPSource  `json:"erpSource"`
-	ERPReference      string     `json:"erpReference,omitempty"`
-	ERPTransactionID  string     `json:"erpTransactionId,omitempty"`
-	ERPSyncedAt       string     `json:"erpSyncedAt,omitempty"`
-	IsApproved        bool       `json:"isApproved"`
-	ApprovedByID      string     `json:"approvedById,omitempty"`
-	ApprovedAt        string     `json:"approvedAt,omitempty"`
-	Notes             string     `json:"notes,omitempty"`
-	CreatedAt         string     `json:"createdAt"`
-	UpdatedAt         string     `json:"updatedAt"`
+	ID               uuid.UUID  `json:"id"`
+	ProjectID        uuid.UUID  `json:"projectId"`
+	CostType         CostType   `json:"costType"`
+	Description      string     `json:"description"`
+	Amount           float64    `json:"amount"`
+	Currency         string     `json:"currency"`
+	CostDate         string     `json:"costDate"`
+	PostingDate      string     `json:"postingDate,omitempty"`
+	BudgetItemID     *uuid.UUID `json:"budgetItemId,omitempty"`
+	ERPSource        ERPSource  `json:"erpSource"`
+	ERPReference     string     `json:"erpReference,omitempty"`
+	ERPTransactionID string     `json:"erpTransactionId,omitempty"`
+	ERPSyncedAt      string     `json:"erpSyncedAt,omitempty"`
+	IsApproved       bool       `json:"isApproved"`
+	ApprovedByID     string     `json:"approvedById,omitempty"`
+	ApprovedAt       string     `json:"approvedAt,omitempty"`
+	Notes            string     `json:"notes,omitempty"`
+	CreatedAt        string     `json:"createdAt"`
+	UpdatedAt        string     `json:"updatedAt"`
 }
 
 type ProjectCostSummaryDTO struct {
-	ProjectID         uuid.UUID `json:"projectId"`
-	ProjectName       string    `json:"projectName"`
-	Budget            float64   `json:"budget"`
-	Spent             float64   `json:"spent"`
-	ActualCosts       float64   `json:"actualCosts"`
-	RemainingBudget   float64   `json:"remainingBudget"`
-	BudgetUsedPercent float64   `json:"budgetUsedPercent"`
-	CostEntryCount    int       `json:"costEntryCount"`
+	ProjectID        uuid.UUID `json:"projectId"`
+	ProjectName      string    `json:"projectName"`
+	Value            float64   `json:"value"`
+	Cost             float64   `json:"cost"`
+	MarginPercent    float64   `json:"marginPercent"`
+	Spent            float64   `json:"spent"`
+	ActualCosts      float64   `json:"actualCosts"`
+	RemainingValue   float64   `json:"remainingValue"`
+	ValueUsedPercent float64   `json:"valueUsedPercent"`
+	CostEntryCount   int       `json:"costEntryCount"`
 }
 
 type UserDTO struct {
@@ -370,6 +384,26 @@ type UnreadCountDTO struct {
 
 // Dashboard DTOs
 
+// TimeRange represents the time range for dashboard metrics
+type TimeRange string
+
+const (
+	// TimeRangeRolling12Months is the default 12-month rolling window
+	TimeRangeRolling12Months TimeRange = "rolling12months"
+	// TimeRangeAllTime calculates metrics without any date filter
+	TimeRangeAllTime TimeRange = "allTime"
+)
+
+// IsValid checks if the TimeRange value is valid
+func (t TimeRange) IsValid() bool {
+	switch t {
+	case TimeRangeRolling12Months, TimeRangeAllTime:
+		return true
+	default:
+		return false
+	}
+}
+
 type DisciplineStats struct {
 	Name         string  `json:"name"`
 	TotalValue   float64 `json:"totalValue"`
@@ -391,9 +425,10 @@ type TeamMemberStats struct {
 
 type PipelinePhaseData struct {
 	Phase         OfferPhase `json:"phase"`
-	Count         int        `json:"count"`
-	TotalValue    float64    `json:"totalValue"`
-	WeightedValue float64    `json:"weightedValue"`
+	Count         int        `json:"count"`         // Total offer count in this phase
+	ProjectCount  int        `json:"projectCount"`  // Unique projects in this phase (excludes orphan offers)
+	TotalValue    float64    `json:"totalValue"`    // Sum of best offer value per project (avoids double-counting)
+	WeightedValue float64    `json:"weightedValue"` // Weighted by probability
 	Offers        []OfferDTO `json:"offers,omitempty"`
 }
 
@@ -417,34 +452,44 @@ type TopCustomerDTO struct {
 }
 
 // DashboardMetrics contains all metrics for the dashboard
-// All metrics use a rolling 12-month window from the current date
-// Drafts and expired offers are excluded from all calculations
+// By default, metrics use a rolling 12-month window from the current date.
+// When timeRange is "allTime", metrics are calculated without any date filter.
+// Drafts and expired offers are excluded from all calculations.
+//
+// IMPORTANT: Pipeline metrics use aggregation to avoid double-counting.
+// When a project has multiple offers, only the highest value offer per phase is counted.
+// Orphan offers (without project) are included at full value.
 type DashboardMetrics struct {
-	// Offer Metrics (12-month window, excluding drafts and expired)
+	// TimeRange indicates the time range used for the metrics
+	TimeRange TimeRange `json:"timeRange"` // "rolling12months" (default) or "allTime"
+
+	// Offer Metrics (excluding drafts and expired)
 	TotalOfferCount      int     `json:"totalOfferCount"`      // Count of offers excluding drafts and expired
-	OfferReserve         float64 `json:"offerReserve"`         // Total value of active offers (in_progress, sent)
+	TotalProjectCount    int     `json:"totalProjectCount"`    // Count of unique projects with offers (excludes orphan offers)
+	OfferReserve         float64 `json:"offerReserve"`         // Total value of active offers - best per project (avoids double-counting)
 	WeightedOfferReserve float64 `json:"weightedOfferReserve"` // Sum of (value * probability/100) for active offers
 	AverageProbability   float64 `json:"averageProbability"`   // Average probability of active offers
 
 	// Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
+	// Uses aggregation: for projects with multiple offers, only the highest value per phase is counted
 	Pipeline []PipelinePhaseData `json:"pipeline"`
 
-	// Win Rate Metrics (12-month window)
+	// Win Rate Metrics
 	WinRateMetrics WinRateMetrics `json:"winRateMetrics"`
 
 	// Order Reserve (from active projects)
 	OrderReserve float64 `json:"orderReserve"` // Sum of (budget - spent) on active projects
 
 	// Financial Summary
-	TotalInvoiced float64 `json:"totalInvoiced"` // Sum of "spent" on all projects in 12-month window
+	TotalInvoiced float64 `json:"totalInvoiced"` // Sum of "spent" on all projects in time range
 	TotalValue    float64 `json:"totalValue"`    // orderReserve + totalInvoiced
 
-	// Recent Lists (12-month window, limit 10 each)
+	// Recent Lists (limit 5 each)
 	RecentOffers     []OfferDTO    `json:"recentOffers"`     // Last created offers (excluding drafts)
 	RecentProjects   []ProjectDTO  `json:"recentProjects"`   // Last created projects
 	RecentActivities []ActivityDTO `json:"recentActivities"` // Last activities
 
-	// Top Customers (12-month window, limit 10)
+	// Top Customers (limit 5)
 	TopCustomers []TopCustomerDTO `json:"topCustomers"` // Ranked by offer count
 }
 
@@ -478,7 +523,7 @@ type APIResponse struct {
 
 type CreateCustomerRequest struct {
 	Name          string           `json:"name" validate:"required,max=200"`
-	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
+	OrgNumber     string           `json:"orgNumber,omitempty" validate:"max=20"`
 	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
 	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
@@ -491,11 +536,17 @@ type CreateCustomerRequest struct {
 	Status        CustomerStatus   `json:"status,omitempty"`
 	Tier          CustomerTier     `json:"tier,omitempty"`
 	Industry      CustomerIndustry `json:"industry,omitempty"`
+	Notes         string           `json:"notes,omitempty"`
+	CustomerClass string           `json:"customerClass,omitempty" validate:"max=50"`
+	CreditLimit   *float64         `json:"creditLimit,omitempty"`
+	IsInternal    bool             `json:"isInternal,omitempty"`
+	Municipality  string           `json:"municipality,omitempty" validate:"max=100"`
+	County        string           `json:"county,omitempty" validate:"max=100"`
 }
 
 type UpdateCustomerRequest struct {
 	Name          string           `json:"name" validate:"required,max=200"`
-	OrgNumber     string           `json:"orgNumber" validate:"required,max=20"`
+	OrgNumber     string           `json:"orgNumber,omitempty" validate:"max=20"`
 	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
 	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
@@ -508,6 +559,12 @@ type UpdateCustomerRequest struct {
 	Status        CustomerStatus   `json:"status,omitempty"`
 	Tier          CustomerTier     `json:"tier,omitempty"`
 	Industry      CustomerIndustry `json:"industry,omitempty"`
+	Notes         string           `json:"notes,omitempty"`
+	CustomerClass string           `json:"customerClass,omitempty" validate:"max=50"`
+	CreditLimit   *float64         `json:"creditLimit,omitempty"`
+	IsInternal    bool             `json:"isInternal,omitempty"`
+	Municipality  string           `json:"municipality,omitempty" validate:"max=100"`
+	County        string           `json:"county,omitempty" validate:"max=100"`
 }
 
 type CreateContactRequest struct {
@@ -608,11 +665,13 @@ type CreateProjectRequest struct {
 	CustomerID              uuid.UUID      `json:"customerId" validate:"required"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
 	Status                  ProjectStatus  `json:"status" validate:"required,oneof=planning active on_hold completed cancelled"`
-	StartDate               time.Time      `json:"startDate" validate:"required"`
+	Phase                   ProjectPhase   `json:"phase,omitempty" validate:"omitempty,oneof=tilbud active completed cancelled"`
+	StartDate               *time.Time     `json:"startDate,omitempty"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
-	Budget                  float64        `json:"budget" validate:"gte=0"`
+	Value                   float64        `json:"value" validate:"gte=0"`
+	Cost                    float64        `json:"cost" validate:"gte=0"`
 	Spent                   float64        `json:"spent" validate:"gte=0"`
-	ManagerID               string         `json:"managerId" validate:"required"`
+	ManagerID               *string        `json:"managerId,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	OfferID                 *uuid.UUID     `json:"offerId,omitempty"`
 	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
@@ -629,11 +688,12 @@ type UpdateProjectRequest struct {
 	Description             string         `json:"description,omitempty"`
 	CompanyID               CompanyID      `json:"companyId" validate:"required"`
 	Status                  ProjectStatus  `json:"status" validate:"required"`
-	StartDate               time.Time      `json:"startDate" validate:"required"`
+	StartDate               *time.Time     `json:"startDate,omitempty"`
 	EndDate                 *time.Time     `json:"endDate,omitempty"`
-	Budget                  float64        `json:"budget" validate:"gte=0"`
+	Value                   float64        `json:"value" validate:"gte=0"`
+	Cost                    float64        `json:"cost" validate:"gte=0"`
 	Spent                   float64        `json:"spent" validate:"gte=0"`
-	ManagerID               string         `json:"managerId" validate:"required"`
+	ManagerID               *string        `json:"managerId,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
 	HasDetailedBudget       *bool          `json:"hasDetailedBudget,omitempty"`
@@ -650,10 +710,15 @@ type CreateOfferRequest struct {
 	Probability       *int                     `json:"probability,omitempty" validate:"omitempty,min=0,max=100"`
 	Status            OfferStatus              `json:"status,omitempty"`
 	ResponsibleUserID string                   `json:"responsibleUserId,omitempty"`
+	ProjectID         *uuid.UUID               `json:"projectId,omitempty"` // Link to existing project (auto-created if not provided and phase != draft)
 	Items             []CreateOfferItemRequest `json:"items,omitempty"`
 	Description       string                   `json:"description,omitempty"`
 	Notes             string                   `json:"notes,omitempty"`
 	DueDate           *time.Time               `json:"dueDate,omitempty"`
+	Cost              float64                  `json:"cost,omitempty" validate:"gte=0"`
+	Location          string                   `json:"location,omitempty" validate:"max=200"`
+	SentDate          *time.Time               `json:"sentDate,omitempty"`
+	ExpirationDate    *time.Time               `json:"expirationDate,omitempty"` // Optional, defaults to 60 days after sent date
 }
 
 type UpdateOfferRequest struct {
@@ -665,6 +730,10 @@ type UpdateOfferRequest struct {
 	Description       string      `json:"description,omitempty"`
 	Notes             string      `json:"notes,omitempty"`
 	DueDate           *time.Time  `json:"dueDate,omitempty"`
+	Cost              float64     `json:"cost,omitempty" validate:"gte=0"`
+	Location          string      `json:"location,omitempty" validate:"max=200"`
+	SentDate          *time.Time  `json:"sentDate,omitempty"`
+	ExpirationDate    *time.Time  `json:"expirationDate,omitempty"` // Optional, defaults to 60 days after sent date
 }
 
 type CreateOfferItemRequest struct {
@@ -685,85 +754,76 @@ type UpdateOfferItemRequest struct {
 	Unit        string  `json:"unit,omitempty" validate:"max=50"`
 }
 
-// Budget Dimension Request DTOs
+// Budget Item Request DTOs
 
-type CreateBudgetDimensionRequest struct {
-	ParentType          BudgetParentType `json:"parentType" validate:"required"`
-	ParentID            uuid.UUID        `json:"parentId" validate:"required"`
-	CategoryID          *string          `json:"categoryId,omitempty" validate:"omitempty,max=50"`
-	CustomName          string           `json:"customName,omitempty" validate:"max=200"`
-	Cost                float64          `json:"cost" validate:"gte=0"`
-	Revenue             float64          `json:"revenue,omitempty" validate:"gte=0"`
-	TargetMarginPercent *float64         `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
-	MarginOverride      bool             `json:"marginOverride,omitempty"`
-	Description         string           `json:"description,omitempty"`
-	Quantity            *float64         `json:"quantity,omitempty" validate:"omitempty,gte=0"`
-	Unit                string           `json:"unit,omitempty" validate:"max=50"`
-	DisplayOrder        int              `json:"displayOrder,omitempty" validate:"gte=0"`
+type CreateBudgetItemRequest struct {
+	ParentType     BudgetParentType `json:"parentType" validate:"required"`
+	ParentID       uuid.UUID        `json:"parentId" validate:"required"`
+	Name           string           `json:"name" validate:"required,max=200"`
+	ExpectedCost   float64          `json:"expectedCost" validate:"gte=0"`
+	ExpectedMargin float64          `json:"expectedMargin" validate:"gte=0,lte=100"`
+	Quantity       *float64         `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	PricePerItem   *float64         `json:"pricePerItem,omitempty" validate:"omitempty,gte=0"`
+	Description    string           `json:"description,omitempty"`
+	DisplayOrder   int              `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
-type UpdateBudgetDimensionRequest struct {
-	CategoryID          *string  `json:"categoryId,omitempty" validate:"omitempty,max=50"`
-	CustomName          string   `json:"customName,omitempty" validate:"max=200"`
-	Cost                float64  `json:"cost" validate:"gte=0"`
-	Revenue             float64  `json:"revenue,omitempty" validate:"gte=0"`
-	TargetMarginPercent *float64 `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
-	MarginOverride      bool     `json:"marginOverride,omitempty"`
-	Description         string   `json:"description,omitempty"`
-	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
-	Unit                string   `json:"unit,omitempty" validate:"max=50"`
-	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
+type UpdateBudgetItemRequest struct {
+	Name           string   `json:"name" validate:"required,max=200"`
+	ExpectedCost   float64  `json:"expectedCost" validate:"gte=0"`
+	ExpectedMargin float64  `json:"expectedMargin" validate:"gte=0,lte=100"`
+	Quantity       *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	PricePerItem   *float64 `json:"pricePerItem,omitempty" validate:"omitempty,gte=0"`
+	Description    string   `json:"description,omitempty"`
+	DisplayOrder   int      `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
-// ReorderDimensionsRequest contains the ordered list of dimension IDs
-type ReorderDimensionsRequest struct {
+// ReorderBudgetItemsRequest contains the ordered list of budget item IDs
+type ReorderBudgetItemsRequest struct {
 	OrderedIDs []uuid.UUID `json:"orderedIds" validate:"required,min=1"`
 }
 
-// AddOfferBudgetDimensionRequest is the simplified request for adding dimensions to an offer
+// AddOfferBudgetItemRequest is the simplified request for adding budget items to an offer
 // ParentType and ParentID are inferred from the URL
-type AddOfferBudgetDimensionRequest struct {
-	CategoryID          *string  `json:"categoryId,omitempty" validate:"omitempty,max=50"`
-	CustomName          string   `json:"customName,omitempty" validate:"max=200"`
-	Cost                float64  `json:"cost" validate:"gt=0"`
-	Revenue             float64  `json:"revenue,omitempty" validate:"gte=0"`
-	TargetMarginPercent *float64 `json:"targetMarginPercent,omitempty" validate:"omitempty,gte=0,lt=100"`
-	MarginOverride      bool     `json:"marginOverride,omitempty"`
-	Description         string   `json:"description,omitempty"`
-	Quantity            *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
-	Unit                string   `json:"unit,omitempty" validate:"max=50"`
-	DisplayOrder        int      `json:"displayOrder,omitempty" validate:"gte=0"`
+type AddOfferBudgetItemRequest struct {
+	Name           string   `json:"name" validate:"required,max=200"`
+	ExpectedCost   float64  `json:"expectedCost" validate:"gte=0"`
+	ExpectedMargin float64  `json:"expectedMargin" validate:"gte=0,lte=100"`
+	Quantity       *float64 `json:"quantity,omitempty" validate:"omitempty,gte=0"`
+	PricePerItem   *float64 `json:"pricePerItem,omitempty" validate:"omitempty,gte=0"`
+	Description    string   `json:"description,omitempty"`
+	DisplayOrder   int      `json:"displayOrder,omitempty" validate:"gte=0"`
 }
 
 // Project Actual Cost Request DTOs
 
 type CreateProjectActualCostRequest struct {
-	ProjectID         uuid.UUID  `json:"projectId" validate:"required"`
-	CostType          CostType   `json:"costType" validate:"required"`
-	Description       string     `json:"description" validate:"required,max=500"`
-	Amount            float64    `json:"amount" validate:"required"`
-	Currency          string     `json:"currency,omitempty" validate:"max=3"`
-	CostDate          time.Time  `json:"costDate" validate:"required"`
-	PostingDate       *time.Time `json:"postingDate,omitempty"`
-	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
-	ERPSource         ERPSource  `json:"erpSource,omitempty"`
-	ERPReference      string     `json:"erpReference,omitempty" validate:"max=100"`
-	ERPTransactionID  string     `json:"erpTransactionId,omitempty" validate:"max=100"`
-	Notes             string     `json:"notes,omitempty"`
+	ProjectID        uuid.UUID  `json:"projectId" validate:"required"`
+	CostType         CostType   `json:"costType" validate:"required"`
+	Description      string     `json:"description" validate:"required,max=500"`
+	Amount           float64    `json:"amount" validate:"required"`
+	Currency         string     `json:"currency,omitempty" validate:"max=3"`
+	CostDate         time.Time  `json:"costDate" validate:"required"`
+	PostingDate      *time.Time `json:"postingDate,omitempty"`
+	BudgetItemID     *uuid.UUID `json:"budgetItemId,omitempty"`
+	ERPSource        ERPSource  `json:"erpSource,omitempty"`
+	ERPReference     string     `json:"erpReference,omitempty" validate:"max=100"`
+	ERPTransactionID string     `json:"erpTransactionId,omitempty" validate:"max=100"`
+	Notes            string     `json:"notes,omitempty"`
 }
 
 type UpdateProjectActualCostRequest struct {
-	CostType          CostType   `json:"costType" validate:"required"`
-	Description       string     `json:"description" validate:"required,max=500"`
-	Amount            float64    `json:"amount" validate:"required"`
-	Currency          string     `json:"currency,omitempty" validate:"max=3"`
-	CostDate          time.Time  `json:"costDate" validate:"required"`
-	PostingDate       *time.Time `json:"postingDate,omitempty"`
-	BudgetDimensionID *uuid.UUID `json:"budgetDimensionId,omitempty"`
-	ERPSource         ERPSource  `json:"erpSource,omitempty"`
-	ERPReference      string     `json:"erpReference,omitempty" validate:"max=100"`
-	ERPTransactionID  string     `json:"erpTransactionId,omitempty" validate:"max=100"`
-	Notes             string     `json:"notes,omitempty"`
+	CostType         CostType   `json:"costType" validate:"required"`
+	Description      string     `json:"description" validate:"required,max=500"`
+	Amount           float64    `json:"amount" validate:"required"`
+	Currency         string     `json:"currency,omitempty" validate:"max=3"`
+	CostDate         time.Time  `json:"costDate" validate:"required"`
+	PostingDate      *time.Time `json:"postingDate,omitempty"`
+	BudgetItemID     *uuid.UUID `json:"budgetItemId,omitempty"`
+	ERPSource        ERPSource  `json:"erpSource,omitempty"`
+	ERPReference     string     `json:"erpReference,omitempty" validate:"max=100"`
+	ERPTransactionID string     `json:"erpTransactionId,omitempty" validate:"max=100"`
+	Notes            string     `json:"notes,omitempty"`
 }
 
 type ApproveProjectActualCostRequest struct {
@@ -792,16 +852,17 @@ type OfferWithItemsDTO struct {
 }
 
 type AdvanceOfferRequest struct {
-	Phase OfferPhase `json:"phase" validate:"required"`
+	Phase     OfferPhase `json:"phase" validate:"required"`
+	ProjectID *uuid.UUID `json:"projectId,omitempty"` // Link to existing project (auto-created if not provided and advancing to in_progress)
 }
 
 // Offer Lifecycle DTOs
 
 // CloneOfferRequest contains options for cloning an offer
 type CloneOfferRequest struct {
-	NewTitle          string `json:"newTitle,omitempty" validate:"max=200"`
-	IncludeDimensions *bool  `json:"includeDimensions,omitempty"` // Default true - clone budget dimensions (nil treated as true)
-	IncludeFiles      bool   `json:"includeFiles"`                // Default false - files are not cloned by default
+	NewTitle      string `json:"newTitle,omitempty" validate:"max=200"`
+	IncludeBudget *bool  `json:"includeBudget,omitempty"` // Default true - clone budget items (nil treated as true)
+	IncludeFiles  bool   `json:"includeFiles"`            // Default false - files are not cloned by default
 }
 
 // AcceptOfferRequest contains options when accepting an offer
@@ -822,19 +883,50 @@ type RejectOfferRequest struct {
 	Reason string `json:"reason,omitempty" validate:"max=500"`
 }
 
-// OfferDetailDTO includes offer with budget dimensions and summary
+// OfferWithProjectResponse contains an offer and optionally an auto-created project
+// Used when creating/advancing offers that trigger project auto-creation
+type OfferWithProjectResponse struct {
+	Offer          *OfferDTO   `json:"offer"`
+	Project        *ProjectDTO `json:"project,omitempty"`        // Present if a project was auto-created
+	ProjectCreated bool        `json:"projectCreated,omitempty"` // True if a new project was created
+}
+
+// WinOfferRequest contains options when winning an offer within a project context
+// This is used when the offer belongs to a project (offer folder model)
+type WinOfferRequest struct {
+	// Notes is an optional note about why this offer was selected
+	Notes string `json:"notes,omitempty" validate:"max=500"`
+}
+
+// WinOfferResponse contains the result of winning an offer
+type WinOfferResponse struct {
+	Offer         *OfferDTO   `json:"offer"`
+	Project       *ProjectDTO `json:"project,omitempty"`
+	ExpiredOffers []OfferDTO  `json:"expiredOffers,omitempty"` // Sibling offers that were expired
+	ExpiredCount  int         `json:"expiredCount"`            // Count of sibling offers that were expired
+}
+
+// ProjectOffersDTO contains a project with its associated offers
+type ProjectOffersDTO struct {
+	Project *ProjectDTO `json:"project"`
+	Offers  []OfferDTO  `json:"offers"`
+}
+
+// OfferDetailDTO includes offer with budget items and summary
 type OfferDetailDTO struct {
 	OfferDTO
-	BudgetDimensions []BudgetDimensionDTO `json:"budgetDimensions,omitempty"`
-	BudgetSummary    *BudgetSummaryDTO    `json:"budgetSummary,omitempty"`
-	FilesCount       int                  `json:"filesCount"`
+	BudgetItems   []BudgetItemDTO   `json:"budgetItems,omitempty"`
+	BudgetSummary *BudgetSummaryDTO `json:"budgetSummary,omitempty"`
+	FilesCount    int               `json:"filesCount"`
 }
 
 type ProjectBudgetDTO struct {
-	Budget      float64 `json:"budget"`
-	Spent       float64 `json:"spent"`
-	Remaining   float64 `json:"remaining"`
-	PercentUsed float64 `json:"percentUsed"`
+	Value         float64 `json:"value"`
+	Cost          float64 `json:"cost"`
+	MarginPercent float64 `json:"marginPercent"`
+	Spent         float64 `json:"spent"`
+	Remaining     float64 `json:"remaining"`
+	PercentUsed   float64 `json:"percentUsed"`
 }
 
 type ActivityDTO struct {
@@ -1034,8 +1126,18 @@ type InheritBudgetRequest struct {
 
 // InheritBudgetResponse contains the result of budget inheritance from an offer
 type InheritBudgetResponse struct {
-	Project         *ProjectDTO `json:"project"`
-	DimensionsCount int         `json:"dimensionsCount"`
+	Project    *ProjectDTO `json:"project"`
+	ItemsCount int         `json:"itemsCount"`
+}
+
+// ResyncFromOfferResponse contains the result of syncing project economics from its best offer
+type ResyncFromOfferResponse struct {
+	Project     *ProjectDTO `json:"project"`
+	OfferID     uuid.UUID   `json:"offerId"`
+	OfferTitle  string      `json:"offerTitle"`
+	OfferPhase  string      `json:"offerPhase"`
+	SyncedValue float64     `json:"syncedValue"`
+	SyncedCost  float64     `json:"syncedCost"`
 }
 
 // ProjectWithDetailsDTO includes project data with related entities and budget summary
@@ -1183,6 +1285,11 @@ type UpdateOfferDueDateRequest struct {
 	DueDate *time.Time `json:"dueDate"` // nullable to allow clearing
 }
 
+// UpdateOfferExpirationDateRequest for updating/extending offer expiration date
+type UpdateOfferExpirationDateRequest struct {
+	ExpirationDate *time.Time `json:"expirationDate"` // nullable to allow clearing (though not recommended)
+}
+
 // UpdateOfferDescriptionRequest for updating offer description
 type UpdateOfferDescriptionRequest struct {
 	Description string `json:"description" validate:"max=10000"`
@@ -1191,4 +1298,181 @@ type UpdateOfferDescriptionRequest struct {
 // UpdateOfferProjectRequest for linking offer to a project
 type UpdateOfferProjectRequest struct {
 	ProjectID uuid.UUID `json:"projectId" validate:"required"`
+}
+
+// UpdateOfferCustomerHasWonProjectRequest for toggling customer has won project flag
+type UpdateOfferCustomerHasWonProjectRequest struct {
+	CustomerHasWonProject bool `json:"customerHasWonProject"`
+}
+
+// UpdateOfferNumberRequest for updating the internal offer number
+type UpdateOfferNumberRequest struct {
+	OfferNumber string `json:"offerNumber" validate:"required,max=50"`
+}
+
+// UpdateOfferExternalReferenceRequest for updating the external reference
+type UpdateOfferExternalReferenceRequest struct {
+	ExternalReference string `json:"externalReference" validate:"max=100"`
+}
+
+// NextOfferNumberResponse contains the next offer number preview
+type NextOfferNumberResponse struct {
+	NextOfferNumber string    `json:"nextOfferNumber"` // The next offer number that would be assigned, e.g., "TK-2025-001"
+	CompanyID       CompanyID `json:"companyId"`       // The company ID this number is for
+	Year            int       `json:"year"`            // The year component of the number
+}
+
+// ============================================================================
+// Customer Property Update Request DTOs
+// ============================================================================
+
+// UpdateCustomerStatusRequest for updating customer status
+type UpdateCustomerStatusRequest struct {
+	Status CustomerStatus `json:"status" validate:"required,oneof=active inactive lead churned"`
+}
+
+// UpdateCustomerTierRequest for updating customer tier
+type UpdateCustomerTierRequest struct {
+	Tier CustomerTier `json:"tier" validate:"required,oneof=bronze silver gold platinum"`
+}
+
+// UpdateCustomerIndustryRequest for updating customer industry
+type UpdateCustomerIndustryRequest struct {
+	Industry CustomerIndustry `json:"industry" validate:"omitempty,oneof=construction manufacturing retail logistics agriculture energy public_sector real_estate other"`
+}
+
+// UpdateCustomerNotesRequest for updating customer notes
+type UpdateCustomerNotesRequest struct {
+	Notes string `json:"notes"`
+}
+
+// UpdateCustomerCompanyRequest for assigning customer to a company
+type UpdateCustomerCompanyRequest struct {
+	CompanyID *CompanyID `json:"companyId"` // nullable to allow unassignment
+}
+
+// UpdateCustomerClassRequest for updating customer class
+type UpdateCustomerClassRequest struct {
+	CustomerClass string `json:"customerClass" validate:"max=50"`
+}
+
+// UpdateCustomerCreditLimitRequest for updating customer credit limit
+type UpdateCustomerCreditLimitRequest struct {
+	CreditLimit *float64 `json:"creditLimit"` // nullable to allow clearing
+}
+
+// UpdateCustomerIsInternalRequest for updating customer internal flag
+type UpdateCustomerIsInternalRequest struct {
+	IsInternal bool `json:"isInternal"`
+}
+
+// UpdateCustomerAddressRequest for updating customer address fields
+type UpdateCustomerAddressRequest struct {
+	Address    string `json:"address" validate:"max=500"`
+	City       string `json:"city" validate:"max=100"`
+	PostalCode string `json:"postalCode" validate:"max=20"`
+	Country    string `json:"country" validate:"max=100"`
+}
+
+// UpdateCustomerPostalCodeRequest for updating customer postal code only
+type UpdateCustomerPostalCodeRequest struct {
+	PostalCode string `json:"postalCode" validate:"max=20"`
+}
+
+// UpdateCustomerCityRequest for updating customer city only
+type UpdateCustomerCityRequest struct {
+	City string `json:"city" validate:"max=100"`
+}
+
+// UpdateCustomerContactInfoRequest for updating customer contact information
+type UpdateCustomerContactInfoRequest struct {
+	ContactPerson string `json:"contactPerson" validate:"max=200"`
+	ContactEmail  string `json:"contactEmail" validate:"omitempty,email"`
+	ContactPhone  string `json:"contactPhone" validate:"max=50"`
+}
+
+// ============================================================================
+// Project Property Update Request DTOs
+// ============================================================================
+
+// UpdateProjectNameRequest for updating project name
+type UpdateProjectNameRequest struct {
+	Name string `json:"name" validate:"required,min=1,max=200"`
+}
+
+// UpdateProjectDescriptionRequest for updating project description and summary
+type UpdateProjectDescriptionRequest struct {
+	Summary     string `json:"summary" validate:"max=500"`
+	Description string `json:"description"`
+}
+
+// UpdateProjectPhaseRequest for updating project phase
+type UpdateProjectPhaseRequest struct {
+	Phase ProjectPhase `json:"phase" validate:"required,oneof=tilbud working active completed cancelled"`
+}
+
+// UpdateProjectManagerRequest for updating project manager
+type UpdateProjectManagerRequest struct {
+	ManagerID string `json:"managerId" validate:"max=100"`
+}
+
+// UpdateProjectDatesRequest for updating project start and end dates
+type UpdateProjectDatesRequest struct {
+	StartDate *time.Time `json:"startDate"`
+	EndDate   *time.Time `json:"endDate"`
+}
+
+// UpdateProjectBudgetRequest for updating project budget (only in active phase)
+type UpdateProjectBudgetRequest struct {
+	Budget float64 `json:"budget" validate:"min=0"`
+}
+
+// UpdateProjectSpentRequest for updating project spent amount (only in active phase)
+type UpdateProjectSpentRequest struct {
+	Spent float64 `json:"spent" validate:"min=0"`
+}
+
+// UpdateProjectTeamMembersRequest for updating project team members
+type UpdateProjectTeamMembersRequest struct {
+	TeamMembers []string `json:"teamMembers"`
+}
+
+// UpdateProjectHealthRequest for updating project health
+type UpdateProjectHealthRequest struct {
+	Health ProjectHealth `json:"health" validate:"required,oneof=on_track at_risk over_budget"`
+}
+
+// UpdateProjectCompletionPercentRequest for updating project completion percentage
+type UpdateProjectCompletionPercentRequest struct {
+	CompletionPercent float64 `json:"completionPercent" validate:"min=0,max=100"`
+}
+
+// UpdateProjectEstimatedCompletionDateRequest for updating estimated completion date
+type UpdateProjectEstimatedCompletionDateRequest struct {
+	EstimatedCompletionDate *time.Time `json:"estimatedCompletionDate"`
+}
+
+// UpdateProjectNumberRequest for updating project number
+type UpdateProjectNumberRequest struct {
+	ProjectNumber string `json:"projectNumber" validate:"max=50"`
+}
+
+// UpdateProjectCompanyRequest for updating project company assignment
+type UpdateProjectCompanyRequest struct {
+	CompanyID CompanyID `json:"companyId" validate:"omitempty,oneof=gruppen stalbygg hybridbygg industri tak montasje"`
+}
+
+// ReopenProjectRequest for reopening a completed or cancelled project
+type ReopenProjectRequest struct {
+	TargetPhase ProjectPhase `json:"targetPhase" validate:"required,oneof=tilbud working"`
+	Notes       string       `json:"notes" validate:"max=1000"`
+}
+
+// ReopenProjectResponse is the response when reopening a project
+type ReopenProjectResponse struct {
+	Project           *ProjectDTO `json:"project"`
+	PreviousPhase     string      `json:"previousPhase"`
+	RevertedOffer     *OfferDTO   `json:"revertedOffer,omitempty"` // Offer that was reverted to sent (if any)
+	ClearedOfferID    bool        `json:"clearedOfferId"`          // Whether WinningOfferID was cleared
+	ClearedOfferValue bool        `json:"clearedOfferValue"`       // Whether economic values were cleared
 }

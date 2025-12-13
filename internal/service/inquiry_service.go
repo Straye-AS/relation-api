@@ -228,11 +228,24 @@ func (s *InquiryService) Convert(ctx context.Context, id uuid.UUID, req *domain.
 		return nil, ErrInquiryMissingConversionData
 	}
 
+	// Validate company ID for offer number generation
+	if !domain.IsValidCompanyID(string(companyID)) {
+		return nil, ErrInvalidCompanyID
+	}
+
 	// Generate offer number for the company
 	offerNumber, err := s.offerRepo.GenerateOfferNumber(ctx, companyID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate offer number: %w", err)
+		s.logger.Error("failed to generate offer number during conversion",
+			zap.Error(err),
+			zap.String("inquiryID", id.String()),
+			zap.String("companyID", string(companyID)))
+		return nil, fmt.Errorf("%w: %v", ErrOfferNumberGenerationFailed, err)
 	}
+
+	s.logger.Info("generated offer number during inquiry conversion",
+		zap.String("inquiryID", id.String()),
+		zap.String("offerNumber", offerNumber))
 
 	// Update inquiry -> offer
 	updates := map[string]interface{}{

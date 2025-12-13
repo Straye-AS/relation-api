@@ -24,8 +24,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// Counter for generating unique offer numbers in tests
+var testProjectOfferCounter int64
+
 func setupProjectHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -37,10 +40,31 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 	projectRepo := repository.NewProjectRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	offerRepo := repository.NewOfferRepository(db)
+	offerItemRepo := repository.NewOfferItemRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
+
+	companyService := service.NewCompanyService(logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, logger)
+	offerService := service.NewOfferService(
+		offerRepo,
+		offerItemRepo,
+		customerRepo,
+		projectRepo,
+		budgetItemRepo,
+		fileRepo,
+		activityRepo,
+		companyService,
+		numberSequenceService,
+		logger,
+		db,
+	)
 
-	return handler.NewProjectHandler(projectService, logger)
+	return handler.NewProjectHandler(projectService, offerService, logger)
 }
 
 // createProjectHandlerWithDeps creates a handler with all dependencies for full feature support
@@ -51,23 +75,41 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 	customerRepo := repository.NewCustomerRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
-	dimensionRepo := repository.NewBudgetDimensionRepository(db)
-	companyRepo := repository.NewCompanyRepository(db)
+	offerItemRepo := repository.NewOfferItemRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
-	companyService := service.NewCompanyService(companyRepo, logger)
+	companyService := service.NewCompanyService(logger)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
 	projectService := service.NewProjectServiceWithDeps(
 		projectRepo,
 		offerRepo,
 		customerRepo,
-		dimensionRepo,
+		budgetItemRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		logger,
 		db,
 	)
 
-	return handler.NewProjectHandler(projectService, logger)
+	offerService := service.NewOfferService(
+		offerRepo,
+		offerItemRepo,
+		customerRepo,
+		projectRepo,
+		budgetItemRepo,
+		fileRepo,
+		activityRepo,
+		companyService,
+		numberSequenceService,
+		logger,
+		db,
+	)
+
+	return handler.NewProjectHandler(projectService, offerService, logger)
 }
 
 func createProjectTestContext() context.Context {
@@ -81,15 +123,18 @@ func createProjectTestContext() context.Context {
 }
 
 func createTestProject(t *testing.T, db *gorm.DB, customer *domain.Customer, name string, status domain.ProjectStatus, managerID string) *domain.Project {
+	startDate := time.Now()
 	project := &domain.Project{
 		Name:         name,
 		CustomerID:   customer.ID,
 		CustomerName: customer.Name,
 		CompanyID:    domain.CompanyStalbygg,
 		Status:       status,
-		StartDate:    time.Now(),
-		Budget:       100000,
-		ManagerID:    managerID,
+		Phase:        domain.ProjectPhaseActive, // Set to active to allow budget updates in tests
+		StartDate:    startDate,
+		Value:        100000,
+		Cost:         80000,
+		ManagerID:    &managerID,
 	}
 	err := db.Create(project).Error
 	require.NoError(t, err)
@@ -291,14 +336,17 @@ func TestProjectHandler_Create(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "New Customer")
 
 	t.Run("create valid project", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.CreateProjectRequest{
 			Name:       "New Project",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusPlanning,
-			StartDate:  time.Now(),
-			Budget:     150000,
-			ManagerID:  userCtx.UserID.String(),
+			StartDate:  &startDate,
+			Value:      150000,
+			Cost:       120000,
+			ManagerID:  &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -349,14 +397,17 @@ func TestProjectHandler_Create(t *testing.T) {
 	})
 
 	t.Run("create with non-existent customer", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.CreateProjectRequest{
 			Name:       "Project Without Customer",
 			CustomerID: uuid.New(), // Non-existent customer
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusPlanning,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  userCtx.UserID.String(),
+			StartDate:  &startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -382,13 +433,16 @@ func TestProjectHandler_Update(t *testing.T) {
 	project := createTestProject(t, db, customer, "Original Project", domain.ProjectStatusPlanning, userCtx.UserID.String())
 
 	t.Run("update project successfully", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.UpdateProjectRequest{
 			Name:      "Updated Project Name",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    200000,
-			ManagerID: userCtx.UserID.String(),
+			StartDate: &startDate,
+			Value:     200000,
+			Cost:      160000,
+			ManagerID: &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -409,18 +463,21 @@ func TestProjectHandler_Update(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Project Name", result.Name)
-		assert.Equal(t, 200000.0, result.Budget)
+		assert.Equal(t, 200000.0, result.Value)
 	})
 
 	t.Run("update non-existent project", func(t *testing.T) {
 		nonExistentID := uuid.New()
+		startDate := time.Now()
+		managerID := userCtx.UserID.String()
 		reqBody := domain.UpdateProjectRequest{
 			Name:      "Updated Name",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    100000,
-			ManagerID: userCtx.UserID.String(),
+			StartDate: &startDate,
+			Value:     100000,
+			Cost:      80000,
+			ManagerID: &managerID,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -687,7 +744,7 @@ func TestProjectHandler_GetBudget(t *testing.T) {
 		var result domain.ProjectBudgetDTO
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
-		assert.Equal(t, 100000.0, result.Budget)
+		assert.Equal(t, 100000.0, result.Value)
 		assert.Equal(t, 25000.0, result.Spent)
 		assert.Equal(t, 75000.0, result.Remaining)
 		assert.Equal(t, 25.0, result.PercentUsed)
@@ -787,6 +844,8 @@ func TestProjectHandler_GetActivities(t *testing.T) {
 
 // Helper to create a test offer for project tests with optional budget dimensions
 func createTestOfferForProject(t *testing.T, db *gorm.DB, customer *domain.Customer, title string, phase domain.OfferPhase, value float64, userID string) *domain.Offer {
+	testProjectOfferCounter++
+
 	offer := &domain.Offer{
 		Title:               title,
 		CustomerID:          customer.ID,
@@ -799,28 +858,34 @@ func createTestOfferForProject(t *testing.T, db *gorm.DB, customer *domain.Custo
 		ResponsibleUserID:   userID,
 		ResponsibleUserName: "Test User",
 	}
+
+	// For non-draft offers, generate unique offer number
+	if phase != domain.OfferPhaseDraft {
+		offer.OfferNumber = fmt.Sprintf("PROJ-TEST-%d-%d", time.Now().UnixNano(), testProjectOfferCounter)
+	}
+
 	err := db.Create(offer).Error
 	require.NoError(t, err)
 	return offer
 }
 
-// Helper to create budget dimensions for an offer
-func createTestBudgetDimensions(t *testing.T, db *gorm.DB, offerID uuid.UUID, count int) []domain.BudgetDimension {
-	dimensions := make([]domain.BudgetDimension, count)
+// Helper to create budget items for an offer
+func createTestBudgetItems(t *testing.T, db *gorm.DB, offerID uuid.UUID, count int) []domain.BudgetItem {
+	items := make([]domain.BudgetItem, count)
 	for i := 0; i < count; i++ {
-		dim := domain.BudgetDimension{
-			ParentType:   domain.BudgetParentOffer,
-			ParentID:     offerID,
-			CustomName:   fmt.Sprintf("Test Dimension %d", i+1),
-			Cost:         float64(10000 * (i + 1)),
-			Revenue:      float64(15000 * (i + 1)),
-			DisplayOrder: i,
+		item := domain.BudgetItem{
+			ParentType:     domain.BudgetParentOffer,
+			ParentID:       offerID,
+			Name:           fmt.Sprintf("Test Item %d", i+1),
+			ExpectedCost:   float64(10000 * (i + 1)),
+			ExpectedMargin: 50, // 50% margin
+			DisplayOrder:   i,
 		}
-		err := db.Create(&dim).Error
+		err := db.Create(&item).Error
 		require.NoError(t, err)
-		dimensions[i] = dim
+		items[i] = item
 	}
-	return dimensions
+	return items
 }
 
 // TestProjectHandler_InheritBudget tests the InheritBudget endpoint
@@ -833,9 +898,9 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "Inherit Budget Customer")
 
 	t.Run("inherit budget from won offer successfully", func(t *testing.T) {
-		// Create a won offer with budget dimensions
+		// Create a won offer with budget items
 		offer := createTestOfferForProject(t, db, customer, "Won Offer", domain.OfferPhaseWon, 150000, userCtx.UserID.String())
-		createTestBudgetDimensions(t, db, offer.ID, 3)
+		createTestBudgetItems(t, db, offer.ID, 3)
 
 		// Create a project to inherit into
 		project := createTestProject(t, db, customer, "Project for Inheritance", domain.ProjectStatusPlanning, userCtx.UserID.String())
@@ -863,19 +928,19 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, project.ID, result.Project.ID)
-		assert.Equal(t, 3, result.DimensionsCount)
-		assert.Equal(t, 150000.0, result.Project.Budget)
+		assert.Equal(t, 3, result.ItemsCount)
+		assert.Equal(t, 150000.0, result.Project.Value)
 		assert.True(t, result.Project.HasDetailedBudget)
 		assert.NotNil(t, result.Project.OfferID)
 		assert.Equal(t, offer.ID, *result.Project.OfferID)
 	})
 
-	t.Run("inherit budget from won offer without dimensions", func(t *testing.T) {
-		// Create a won offer without budget dimensions
-		offer := createTestOfferForProject(t, db, customer, "Won Offer No Dims", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
+	t.Run("inherit budget from won offer without budget items", func(t *testing.T) {
+		// Create a won offer without budget items
+		offer := createTestOfferForProject(t, db, customer, "Won Offer No Items", domain.OfferPhaseWon, 100000, userCtx.UserID.String())
 
 		// Create a project to inherit into
-		project := createTestProject(t, db, customer, "Project No Dims", domain.ProjectStatusPlanning, userCtx.UserID.String())
+		project := createTestProject(t, db, customer, "Project No Items", domain.ProjectStatusPlanning, userCtx.UserID.String())
 
 		reqBody := domain.InheritBudgetRequest{
 			OfferID: offer.ID,
@@ -899,8 +964,8 @@ func TestProjectHandler_InheritBudget(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.NotNil(t, result.Project)
-		assert.Equal(t, 0, result.DimensionsCount)
-		assert.Equal(t, 100000.0, result.Project.Budget)
+		assert.Equal(t, 0, result.ItemsCount)
+		assert.Equal(t, 100000.0, result.Project.Value)
 		assert.NotNil(t, result.Project.OfferID)
 	})
 

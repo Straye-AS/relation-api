@@ -38,40 +38,42 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 	projectRepo := repository.NewProjectRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
-	dimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
-	companyRepo := repository.NewCompanyRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
-	companyService := service.NewCompanyService(companyRepo, log)
+	companyService := service.NewCompanyService(log)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
 	svc := service.NewProjectServiceWithDeps(
 		projectRepo,
 		offerRepo,
 		customerRepo,
-		dimensionRepo,
+		budgetItemRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		log,
 		db,
 	)
 
 	fixtures := &projectTestFixtures{
-		db:            db,
-		customerRepo:  customerRepo,
-		offerRepo:     offerRepo,
-		projectRepo:   projectRepo,
-		dimensionRepo: dimensionRepo,
+		db:             db,
+		customerRepo:   customerRepo,
+		offerRepo:      offerRepo,
+		projectRepo:    projectRepo,
+		budgetItemRepo: budgetItemRepo,
 	}
 
 	return svc, fixtures
 }
 
 type projectTestFixtures struct {
-	db            *gorm.DB
-	customerRepo  *repository.CustomerRepository
-	offerRepo     *repository.OfferRepository
-	projectRepo   *repository.ProjectRepository
-	dimensionRepo *repository.BudgetDimensionRepository
+	db             *gorm.DB
+	customerRepo   *repository.CustomerRepository
+	offerRepo      *repository.OfferRepository
+	projectRepo    *repository.ProjectRepository
+	budgetItemRepo *repository.BudgetItemRepository
 }
 
 func (f *projectTestFixtures) createTestCustomer(t *testing.T, ctx context.Context, name string) *domain.Customer {
@@ -105,34 +107,37 @@ func (f *projectTestFixtures) createTestOffer(t *testing.T, ctx context.Context,
 	return offer
 }
 
-func (f *projectTestFixtures) createTestBudgetDimension(t *testing.T, ctx context.Context, parentType domain.BudgetParentType, parentID uuid.UUID, name string, cost, revenue float64, order int) *domain.BudgetDimension {
-	dimension := &domain.BudgetDimension{
-		ParentType:   parentType,
-		ParentID:     parentID,
-		CustomName:   name,
-		Cost:         cost,
-		Revenue:      revenue,
-		DisplayOrder: order,
+func (f *projectTestFixtures) createTestBudgetItem(t *testing.T, ctx context.Context, parentType domain.BudgetParentType, parentID uuid.UUID, name string, expectedCost float64, marginPercent float64, order int) *domain.BudgetItem {
+	item := &domain.BudgetItem{
+		ParentType:     parentType,
+		ParentID:       parentID,
+		Name:           name,
+		ExpectedCost:   expectedCost,
+		ExpectedMargin: marginPercent,
+		DisplayOrder:   order,
 	}
-	err := f.dimensionRepo.Create(ctx, dimension)
+	err := f.budgetItemRepo.Create(ctx, item)
 	require.NoError(t, err)
-	return dimension
+	return item
 }
 
 func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Context, name string, status domain.ProjectStatus) (*domain.Project, *domain.Customer) {
 	customer := f.createTestCustomer(t, ctx, "Customer for "+name)
 
 	health := domain.ProjectHealthOnTrack
+	managerID := "test-manager-id"
+	startDate := time.Now()
 	project := &domain.Project{
 		Name:              name,
 		CustomerID:        customer.ID,
 		CustomerName:      customer.Name,
 		CompanyID:         domain.CompanyStalbygg,
 		Status:            status,
-		StartDate:         time.Now(),
-		Budget:            100000,
+		StartDate:         startDate,
+		Value:             100000,
+		Cost:              80000,
 		Spent:             0,
-		ManagerID:         "test-manager-id",
+		ManagerID:         &managerID,
 		HasDetailedBudget: false,
 		Health:            &health,
 	}
@@ -144,7 +149,7 @@ func (f *projectTestFixtures) createTestProject(t *testing.T, ctx context.Contex
 
 func (f *projectTestFixtures) cleanup(t *testing.T) {
 	f.db.Exec("DELETE FROM activities WHERE target_type = 'Project' OR target_type = 'Customer'")
-	f.db.Exec("DELETE FROM budget_dimensions WHERE parent_type = 'project' OR parent_type = 'offer'")
+	f.db.Exec("DELETE FROM budget_items WHERE parent_type = 'project' OR parent_type = 'offer'")
 	f.db.Exec("DELETE FROM projects WHERE name LIKE 'Test%'")
 	f.db.Exec("DELETE FROM offers WHERE title LIKE 'Test%'")
 	f.db.Exec("DELETE FROM customers WHERE name LIKE 'Customer for%' OR name LIKE 'Test%'")
@@ -186,14 +191,17 @@ func TestProjectService_Create(t *testing.T) {
 	t.Run("create project successfully", func(t *testing.T) {
 		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Create")
 
+		startDate := time.Now()
+		managerID := "test-manager"
 		req := &domain.CreateProjectRequest{
 			Name:       "Test Project Create",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusPlanning,
-			StartDate:  time.Now(),
-			Budget:     150000,
-			ManagerID:  "test-manager",
+			StartDate:  &startDate,
+			Value:      150000,
+			Cost:       120000,
+			ManagerID:  &managerID,
 		}
 
 		result, err := svc.Create(ctx, req)
@@ -210,14 +218,17 @@ func TestProjectService_Create(t *testing.T) {
 	t.Run("create project with default health", func(t *testing.T) {
 		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Health")
 
+		startDate := time.Now()
+		managerID := "test-manager"
 		req := &domain.CreateProjectRequest{
 			Name:       "Test Project Default Health",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "test-manager",
+			StartDate:  &startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 		}
 
 		result, err := svc.Create(ctx, req)
@@ -227,14 +238,17 @@ func TestProjectService_Create(t *testing.T) {
 	})
 
 	t.Run("create fails with non-existent customer", func(t *testing.T) {
+		startDate := time.Now()
+		managerID := "test-manager"
 		req := &domain.CreateProjectRequest{
 			Name:       "Test Project Bad Customer",
 			CustomerID: uuid.New(),
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusPlanning,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "test-manager",
+			StartDate:  &startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 		}
 
 		result, err := svc.Create(ctx, req)
@@ -279,14 +293,17 @@ func TestProjectService_Update(t *testing.T) {
 		ctx := createProjectTestContextWithManagerID("test-manager-id")
 		project, _ := fixtures.createTestProject(t, ctx, "Test Update Project", domain.ProjectStatusPlanning)
 
+		startDate := time.Now()
+		managerID := "test-manager-id"
 		req := &domain.UpdateProjectRequest{
 			Name:      "Test Updated Project Name",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    200000,
+			StartDate: &startDate,
+			Value:     200000,
+			Cost:      160000,
 			Spent:     50000,
-			ManagerID: "test-manager-id",
+			ManagerID: &managerID,
 		}
 
 		result, err := svc.Update(ctx, project.ID, req)
@@ -294,20 +311,23 @@ func TestProjectService_Update(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.Equal(t, "Test Updated Project Name", result.Name)
 		assert.Equal(t, domain.ProjectStatusActive, result.Status)
-		assert.Equal(t, float64(200000), result.Budget)
+		assert.Equal(t, float64(200000), result.Value)
 	})
 
 	t.Run("update project as admin", func(t *testing.T) {
 		ctx := createProjectTestContext() // Manager role allows update
 		project, _ := fixtures.createTestProject(t, ctx, "Test Update Admin", domain.ProjectStatusPlanning)
 
+		startDate := time.Now()
+		managerID := "different-manager"
 		req := &domain.UpdateProjectRequest{
 			Name:      "Test Updated By Admin",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    150000,
-			ManagerID: "different-manager",
+			StartDate: &startDate,
+			Value:     150000,
+			Cost:      120000,
+			ManagerID: &managerID,
 		}
 
 		result, err := svc.Update(ctx, project.ID, req)
@@ -317,13 +337,16 @@ func TestProjectService_Update(t *testing.T) {
 
 	t.Run("update project not found", func(t *testing.T) {
 		ctx := createProjectTestContext()
+		startDate := time.Now()
+		managerID := "test-manager"
 		req := &domain.UpdateProjectRequest{
 			Name:      "Test Non-Existent",
 			CompanyID: domain.CompanyStalbygg,
 			Status:    domain.ProjectStatusActive,
-			StartDate: time.Now(),
-			Budget:    100000,
-			ManagerID: "test-manager",
+			StartDate: &startDate,
+			Value:     100000,
+			Cost:      80000,
+			ManagerID: &managerID,
 		}
 
 		result, err := svc.Update(ctx, uuid.New(), req)
@@ -406,13 +429,13 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 
 	ctx := createProjectTestContext()
 
-	t.Run("inherit budget dimensions from won offer", func(t *testing.T) {
+	t.Run("inherit budget items from won offer", func(t *testing.T) {
 		customer := fixtures.createTestCustomer(t, ctx, "Test Inherit Customer")
 		offer := fixtures.createTestOffer(t, ctx, "Test Inherit Offer", domain.OfferPhaseWon, customer.ID)
 
-		// Create budget dimensions on the offer
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentOffer, offer.ID, "Steel Structure", 50000, 75000, 0)
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 45000, 1)
+		// Create budget items on the offer
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Steel Structure", 50000, 50, 0) // Revenue=75000
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentOffer, offer.ID, "Assembly", 30000, 50, 1)        // Revenue=45000
 
 		// Create project without inherited budget
 		project, _ := fixtures.createTestProject(t, ctx, "Test Inherit Project", domain.ProjectStatusPlanning)
@@ -422,27 +445,27 @@ func TestProjectService_InheritBudgetFromOffer(t *testing.T) {
 		resp, err := svc.InheritBudgetFromOffer(ctx, project.ID, offer.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.Equal(t, 2, resp.DimensionsCount)
+		assert.Equal(t, 2, resp.ItemsCount)
 
-		// Verify dimensions were cloned
-		projectDims, err := fixtures.dimensionRepo.GetByParent(ctx, domain.BudgetParentProject, project.ID)
+		// Verify items were cloned
+		projectItems, err := fixtures.budgetItemRepo.ListByParent(ctx, domain.BudgetParentProject, project.ID)
 		require.NoError(t, err)
-		assert.Len(t, projectDims, 2)
+		assert.Len(t, projectItems, 2)
 
-		// Verify dimension values
-		assert.Equal(t, "Steel Structure", projectDims[0].CustomName)
-		assert.Equal(t, float64(50000), projectDims[0].Cost)
-		assert.Equal(t, float64(75000), projectDims[0].Revenue)
+		// Verify item values
+		assert.Equal(t, "Steel Structure", projectItems[0].Name)
+		assert.Equal(t, float64(50000), projectItems[0].ExpectedCost)
+		assert.Equal(t, float64(50), projectItems[0].ExpectedMargin)
 
-		assert.Equal(t, "Assembly", projectDims[1].CustomName)
-		assert.Equal(t, float64(30000), projectDims[1].Cost)
-		assert.Equal(t, float64(45000), projectDims[1].Revenue)
+		assert.Equal(t, "Assembly", projectItems[1].Name)
+		assert.Equal(t, float64(30000), projectItems[1].ExpectedCost)
+		assert.Equal(t, float64(50), projectItems[1].ExpectedMargin)
 
 		// Verify project was updated
 		updatedProject, err := svc.GetByID(ctx, project.ID)
 		require.NoError(t, err)
 		assert.True(t, updatedProject.HasDetailedBudget)
-		assert.Equal(t, offer.Value, updatedProject.Budget)
+		assert.Equal(t, offer.Value, updatedProject.Value)
 	})
 
 	t.Run("cannot inherit from non-won offer", func(t *testing.T) {
@@ -480,19 +503,19 @@ func TestProjectService_GetBudgetSummary(t *testing.T) {
 
 	ctx := createProjectTestContext()
 
-	t.Run("get budget summary for project with dimensions", func(t *testing.T) {
+	t.Run("get budget summary for project with budget items", func(t *testing.T) {
 		project, _ := fixtures.createTestProject(t, ctx, "Test Budget Summary", domain.ProjectStatusActive)
 
-		// Add budget dimensions
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentProject, project.ID, "Dim 1", 10000, 15000, 0)
-		fixtures.createTestBudgetDimension(t, ctx, domain.BudgetParentProject, project.ID, "Dim 2", 20000, 30000, 1)
+		// Add budget items
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentProject, project.ID, "Item 1", 10000, 50, 0) // Revenue=15000
+		fixtures.createTestBudgetItem(t, ctx, domain.BudgetParentProject, project.ID, "Item 2", 20000, 50, 1) // Revenue=30000
 
 		summary, err := svc.GetBudgetSummary(ctx, project.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, summary)
 		assert.Equal(t, domain.BudgetParentProject, summary.ParentType)
 		assert.Equal(t, project.ID, summary.ParentID)
-		assert.Equal(t, 2, summary.DimensionCount)
+		assert.Equal(t, 2, summary.ItemCount)
 		assert.Equal(t, float64(30000), summary.TotalCost)
 		assert.Equal(t, float64(45000), summary.TotalRevenue)
 		assert.Equal(t, float64(15000), summary.TotalProfit)
@@ -707,14 +730,17 @@ func TestProjectService_GetByManager(t *testing.T) {
 	t.Run("get projects by manager", func(t *testing.T) {
 		// Create projects with specific manager
 		customer := fixtures.createTestCustomer(t, ctx, "Test Manager Customer")
+		startDate := time.Now()
+		managerID := "specific-manager-id"
 		project := &domain.Project{
 			Name:       "Test Manager Project 1",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "specific-manager-id",
+			StartDate:  startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 		}
 		fixtures.projectRepo.Create(ctx, project)
 
@@ -723,9 +749,10 @@ func TestProjectService_GetByManager(t *testing.T) {
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "specific-manager-id",
+			StartDate:  startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 		}
 		fixtures.projectRepo.Create(ctx, project2)
 
@@ -734,7 +761,8 @@ func TestProjectService_GetByManager(t *testing.T) {
 		assert.GreaterOrEqual(t, len(results), 2)
 
 		for _, p := range results {
-			assert.Equal(t, "specific-manager-id", p.ManagerID)
+			assert.NotNil(t, p.ManagerID)
+			assert.Equal(t, "specific-manager-id", *p.ManagerID)
 		}
 	})
 }
@@ -750,14 +778,17 @@ func TestProjectService_GetByHealth(t *testing.T) {
 		// Create projects with different health statuses
 		atRiskHealth := domain.ProjectHealthAtRisk
 		customer := fixtures.createTestCustomer(t, ctx, "Test Health Customer")
+		startDate := time.Now()
+		managerID := "test-manager"
 		project := &domain.Project{
 			Name:       "Test AtRisk Project",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "test-manager",
+			StartDate:  startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 			Health:     &atRiskHealth,
 		}
 		fixtures.projectRepo.Create(ctx, project)
@@ -786,15 +817,18 @@ func TestProjectService_GetHealthSummary(t *testing.T) {
 
 		onTrack := domain.ProjectHealthOnTrack
 		atRisk := domain.ProjectHealthAtRisk
+		startDate := time.Now()
+		managerID := "test-manager"
 
 		fixtures.db.Create(&domain.Project{
 			Name:       "Test Summary OnTrack",
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "test-manager",
+			StartDate:  startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 			Health:     &onTrack,
 		})
 
@@ -803,9 +837,10 @@ func TestProjectService_GetHealthSummary(t *testing.T) {
 			CustomerID: customer.ID,
 			CompanyID:  domain.CompanyStalbygg,
 			Status:     domain.ProjectStatusActive,
-			StartDate:  time.Now(),
-			Budget:     100000,
-			ManagerID:  "test-manager",
+			StartDate:  startDate,
+			Value:      100000,
+			Cost:       80000,
+			ManagerID:  &managerID,
 			Health:     &atRisk,
 		})
 

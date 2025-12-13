@@ -16,16 +16,36 @@ import (
 type ProjectFilters struct {
 	CustomerID *uuid.UUID
 	Status     *domain.ProjectStatus
+	Phase      *domain.ProjectPhase
 	Health     *domain.ProjectHealth
 	ManagerID  *string
 }
 
+// projectSortableFields maps API field names to database column names for projects
+// Only fields in this map can be used for sorting (whitelist approach)
+var projectSortableFields = map[string]string{
+	"createdAt":    "created_at",
+	"updatedAt":    "updated_at",
+	"name":         "name",
+	"status":       "status",
+	"phase":        "phase",
+	"health":       "health",
+	"budget":       "budget",
+	"spent":        "spent",
+	"startDate":    "start_date",
+	"endDate":      "end_date",
+	"customerName": "customer_name",
+	"wonAt":        "won_at",
+}
+
 // ProjectBudgetMetrics holds calculated budget metrics for a project
 type ProjectBudgetMetrics struct {
-	Budget      float64
-	Spent       float64
-	Remaining   float64
-	PercentUsed float64
+	Value         float64
+	Cost          float64
+	MarginPercent float64
+	Spent         float64
+	Remaining     float64
+	PercentUsed   float64
 }
 
 type ProjectRepository struct {
@@ -67,11 +87,11 @@ func (r *ProjectRepository) List(ctx context.Context, page, pageSize int, custom
 		CustomerID: customerID,
 		Status:     status,
 	}
-	return r.ListWithFilters(ctx, page, pageSize, filters)
+	return r.ListWithFilters(ctx, page, pageSize, filters, DefaultSortConfig())
 }
 
-// ListWithFilters returns a paginated list of projects with filter options including health and managerID
-func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *ProjectFilters) ([]domain.Project, int64, error) {
+// ListWithFilters returns a paginated list of projects with filter and sort options
+func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *ProjectFilters, sort SortConfig) ([]domain.Project, int64, error) {
 	var projects []domain.Project
 	var total int64
 
@@ -101,6 +121,10 @@ func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize 
 			query = query.Where("status = ?", *filters.Status)
 		}
 
+		if filters.Phase != nil {
+			query = query.Where("phase = ?", *filters.Phase)
+		}
+
 		if filters.Health != nil {
 			query = query.Where("health = ?", *filters.Health)
 		}
@@ -114,8 +138,11 @@ func (r *ProjectRepository) ListWithFilters(ctx context.Context, page, pageSize 
 		return nil, 0, err
 	}
 
+	// Build order clause from sort config
+	orderClause := BuildOrderClause(sort, projectSortableFields, "created_at")
+
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&projects).Error
+	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&projects).Error
 
 	return projects, total, err
 }
@@ -133,15 +160,20 @@ func (r *ProjectRepository) Search(ctx context.Context, searchQuery string, limi
 	var projects []domain.Project
 	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
 	query := r.db.WithContext(ctx).Preload("Customer").
-		Where("LOWER(name) LIKE ? OR LOWER(summary) LIKE ?", searchPattern, searchPattern)
+		Where(`LOWER(name) LIKE ? OR
+			LOWER(summary) LIKE ? OR
+			LOWER(project_number) LIKE ? OR
+			LOWER(customer_name) LIKE ? OR
+			LOWER(description) LIKE ?`,
+			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Limit(limit).Find(&projects).Error
+	err := query.Order("created_at DESC").Limit(limit).Find(&projects).Error
 	return projects, err
 }
 
 // GetByIDWithRelations retrieves a project by ID with all related data
-// Preloads: Customer, Offer, Deal, BudgetDimensions, Activities
-func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.Project, []domain.BudgetDimension, []domain.Activity, error) {
+// Preloads: Customer, Offer, Deal, BudgetItems, Activities
+func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UUID) (*domain.Project, []domain.BudgetItem, []domain.Activity, error) {
 	var project domain.Project
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
@@ -154,15 +186,14 @@ func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UU
 		return nil, nil, nil, err
 	}
 
-	// Fetch budget dimensions separately (polymorphic relationship)
-	var dimensions []domain.BudgetDimension
+	// Fetch budget items separately (polymorphic relationship)
+	var items []domain.BudgetItem
 	err = r.db.WithContext(ctx).
-		Preload("Category").
 		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentProject, id).
 		Order("display_order ASC, created_at ASC").
-		Find(&dimensions).Error
+		Find(&items).Error
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load budget dimensions: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to load budget items: %w", err)
 	}
 
 	// Fetch activities separately (polymorphic relationship)
@@ -176,12 +207,12 @@ func (r *ProjectRepository) GetByIDWithRelations(ctx context.Context, id uuid.UU
 		return nil, nil, nil, fmt.Errorf("failed to load activities: %w", err)
 	}
 
-	return &project, dimensions, activities, nil
+	return &project, items, activities, nil
 }
 
 // CalculateBudgetMetrics calculates budget metrics for a project
 // Returns: budget, spent, remaining, percent_used
-// If hasDetailedBudget is true, spent is calculated from BudgetDimensions cost sum
+// If hasDetailedBudget is true, spent is calculated from BudgetItems expected_cost sum
 // Otherwise, it uses the project's Spent field directly
 func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectID uuid.UUID) (*ProjectBudgetMetrics, error) {
 	// First get the project to get budget and check if it has detailed budget
@@ -194,20 +225,22 @@ func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectI
 	}
 
 	metrics := &ProjectBudgetMetrics{
-		Budget: project.Budget,
+		Value:         project.Value,
+		Cost:          project.Cost,
+		MarginPercent: project.MarginPercent,
 	}
 
 	// Calculate spent based on whether project uses detailed budget
 	if project.HasDetailedBudget {
-		// Sum cost from budget dimensions
+		// Sum expected_cost from budget items
 		var totalCost float64
 		err = r.db.WithContext(ctx).
-			Model(&domain.BudgetDimension{}).
+			Model(&domain.BudgetItem{}).
 			Where("parent_type = ? AND parent_id = ?", domain.BudgetParentProject, projectID).
-			Select("COALESCE(SUM(cost), 0)").
+			Select("COALESCE(SUM(expected_cost), 0)").
 			Scan(&totalCost).Error
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate budget dimension costs: %w", err)
+			return nil, fmt.Errorf("failed to calculate budget item costs: %w", err)
 		}
 		metrics.Spent = totalCost
 	} else {
@@ -216,9 +249,9 @@ func (r *ProjectRepository) CalculateBudgetMetrics(ctx context.Context, projectI
 	}
 
 	// Calculate remaining and percent used
-	metrics.Remaining = metrics.Budget - metrics.Spent
-	if metrics.Budget > 0 {
-		metrics.PercentUsed = (metrics.Spent / metrics.Budget) * 100
+	metrics.Remaining = metrics.Value - metrics.Spent
+	if metrics.Value > 0 {
+		metrics.PercentUsed = (metrics.Spent / metrics.Value) * 100
 	}
 
 	return metrics, nil
@@ -242,8 +275,8 @@ func (r *ProjectRepository) CalculateHealth(ctx context.Context, projectID uuid.
 		return "", fmt.Errorf("failed to calculate budget metrics: %w", err)
 	}
 
-	// If budget is 0, default to on_track to avoid division issues
-	if metrics.Budget <= 0 {
+	// If value is 0, default to on_track to avoid division issues
+	if metrics.Value <= 0 {
 		return domain.ProjectHealthOnTrack, nil
 	}
 
@@ -285,18 +318,19 @@ func (r *ProjectRepository) UpdateHealth(ctx context.Context, projectID uuid.UUI
 	return nil
 }
 
-// GetBudgetSummary returns aggregated budget totals for a project's budget dimensions
+// GetBudgetSummary returns aggregated budget totals for a project's budget items
 func (r *ProjectRepository) GetBudgetSummary(ctx context.Context, projectID uuid.UUID) (*domain.BudgetSummary, error) {
 	var result struct {
-		TotalCost      float64
-		TotalRevenue   float64
-		DimensionCount int
+		TotalCost    float64
+		TotalRevenue float64
+		TotalProfit  float64
+		ItemCount    int
 	}
 
 	err := r.db.WithContext(ctx).
-		Model(&domain.BudgetDimension{}).
+		Model(&domain.BudgetItem{}).
 		Where("parent_type = ? AND parent_id = ?", domain.BudgetParentProject, projectID).
-		Select("COALESCE(SUM(cost), 0) as total_cost, COALESCE(SUM(revenue), 0) as total_revenue, COUNT(*) as dimension_count").
+		Select("COALESCE(SUM(expected_cost), 0) as total_cost, COALESCE(SUM(expected_revenue), 0) as total_revenue, COALESCE(SUM(expected_profit), 0) as total_profit, COUNT(*) as item_count").
 		Scan(&result).Error
 
 	if err != nil {
@@ -304,15 +338,15 @@ func (r *ProjectRepository) GetBudgetSummary(ctx context.Context, projectID uuid
 	}
 
 	summary := &domain.BudgetSummary{
-		TotalCost:      result.TotalCost,
-		TotalRevenue:   result.TotalRevenue,
-		TotalMargin:    result.TotalRevenue - result.TotalCost,
-		DimensionCount: result.DimensionCount,
+		TotalCost:    result.TotalCost,
+		TotalRevenue: result.TotalRevenue,
+		TotalProfit:  result.TotalProfit,
+		ItemCount:    result.ItemCount,
 	}
 
-	// Calculate margin percent: ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
+	// Calculate margin percent: (Profit / Revenue) * 100, 0 if revenue=0
 	if result.TotalRevenue > 0 {
-		summary.MarginPercent = ((result.TotalRevenue - result.TotalCost) / result.TotalRevenue) * 100
+		summary.MarginPercent = (result.TotalProfit / result.TotalRevenue) * 100
 	}
 
 	return summary, nil
@@ -397,8 +431,9 @@ type DashboardProjectStats struct {
 	TotalInvoiced float64 // Sum of "spent" on all projects in the time window
 }
 
-// GetDashboardProjectStats returns project statistics for the dashboard within a time window
-func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since time.Time) (*DashboardProjectStats, error) {
+// GetDashboardProjectStats returns project statistics for the dashboard
+// If since is nil, no date filter is applied (all time)
+func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since *time.Time) (*DashboardProjectStats, error) {
 	stats := &DashboardProjectStats{}
 
 	// Order reserve: sum of (budget - spent) on active projects
@@ -411,8 +446,10 @@ func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since 
 	}
 
 	// Total invoiced: sum of "spent" on all projects in the time window
-	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("created_at >= ?", since)
+	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{})
+	if since != nil {
+		invoicedQuery = invoicedQuery.Where("created_at >= ?", *since)
+	}
 	invoicedQuery = ApplyCompanyFilter(ctx, invoicedQuery)
 	if err := invoicedQuery.Select("COALESCE(SUM(spent), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate total invoiced: %w", err)
@@ -422,14 +459,220 @@ func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since 
 }
 
 // GetRecentProjectsInWindow returns the most recently created projects within the time window
-func (r *ProjectRepository) GetRecentProjectsInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Project, error) {
+// If since is nil, no date filter is applied (all time)
+func (r *ProjectRepository) GetRecentProjectsInWindow(ctx context.Context, since *time.Time, limit int) ([]domain.Project, error) {
 	var projects []domain.Project
 	query := r.db.WithContext(ctx).
-		Preload("Customer").
-		Where("created_at >= ?", since).
-		Order("created_at DESC").
-		Limit(limit)
+		Preload("Customer")
+	if since != nil {
+		query = query.Where("created_at >= ?", *since)
+	}
+	query = query.Order("created_at DESC").Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&projects).Error
 	return projects, err
+}
+
+// ============================================================================
+// Phase Management Methods
+// ============================================================================
+
+// UpdatePhase updates the project phase and related fields
+func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID, phase domain.ProjectPhase) error {
+	updates := map[string]interface{}{
+		"phase": phase,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project phase: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// SetWinningOffer sets the winning offer for a project and transitions it to active phase
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, wonAt time.Time) error {
+	updates := map[string]interface{}{
+		"phase":                  domain.ProjectPhaseActive,
+		"winning_offer_id":       offerID,
+		"inherited_offer_number": inheritedOfferNumber,
+		"calculated_offer_value": offerValue,
+		"value":                  offerValue, // Set value from winning offer
+		"cost":                   offerCost,  // Set cost from winning offer (margin_percent auto-calculated by trigger)
+		"won_at":                 wonAt,
+		"status":                 domain.ProjectStatusActive, // Also update status to active
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to set winning offer: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// UpdateCalculatedOfferValue updates the calculated offer value for projects in tilbud phase
+// This should be called when offers in a project are modified to keep the value in sync
+func (r *ProjectRepository) UpdateCalculatedOfferValue(ctx context.Context, projectID uuid.UUID, value float64) error {
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ? AND phase = ?", projectID, domain.ProjectPhaseTilbud)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(map[string]interface{}{
+		"calculated_offer_value": value,
+		"budget":                 value, // Keep budget in sync during tilbud phase
+	})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update calculated offer value: %w", result.Error)
+	}
+
+	// Note: not checking RowsAffected because project might not be in tilbud phase
+	return nil
+}
+
+// GetByPhase returns all projects in a specific phase
+func (r *ProjectRepository) GetByPhase(ctx context.Context, phase domain.ProjectPhase) ([]domain.Project, error) {
+	var projects []domain.Project
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("phase = ?", phase)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Order("created_at DESC").Find(&projects).Error
+	return projects, err
+}
+
+// CountByPhase returns the count of projects grouped by phase
+func (r *ProjectRepository) CountByPhase(ctx context.Context) (map[domain.ProjectPhase]int64, error) {
+	type phaseCount struct {
+		Phase domain.ProjectPhase
+		Count int64
+	}
+
+	var results []phaseCount
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Select("phase, COUNT(*) as count").
+		Group("phase")
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Scan(&results).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to count projects by phase: %w", err)
+	}
+
+	counts := make(map[domain.ProjectPhase]int64)
+	for _, r := range results {
+		counts[r.Phase] = r.Count
+	}
+
+	return counts, nil
+}
+
+// CancelProject updates the project status and phase to cancelled
+func (r *ProjectRepository) CancelProject(ctx context.Context, projectID uuid.UUID) error {
+	updates := map[string]interface{}{
+		"phase":  domain.ProjectPhaseCancelled,
+		"status": domain.ProjectStatusCancelled,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to cancel project: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// RecalculateBestOfferEconomics recalculates the project's CalculatedOfferValue and Budget
+// based on the highest value active offer linked to the project.
+// This should only be called for projects in the tilbud phase.
+func (r *ProjectRepository) RecalculateBestOfferEconomics(ctx context.Context, projectID uuid.UUID) error {
+	// Find the highest value active offer for this project
+	var maxValue float64
+	err := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("project_id = ?", projectID).
+		Where("phase NOT IN ?", []domain.OfferPhase{
+			domain.OfferPhaseWon,
+			domain.OfferPhaseLost,
+			domain.OfferPhaseExpired,
+		}).
+		Select("COALESCE(MAX(value), 0)").
+		Scan(&maxValue).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to calculate best offer value: %w", err)
+	}
+
+	// Update project with the calculated value
+	updates := map[string]interface{}{
+		"calculated_offer_value": maxValue,
+		"budget":                 maxValue,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID).
+		Where("phase = ?", domain.ProjectPhaseTilbud) // Only update tilbud phase projects
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project economics: %w", result.Error)
+	}
+
+	return nil
+}
+
+// UpdateCustomerFromOffers updates the project's customer based on active offers.
+// If all active offers (in_progress/sent) are to the same customer, set that customer.
+// If active offers are to different customers, set CustomerID to NULL.
+// This should only be called for projects in the tilbud phase.
+func (r *ProjectRepository) UpdateCustomerFromOffers(ctx context.Context, projectID uuid.UUID, customerID *uuid.UUID, customerName string) error {
+	updates := map[string]interface{}{
+		"customer_id":   customerID,
+		"customer_name": customerName,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID).
+		Where("phase = ?", domain.ProjectPhaseTilbud) // Only update tilbud phase projects
+	query = ApplyCompanyFilter(ctx, query)
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project customer: %w", result.Error)
+	}
+
+	return nil
 }

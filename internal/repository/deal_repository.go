@@ -285,8 +285,13 @@ func (r *DealRepository) Search(ctx context.Context, searchQuery string, limit i
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
 		Preload("Company").
-		Where("LOWER(title) LIKE ? OR LOWER(customer_name) LIKE ? OR LOWER(description) LIKE ?",
-			searchPattern, searchPattern, searchPattern)
+		Where(`LOWER(title) LIKE ? OR
+			LOWER(customer_name) LIKE ? OR
+			LOWER(description) LIKE ? OR
+			LOWER(owner_name) LIKE ? OR
+			LOWER(source) LIKE ? OR
+			LOWER(notes) LIKE ?`,
+			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Limit(limit).Order("created_at DESC").Find(&deals).Error
 	return deals, err

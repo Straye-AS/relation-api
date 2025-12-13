@@ -12,6 +12,7 @@ import (
 )
 
 // CustomerSortOption defines sorting options for customer listing
+// Deprecated: Use SortConfig instead for new code
 type CustomerSortOption string
 
 const (
@@ -31,6 +32,20 @@ type CustomerFilters struct {
 	Status   *domain.CustomerStatus
 	Tier     *domain.CustomerTier
 	Industry *domain.CustomerIndustry
+}
+
+// customerSortableFields maps API field names to database column names for customers
+// Only fields in this map can be used for sorting (whitelist approach)
+var customerSortableFields = map[string]string{
+	"createdAt": "created_at",
+	"updatedAt": "updated_at",
+	"name":      "name",
+	"city":      "city",
+	"country":   "country",
+	"status":    "status",
+	"tier":      "tier",
+	"industry":  "industry",
+	"orgNumber": "org_number",
 }
 
 type CustomerRepository struct {
@@ -64,13 +79,32 @@ func (r *CustomerRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 func (r *CustomerRepository) List(ctx context.Context, page, pageSize int, search string) ([]domain.Customer, int64, error) {
 	filters := &CustomerFilters{Search: search}
-	return r.ListWithFilters(ctx, page, pageSize, filters, CustomerSortByCreatedDesc)
+	return r.ListWithSortConfig(ctx, page, pageSize, filters, DefaultSortConfig())
 }
 
 // ListWithFilters returns a paginated list of customers with filter and sort options
+// Deprecated: Use ListWithSortConfig for new code
 func (r *CustomerRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters *CustomerFilters, sortBy CustomerSortOption) ([]domain.Customer, int64, error) {
+	// Convert legacy sort option to SortConfig
+	sort := r.convertLegacySortOption(sortBy)
+	return r.ListWithSortConfig(ctx, page, pageSize, filters, sort)
+}
+
+// ListWithSortConfig returns a paginated list of customers with filter and sort options using SortConfig
+func (r *CustomerRepository) ListWithSortConfig(ctx context.Context, page, pageSize int, filters *CustomerFilters, sort SortConfig) ([]domain.Customer, int64, error) {
 	var customers []domain.Customer
 	var total int64
+
+	// Validate and normalize pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20 // Default page size
+	}
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
 
 	query := r.db.WithContext(ctx).Model(&domain.Customer{})
 
@@ -106,8 +140,8 @@ func (r *CustomerRepository) ListWithFilters(ctx context.Context, page, pageSize
 		return nil, 0, err
 	}
 
-	// Apply sorting
-	orderClause := r.getSortClause(sortBy)
+	// Build order clause from sort config
+	orderClause := BuildOrderClause(sort, customerSortableFields, "created_at")
 
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&customers).Error
@@ -115,23 +149,23 @@ func (r *CustomerRepository) ListWithFilters(ctx context.Context, page, pageSize
 	return customers, total, err
 }
 
-// getSortClause returns the SQL ORDER BY clause for the given sort option
-func (r *CustomerRepository) getSortClause(sortBy CustomerSortOption) string {
+// convertLegacySortOption converts legacy CustomerSortOption to SortConfig
+func (r *CustomerRepository) convertLegacySortOption(sortBy CustomerSortOption) SortConfig {
 	switch sortBy {
 	case CustomerSortByNameAsc:
-		return "name ASC"
+		return SortConfig{Field: "name", Order: SortOrderAsc}
 	case CustomerSortByNameDesc:
-		return "name DESC"
+		return SortConfig{Field: "name", Order: SortOrderDesc}
 	case CustomerSortByCreatedAsc:
-		return "created_at ASC"
+		return SortConfig{Field: "createdAt", Order: SortOrderAsc}
 	case CustomerSortByCityAsc:
-		return "city ASC"
+		return SortConfig{Field: "city", Order: SortOrderAsc}
 	case CustomerSortByCityDesc:
-		return "city DESC"
+		return SortConfig{Field: "city", Order: SortOrderDesc}
 	case CustomerSortByCreatedDesc:
 		fallthrough
 	default:
-		return "created_at DESC"
+		return DefaultSortConfig()
 	}
 }
 
@@ -176,6 +210,9 @@ func (r *CustomerRepository) GetByOrgNumber(ctx context.Context, orgNumber strin
 	var customer domain.Customer
 	err := r.db.WithContext(ctx).Where("org_number = ?", orgNumber).First(&customer).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &customer, nil
@@ -504,8 +541,9 @@ func (r *CustomerRepository) GetAllMinimal(ctx context.Context) ([]domain.Custom
 }
 
 // GetTopCustomersWithOfferStats returns top customers ranked by offer count within a time window
+// If since is nil, no date filter is applied (all time)
 // Excludes draft and expired offers from the counts
-func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, since time.Time, limit int) ([]TopCustomerWithStats, error) {
+func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, since *time.Time, limit int) ([]TopCustomerWithStats, error) {
 	// Valid phases for counting (excludes draft and expired)
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
@@ -522,10 +560,12 @@ func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, 
 		Table("offers").
 		Select("customers.id as customer_id, customers.name as customer_name, customers.org_number, COUNT(offers.id) as offer_count, COALESCE(SUM(offers.value), 0) as economic_value").
 		Joins("JOIN customers ON customers.id = offers.customer_id").
-		Where("offers.created_at >= ?", since).
 		Where("offers.phase IN ?", validPhases).
-		Where("customers.status != ?", domain.CustomerStatusInactive).
-		Group("customers.id, customers.name, customers.org_number").
+		Where("customers.status != ?", domain.CustomerStatusInactive)
+	if since != nil {
+		query = query.Where("offers.created_at >= ?", *since)
+	}
+	query = query.Group("customers.id, customers.name, customers.org_number").
 		Order("offer_count DESC, economic_value DESC").
 		Limit(limit)
 

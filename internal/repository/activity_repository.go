@@ -306,12 +306,14 @@ func (r *ActivityRepository) GetRecentActivities(ctx context.Context, limit int)
 }
 
 // GetRecentActivitiesInWindow returns the most recent activities within a time window
-func (r *ActivityRepository) GetRecentActivitiesInWindow(ctx context.Context, since time.Time, limit int) ([]domain.Activity, error) {
+// If since is nil, no date filter is applied (all time)
+func (r *ActivityRepository) GetRecentActivitiesInWindow(ctx context.Context, since *time.Time, limit int) ([]domain.Activity, error) {
 	var activities []domain.Activity
-	query := r.db.WithContext(ctx).
-		Where("created_at >= ?", since).
-		Order("created_at DESC").
-		Limit(limit)
+	query := r.db.WithContext(ctx)
+	if since != nil {
+		query = query.Where("created_at >= ?", *since)
+	}
+	query = query.Order("created_at DESC").Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&activities).Error
 	return activities, err

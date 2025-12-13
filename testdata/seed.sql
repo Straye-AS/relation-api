@@ -14,6 +14,7 @@ DELETE FROM audit_logs;
 DELETE FROM activities;
 DELETE FROM deal_stage_history;
 DELETE FROM budget_dimensions;
+DELETE FROM number_sequences;
 DELETE FROM project_actual_costs;
 DELETE FROM offer_items;
 DELETE FROM files;
@@ -26,10 +27,23 @@ DELETE FROM user_permissions;
 DELETE FROM user_roles;
 DELETE FROM users;
 DELETE FROM customers;
--- Note: Do NOT delete from companies or budget_dimension_categories (seeded by migrations)
+DELETE FROM companies;
+-- Note: Do NOT delete from budget_dimension_categories (seeded by migrations)
 
 -- ============================================================================
--- PART 2: USERS (12 Norwegian users across all Straye companies)
+-- PART 2: COMPANIES (Straye Group companies)
+-- ============================================================================
+
+INSERT INTO companies (id, name, short_name, org_number, color, is_active, created_at, updated_at) VALUES
+('gruppen', 'Straye Gruppen AS', 'Gruppen', '999000001', '#1a1a2e', true, NOW(), NOW()),
+('stalbygg', 'Straye Stalbygg AS', 'Stalbygg', '999000002', '#e94560', true, NOW(), NOW()),
+('hybridbygg', 'Straye Hybridbygg AS', 'Hybridbygg', '999000003', '#0f3460', true, NOW(), NOW()),
+('industri', 'Straye Industri AS', 'Industri', '999000004', '#16213e', true, NOW(), NOW()),
+('tak', 'Straye Tak AS', 'Tak', '999000005', '#533483', true, NOW(), NOW()),
+('montasje', 'Straye Montasje AS', 'Montasje', '999000006', '#e07c24', true, NOW(), NOW());
+
+-- ============================================================================
+-- PART 3: USERS (12 Norwegian users across all Straye companies)
 -- Users table: id is VARCHAR(100), name is single field
 -- ============================================================================
 
@@ -284,34 +298,34 @@ INSERT INTO deal_stage_history (id, deal_id, from_stage, to_stage, changed_by_id
 -- PART 9: OFFERS (18 offers)
 -- ============================================================================
 
-INSERT INTO offers (id, title, customer_id, customer_name, company_id, phase, probability, value, status, responsible_user_id, responsible_user_name, description, notes, created_at, updated_at) VALUES
--- Stalbygg offers
-('d0000001-0001-0001-0001-000000000001', 'Lagerbygg Alnabru - Stalkonstruksjon', 'a0000001-0001-0001-0001-000000000001', 'Veidekke ASA', 'stalbygg', 'draft', 10, 12000000.00, 'active', 'usr-lars-johansen-0003', 'Lars Johansen', 'Komplett stalkonstruksjon for lagerbygg', NULL, NOW() - INTERVAL '8 days', NOW()),
-('d0000002-0002-0002-0002-000000000002', 'Verkstedhall AF - Tilbud', 'a0000002-0002-0002-0002-000000000002', 'AF Gruppen ASA', 'stalbygg', 'in_progress', 30, 8500000.00, 'active', 'usr-lars-johansen-0003', 'Lars Johansen', 'Stalverksted med porter og kraner', NULL, NOW() - INTERVAL '20 days', NOW()),
-('d0000003-0003-0003-0003-000000000003', 'Produksjonshall Skanska', 'a0000003-0003-0003-0003-000000000003', 'Skanska Norge AS', 'stalbygg', 'sent', 50, 15000000.00, 'active', 'usr-marte-olsen-0002', 'Marte Olsen', 'Produksjonshall med kontordel', 'Sendt til kunde for vurdering', NOW() - INTERVAL '35 days', NOW()),
-('d0000004-0004-0004-0004-000000000004', 'Lagerbygg Gardermoen', 'a0000001-0001-0001-0001-000000000001', 'Veidekke ASA', 'stalbygg', 'won', 100, 18500000.00, 'won', 'usr-lars-johansen-0003', 'Lars Johansen', 'Stort lagerbygg ved OSL', 'Kontrakt signert', NOW() - INTERVAL '60 days', NOW()),
-('d0000005-0005-0005-0005-000000000005', 'Logistikksenter Vestby', 'a0000002-0002-0002-0002-000000000002', 'AF Gruppen ASA', 'stalbygg', 'sent', 70, 22000000.00, 'active', 'usr-lars-johansen-0003', 'Lars Johansen', 'Logistikksenter med kjolelager', 'I forhandling', NOW() - INTERVAL '45 days', NOW()),
-('d0000006-0006-0006-0006-000000000006', 'Flerbrukshall Drammen', 'a0000003-0003-0003-0003-000000000003', 'Skanska Norge AS', 'stalbygg', 'lost', 0, 9500000.00, 'lost', 'usr-marte-olsen-0002', 'Marte Olsen', 'Flerbrukshall for kommunen', 'Tapt til konkurrent', NOW() - INTERVAL '50 days', NOW()),
+INSERT INTO offers (id, title, customer_id, customer_name, company_id, phase, probability, value, status, responsible_user_id, responsible_user_name, description, notes, offer_number, created_at, updated_at) VALUES
+-- Stalbygg offers (draft offers have NULL offer_number)
+('d0000001-0001-0001-0001-000000000001', 'Lagerbygg Alnabru - Stalkonstruksjon', 'a0000001-0001-0001-0001-000000000001', 'Veidekke ASA', 'stalbygg', 'draft', 10, 12000000.00, 'active', 'usr-lars-johansen-0003', 'Lars Johansen', 'Komplett stalkonstruksjon for lagerbygg', NULL, NULL, NOW() - INTERVAL '8 days', NOW()),
+('d0000002-0002-0002-0002-000000000002', 'Verkstedhall AF - Tilbud', 'a0000002-0002-0002-0002-000000000002', 'AF Gruppen ASA', 'stalbygg', 'in_progress', 30, 8500000.00, 'active', 'usr-lars-johansen-0003', 'Lars Johansen', 'Stalverksted med porter og kraner', NULL, 'ST-2025-005', NOW() - INTERVAL '20 days', NOW()),
+('d0000003-0003-0003-0003-000000000003', 'Produksjonshall Skanska', 'a0000003-0003-0003-0003-000000000003', 'Skanska Norge AS', 'stalbygg', 'sent', 50, 15000000.00, 'active', 'usr-marte-olsen-0002', 'Marte Olsen', 'Produksjonshall med kontordel', 'Sendt til kunde for vurdering', 'ST-2025-004', NOW() - INTERVAL '35 days', NOW()),
+('d0000004-0004-0004-0004-000000000004', 'Lagerbygg Gardermoen', 'a0000001-0001-0001-0001-000000000001', 'Veidekke ASA', 'stalbygg', 'won', 100, 18500000.00, 'won', 'usr-lars-johansen-0003', 'Lars Johansen', 'Stort lagerbygg ved OSL', 'Kontrakt signert', 'ST-2025-001', NOW() - INTERVAL '60 days', NOW()),
+('d0000005-0005-0005-0005-000000000005', 'Logistikksenter Vestby', 'a0000002-0002-0002-0002-000000000002', 'AF Gruppen ASA', 'stalbygg', 'sent', 70, 22000000.00, 'active', 'usr-lars-johansen-0003', 'Lars Johansen', 'Logistikksenter med kjolelager', 'I forhandling', 'ST-2025-003', NOW() - INTERVAL '45 days', NOW()),
+('d0000006-0006-0006-0006-000000000006', 'Flerbrukshall Drammen', 'a0000003-0003-0003-0003-000000000003', 'Skanska Norge AS', 'stalbygg', 'lost', 0, 9500000.00, 'lost', 'usr-marte-olsen-0002', 'Marte Olsen', 'Flerbrukshall for kommunen', 'Tapt til konkurrent', 'ST-2025-002', NOW() - INTERVAL '50 days', NOW()),
 
 -- Hybridbygg offers
-('d0000007-0007-0007-0007-000000000007', 'Kontorbygg Statsbygg', 'a0000004-0004-0004-0004-000000000004', 'Statsbygg', 'hybridbygg', 'sent', 60, 35000000.00, 'active', 'usr-anders-nilsen-0005', 'Anders Nilsen', 'Hybridkonstruksjon kontorbygg', NULL, NOW() - INTERVAL '40 days', NOW()),
-('d0000008-0008-0008-0008-000000000008', 'Boligprosjekt Loren', 'a0000005-0005-0005-0005-000000000005', 'OBOS Eiendom AS', 'hybridbygg', 'in_progress', 40, 28000000.00, 'active', 'usr-ingrid-bakke-0006', 'Ingrid Bakke', 'Boligblokk i hybrid', NULL, NOW() - INTERVAL '30 days', NOW()),
-('d0000009-0009-0009-0009-000000000009', 'Kontorbygg Majorstuen', 'a0000006-0006-0006-0006-000000000006', 'Selvaag Bolig ASA', 'hybridbygg', 'won', 100, 25000000.00, 'won', 'usr-ingrid-bakke-0006', 'Ingrid Bakke', 'Moderne kontorbygg sentrum', 'Vunnet', NOW() - INTERVAL '75 days', NOW()),
-('d0000010-0010-0010-0010-000000000010', 'Universitetsbygg NTNU', 'a0000017-0017-0017-0017-000000000017', 'NTNU', 'hybridbygg', 'sent', 75, 42000000.00, 'active', 'usr-anders-nilsen-0005', 'Anders Nilsen', 'Undervisningsbygg NTNU', 'I forhandling', NOW() - INTERVAL '60 days', NOW()),
+('d0000007-0007-0007-0007-000000000007', 'Kontorbygg Statsbygg', 'a0000004-0004-0004-0004-000000000004', 'Statsbygg', 'hybridbygg', 'sent', 60, 35000000.00, 'active', 'usr-anders-nilsen-0005', 'Anders Nilsen', 'Hybridkonstruksjon kontorbygg', NULL, 'HB-2025-003', NOW() - INTERVAL '40 days', NOW()),
+('d0000008-0008-0008-0008-000000000008', 'Boligprosjekt Loren', 'a0000005-0005-0005-0005-000000000005', 'OBOS Eiendom AS', 'hybridbygg', 'in_progress', 40, 28000000.00, 'active', 'usr-ingrid-bakke-0006', 'Ingrid Bakke', 'Boligblokk i hybrid', NULL, 'HB-2025-004', NOW() - INTERVAL '30 days', NOW()),
+('d0000009-0009-0009-0009-000000000009', 'Kontorbygg Majorstuen', 'a0000006-0006-0006-0006-000000000006', 'Selvaag Bolig ASA', 'hybridbygg', 'won', 100, 25000000.00, 'won', 'usr-ingrid-bakke-0006', 'Ingrid Bakke', 'Moderne kontorbygg sentrum', 'Vunnet', 'HB-2025-001', NOW() - INTERVAL '75 days', NOW()),
+('d0000010-0010-0010-0010-000000000010', 'Universitetsbygg NTNU', 'a0000017-0017-0017-0017-000000000017', 'NTNU', 'hybridbygg', 'sent', 75, 42000000.00, 'active', 'usr-anders-nilsen-0005', 'Anders Nilsen', 'Undervisningsbygg NTNU', 'I forhandling', 'HB-2025-002', NOW() - INTERVAL '60 days', NOW()),
 
--- Industri offers
-('d0000011-0011-0011-0011-000000000011', 'Verksted Hydro', 'a0000007-0007-0007-0007-000000000007', 'Norsk Hydro ASA', 'industri', 'draft', 15, 6500000.00, 'active', 'usr-thomas-dahl-0007', 'Thomas Dahl', 'Vedlikeholdsverksted', NULL, NOW() - INTERVAL '4 days', NOW()),
-('d0000012-0012-0012-0012-000000000012', 'Verksted Karmoy', 'a0000008-0008-0008-0008-000000000008', 'Elkem ASA', 'industri', 'won', 100, 11500000.00, 'won', 'usr-hanne-lie-0008', 'Hanne Lie', 'Produksjonsverksted', 'Prosjekt startet', NOW() - INTERVAL '90 days', NOW()),
-('d0000013-0013-0013-0013-000000000013', 'Offshore modul Aibel', 'a0000009-0009-0009-0009-000000000009', 'Aibel AS', 'industri', 'sent', 55, 45000000.00, 'active', 'usr-thomas-dahl-0007', 'Thomas Dahl', 'Offshore modul for plattform', NULL, NOW() - INTERVAL '35 days', NOW()),
+-- Industri offers (draft offers have NULL offer_number)
+('d0000011-0011-0011-0011-000000000011', 'Verksted Hydro', 'a0000007-0007-0007-0007-000000000007', 'Norsk Hydro ASA', 'industri', 'draft', 15, 6500000.00, 'active', 'usr-thomas-dahl-0007', 'Thomas Dahl', 'Vedlikeholdsverksted', NULL, NULL, NOW() - INTERVAL '4 days', NOW()),
+('d0000012-0012-0012-0012-000000000012', 'Verksted Karmoy', 'a0000008-0008-0008-0008-000000000008', 'Elkem ASA', 'industri', 'won', 100, 11500000.00, 'won', 'usr-hanne-lie-0008', 'Hanne Lie', 'Produksjonsverksted', 'Prosjekt startet', 'IN-2025-001', NOW() - INTERVAL '90 days', NOW()),
+('d0000013-0013-0013-0013-000000000013', 'Offshore modul Aibel', 'a0000009-0009-0009-0009-000000000009', 'Aibel AS', 'industri', 'sent', 55, 45000000.00, 'active', 'usr-thomas-dahl-0007', 'Thomas Dahl', 'Offshore modul for plattform', NULL, 'IN-2025-002', NOW() - INTERVAL '35 days', NOW()),
 
 -- Tak offers
-('d0000014-0014-0014-0014-000000000014', 'Takprosjekt Bryggen', 'a0000011-0011-0011-0011-000000000011', 'Bergen Kommune', 'tak', 'sent', 50, 4800000.00, 'active', 'usr-ole-martinsen-0009', 'Ole Martinsen', 'Historisk tak renovering', NULL, NOW() - INTERVAL '25 days', NOW()),
-('d0000015-0015-0015-0015-000000000015', 'Takprosjekt Coop', 'a0000012-0012-0012-0012-000000000012', 'Coop Norge SA', 'tak', 'won', 100, 2800000.00, 'won', 'usr-ole-martinsen-0009', 'Ole Martinsen', 'Takutskifting varehus', 'Arbeid pagaende', NOW() - INTERVAL '45 days', NOW()),
+('d0000014-0014-0014-0014-000000000014', 'Takprosjekt Bryggen', 'a0000011-0011-0011-0011-000000000011', 'Bergen Kommune', 'tak', 'sent', 50, 4800000.00, 'active', 'usr-ole-martinsen-0009', 'Ole Martinsen', 'Historisk tak renovering', NULL, 'TK-2025-002', NOW() - INTERVAL '25 days', NOW()),
+('d0000015-0015-0015-0015-000000000015', 'Takprosjekt Coop', 'a0000012-0012-0012-0012-000000000012', 'Coop Norge SA', 'tak', 'won', 100, 2800000.00, 'won', 'usr-ole-martinsen-0009', 'Ole Martinsen', 'Takutskifting varehus', 'Arbeid pagaende', 'TK-2025-001', NOW() - INTERVAL '45 days', NOW()),
 
 -- Montasje offers
-('d0000016-0016-0016-0016-000000000016', 'IKEA Innredning', 'a0000013-0013-0013-0013-000000000013', 'IKEA Norge AS', 'montasje', 'sent', 80, 8500000.00, 'active', 'usr-knut-svendsen-0011', 'Knut Svendsen', 'Komplett varehusinnredning', 'I forhandling', NOW() - INTERVAL '45 days', NOW()),
-('d0000017-0017-0017-0017-000000000017', 'XXL Butikk Oslo', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'in_progress', 40, 4200000.00, 'active', 'usr-knut-svendsen-0011', 'Knut Svendsen', 'Butikkinnredning sportsbutikk', NULL, NOW() - INTERVAL '15 days', NOW()),
-('d0000018-0018-0018-0018-000000000018', 'Monteringsjobb Bodo', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'won', 100, 2100000.00, 'won', 'usr-knut-svendsen-0011', 'Knut Svendsen', 'Butikkmontering nord', 'Ferdigstilt', NOW() - INTERVAL '70 days', NOW());
+('d0000016-0016-0016-0016-000000000016', 'IKEA Innredning', 'a0000013-0013-0013-0013-000000000013', 'IKEA Norge AS', 'montasje', 'sent', 80, 8500000.00, 'active', 'usr-knut-svendsen-0011', 'Knut Svendsen', 'Komplett varehusinnredning', 'I forhandling', 'MO-2025-002', NOW() - INTERVAL '45 days', NOW()),
+('d0000017-0017-0017-0017-000000000017', 'XXL Butikk Oslo', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'in_progress', 40, 4200000.00, 'active', 'usr-knut-svendsen-0011', 'Knut Svendsen', 'Butikkinnredning sportsbutikk', NULL, 'MO-2025-003', NOW() - INTERVAL '15 days', NOW()),
+('d0000018-0018-0018-0018-000000000018', 'Monteringsjobb Bodo', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'won', 100, 2100000.00, 'won', 'usr-knut-svendsen-0011', 'Knut Svendsen', 'Butikkmontering nord', 'Ferdigstilt', 'MO-2025-001', NOW() - INTERVAL '70 days', NOW());
 
 -- ============================================================================
 -- PART 10: BUDGET DIMENSIONS FOR OFFERS
@@ -354,30 +368,30 @@ INSERT INTO budget_dimensions (id, parent_type, parent_id, category_id, cost, re
 -- ============================================================================
 
 INSERT INTO projects (id, name, summary, description, customer_id, customer_name, company_id, status, start_date, end_date, budget, spent, manager_id, manager_name, team_members, offer_id, deal_id, has_detailed_budget, health, completion_percent, project_number, created_at, updated_at) VALUES
--- Stalbygg projects
-('e0000001-0001-0001-0001-000000000001', 'Lagerbygg Gardermoen', 'Stort lagerbygg ved OSL', 'Komplett stalkonstruksjon lagerbygg 8000m2', 'a0000001-0001-0001-0001-000000000001', 'Veidekke ASA', 'stalbygg', 'active', NOW() - INTERVAL '25 days', NOW() + INTERVAL '120 days', 18500000.00, 4625000.00, 'usr-kristine-berg-0004', 'Kristine Berg', ARRAY['usr-lars-johansen-0003', 'usr-kristine-berg-0004'], 'd0000004-0004-0004-0004-000000000004', 'c0000004-0004-0004-0004-000000000004', true, 'on_track', 25.00, 'SB-2024-001', NOW() - INTERVAL '30 days', NOW()),
-('e0000002-0002-0002-0002-000000000002', 'Produksjonshall Lillestrom', 'Produksjonshall for AF', 'Tidligere vunnet prosjekt', 'a0000002-0002-0002-0002-000000000002', 'AF Gruppen ASA', 'stalbygg', 'active', NOW() - INTERVAL '60 days', NOW() + INTERVAL '60 days', 12000000.00, 7200000.00, 'usr-kristine-berg-0004', 'Kristine Berg', ARRAY['usr-kristine-berg-0004'], NULL, NULL, true, 'on_track', 60.00, 'SB-2024-002', NOW() - INTERVAL '65 days', NOW()),
-('e0000003-0003-0003-0003-000000000003', 'Lager Drammen', 'Mindre lagerbygg', 'Lagerbygg Skanska', 'a0000003-0003-0003-0003-000000000003', 'Skanska Norge AS', 'stalbygg', 'planning', NOW() + INTERVAL '30 days', NOW() + INTERVAL '150 days', 8500000.00, 0.00, 'usr-kristine-berg-0004', 'Kristine Berg', ARRAY['usr-kristine-berg-0004'], NULL, NULL, false, 'on_track', 0.00, 'SB-2024-003', NOW() - INTERVAL '5 days', NOW()),
+-- Stalbygg projects (using ST- prefix, shared sequence with offers)
+('e0000001-0001-0001-0001-000000000001', 'Lagerbygg Gardermoen', 'Stort lagerbygg ved OSL', 'Komplett stalkonstruksjon lagerbygg 8000m2', 'a0000001-0001-0001-0001-000000000001', 'Veidekke ASA', 'stalbygg', 'active', NOW() - INTERVAL '25 days', NOW() + INTERVAL '120 days', 18500000.00, 4625000.00, 'usr-kristine-berg-0004', 'Kristine Berg', ARRAY['usr-lars-johansen-0003', 'usr-kristine-berg-0004'], 'd0000004-0004-0004-0004-000000000004', 'c0000004-0004-0004-0004-000000000004', true, 'on_track', 25.00, 'ST-2025-006', NOW() - INTERVAL '30 days', NOW()),
+('e0000002-0002-0002-0002-000000000002', 'Produksjonshall Lillestrom', 'Produksjonshall for AF', 'Tidligere vunnet prosjekt', 'a0000002-0002-0002-0002-000000000002', 'AF Gruppen ASA', 'stalbygg', 'active', NOW() - INTERVAL '60 days', NOW() + INTERVAL '60 days', 12000000.00, 7200000.00, 'usr-kristine-berg-0004', 'Kristine Berg', ARRAY['usr-kristine-berg-0004'], NULL, NULL, true, 'on_track', 60.00, 'ST-2025-007', NOW() - INTERVAL '65 days', NOW()),
+('e0000003-0003-0003-0003-000000000003', 'Lager Drammen', 'Mindre lagerbygg', 'Lagerbygg Skanska', 'a0000003-0003-0003-0003-000000000003', 'Skanska Norge AS', 'stalbygg', 'planning', NOW() + INTERVAL '30 days', NOW() + INTERVAL '150 days', 8500000.00, 0.00, 'usr-kristine-berg-0004', 'Kristine Berg', ARRAY['usr-kristine-berg-0004'], NULL, NULL, false, 'on_track', 0.00, 'ST-2025-008', NOW() - INTERVAL '5 days', NOW()),
 
--- Hybridbygg projects
-('e0000004-0004-0004-0004-000000000004', 'Kontorbygg Majorstuen', 'Kontorbygg Selvaag', 'Moderne hybridkonstruksjon', 'a0000006-0006-0006-0006-000000000006', 'Selvaag Bolig ASA', 'hybridbygg', 'active', NOW() - INTERVAL '40 days', NOW() + INTERVAL '100 days', 25000000.00, 10000000.00, 'usr-anders-nilsen-0005', 'Anders Nilsen', ARRAY['usr-anders-nilsen-0005', 'usr-ingrid-bakke-0006'], 'd0000009-0009-0009-0009-000000000009', 'c0000009-0009-0009-0009-000000000009', true, 'on_track', 40.00, 'HB-2024-001', NOW() - INTERVAL '45 days', NOW()),
-('e0000005-0005-0005-0005-000000000005', 'Boligblokk Grunerlokka', 'Boligprosjekt OBOS', 'Tidligere prosjekt', 'a0000005-0005-0005-0005-000000000005', 'OBOS Eiendom AS', 'hybridbygg', 'completed', NOW() - INTERVAL '180 days', NOW() - INTERVAL '30 days', 32000000.00, 31500000.00, 'usr-ingrid-bakke-0006', 'Ingrid Bakke', ARRAY['usr-ingrid-bakke-0006'], NULL, NULL, true, 'on_track', 100.00, 'HB-2023-005', NOW() - INTERVAL '185 days', NOW()),
+-- Hybridbygg projects (using HB- prefix, shared sequence with offers)
+('e0000004-0004-0004-0004-000000000004', 'Kontorbygg Majorstuen', 'Kontorbygg Selvaag', 'Moderne hybridkonstruksjon', 'a0000006-0006-0006-0006-000000000006', 'Selvaag Bolig ASA', 'hybridbygg', 'active', NOW() - INTERVAL '40 days', NOW() + INTERVAL '100 days', 25000000.00, 10000000.00, 'usr-anders-nilsen-0005', 'Anders Nilsen', ARRAY['usr-anders-nilsen-0005', 'usr-ingrid-bakke-0006'], 'd0000009-0009-0009-0009-000000000009', 'c0000009-0009-0009-0009-000000000009', true, 'on_track', 40.00, 'HB-2025-005', NOW() - INTERVAL '45 days', NOW()),
+('e0000005-0005-0005-0005-000000000005', 'Boligblokk Grunerlokka', 'Boligprosjekt OBOS', 'Tidligere prosjekt', 'a0000005-0005-0005-0005-000000000005', 'OBOS Eiendom AS', 'hybridbygg', 'completed', NOW() - INTERVAL '180 days', NOW() - INTERVAL '30 days', 32000000.00, 31500000.00, 'usr-ingrid-bakke-0006', 'Ingrid Bakke', ARRAY['usr-ingrid-bakke-0006'], NULL, NULL, true, 'on_track', 100.00, 'HB-2025-006', NOW() - INTERVAL '185 days', NOW()),
 
--- Industri projects
-('e0000006-0006-0006-0006-000000000006', 'Verksted Karmoy', 'Produksjonsverksted Elkem', 'Nytt verksted', 'a0000008-0008-0008-0008-000000000008', 'Elkem ASA', 'industri', 'active', NOW() - INTERVAL '55 days', NOW() + INTERVAL '30 days', 11500000.00, 9775000.00, 'usr-hanne-lie-0008', 'Hanne Lie', ARRAY['usr-hanne-lie-0008', 'usr-thomas-dahl-0007'], 'd0000012-0012-0012-0012-000000000012', 'c0000012-0012-0012-0012-000000000012', true, 'on_track', 85.00, 'IN-2024-001', NOW() - INTERVAL '60 days', NOW()),
-('e0000007-0007-0007-0007-000000000007', 'Industrihall Bergen', 'Hall pa vent', 'Prosjekt pa vent', 'a0000009-0009-0009-0009-000000000009', 'Aibel AS', 'industri', 'on_hold', NOW() - INTERVAL '90 days', NOW() + INTERVAL '90 days', 18000000.00, 3600000.00, 'usr-thomas-dahl-0007', 'Thomas Dahl', ARRAY['usr-thomas-dahl-0007'], NULL, NULL, false, 'at_risk', 20.00, 'IN-2024-002', NOW() - INTERVAL '95 days', NOW()),
-('e0000008-0008-0008-0008-000000000008', 'Prosessanlegg Mongstad', 'Utvidelse prosessanlegg', 'Tidlig fase', 'a0000018-0018-0018-0018-000000000018', 'Equinor ASA', 'industri', 'planning', NOW() + INTERVAL '60 days', NOW() + INTERVAL '240 days', 65000000.00, 0.00, 'usr-thomas-dahl-0007', 'Thomas Dahl', ARRAY['usr-thomas-dahl-0007', 'usr-hanne-lie-0008'], NULL, NULL, false, 'on_track', 0.00, 'IN-2024-003', NOW() - INTERVAL '20 days', NOW()),
+-- Industri projects (using IN- prefix, shared sequence with offers)
+('e0000006-0006-0006-0006-000000000006', 'Verksted Karmoy', 'Produksjonsverksted Elkem', 'Nytt verksted', 'a0000008-0008-0008-0008-000000000008', 'Elkem ASA', 'industri', 'active', NOW() - INTERVAL '55 days', NOW() + INTERVAL '30 days', 11500000.00, 9775000.00, 'usr-hanne-lie-0008', 'Hanne Lie', ARRAY['usr-hanne-lie-0008', 'usr-thomas-dahl-0007'], 'd0000012-0012-0012-0012-000000000012', 'c0000012-0012-0012-0012-000000000012', true, 'on_track', 85.00, 'IN-2025-003', NOW() - INTERVAL '60 days', NOW()),
+('e0000007-0007-0007-0007-000000000007', 'Industrihall Bergen', 'Hall pa vent', 'Prosjekt pa vent', 'a0000009-0009-0009-0009-000000000009', 'Aibel AS', 'industri', 'on_hold', NOW() - INTERVAL '90 days', NOW() + INTERVAL '90 days', 18000000.00, 3600000.00, 'usr-thomas-dahl-0007', 'Thomas Dahl', ARRAY['usr-thomas-dahl-0007'], NULL, NULL, false, 'at_risk', 20.00, 'IN-2025-004', NOW() - INTERVAL '95 days', NOW()),
+('e0000008-0008-0008-0008-000000000008', 'Prosessanlegg Mongstad', 'Utvidelse prosessanlegg', 'Tidlig fase', 'a0000018-0018-0018-0018-000000000018', 'Equinor ASA', 'industri', 'planning', NOW() + INTERVAL '60 days', NOW() + INTERVAL '240 days', 65000000.00, 0.00, 'usr-thomas-dahl-0007', 'Thomas Dahl', ARRAY['usr-thomas-dahl-0007', 'usr-hanne-lie-0008'], NULL, NULL, false, 'on_track', 0.00, 'IN-2025-005', NOW() - INTERVAL '20 days', NOW()),
 
--- Tak projects
-('e0000009-0009-0009-0009-000000000009', 'Takprosjekt Coop Obs', 'Takutskifting varehus', 'Pagaende takarbeid', 'a0000012-0012-0012-0012-000000000012', 'Coop Norge SA', 'tak', 'active', NOW() - INTERVAL '15 days', NOW() + INTERVAL '45 days', 2800000.00, 1400000.00, 'usr-ole-martinsen-0009', 'Ole Martinsen', ARRAY['usr-ole-martinsen-0009', 'usr-silje-haugen-0010'], 'd0000015-0015-0015-0015-000000000015', 'c0000018-0018-0018-0018-000000000018', true, 'on_track', 50.00, 'TK-2024-001', NOW() - INTERVAL '20 days', NOW()),
-('e0000010-0010-0010-0010-000000000010', 'Skoletak Stavanger', 'Skoletakrenovering', 'Ferdigstilt prosjekt', 'a0000011-0011-0011-0011-000000000011', 'Bergen Kommune', 'tak', 'completed', NOW() - INTERVAL '120 days', NOW() - INTERVAL '15 days', 1900000.00, 1850000.00, 'usr-silje-haugen-0010', 'Silje Haugen', ARRAY['usr-silje-haugen-0010'], NULL, 'c0000019-0019-0019-0019-000000000019', true, 'on_track', 100.00, 'TK-2023-008', NOW() - INTERVAL '150 days', NOW()),
-('e0000011-0011-0011-0011-000000000011', 'Tak Trondheim Kommune', 'Diverse takarbeid', 'Rammeavtale takarbeid', 'a0000010-0010-0010-0010-000000000010', 'Trondheim Kommune', 'tak', 'active', NOW() - INTERVAL '30 days', NOW() + INTERVAL '90 days', 3500000.00, 1050000.00, 'usr-ole-martinsen-0009', 'Ole Martinsen', ARRAY['usr-ole-martinsen-0009'], NULL, NULL, false, 'on_track', 30.00, 'TK-2024-002', NOW() - INTERVAL '35 days', NOW()),
+-- Tak projects (using TK- prefix, shared sequence with offers)
+('e0000009-0009-0009-0009-000000000009', 'Takprosjekt Coop Obs', 'Takutskifting varehus', 'Pagaende takarbeid', 'a0000012-0012-0012-0012-000000000012', 'Coop Norge SA', 'tak', 'active', NOW() - INTERVAL '15 days', NOW() + INTERVAL '45 days', 2800000.00, 1400000.00, 'usr-ole-martinsen-0009', 'Ole Martinsen', ARRAY['usr-ole-martinsen-0009', 'usr-silje-haugen-0010'], 'd0000015-0015-0015-0015-000000000015', 'c0000018-0018-0018-0018-000000000018', true, 'on_track', 50.00, 'TK-2025-003', NOW() - INTERVAL '20 days', NOW()),
+('e0000010-0010-0010-0010-000000000010', 'Skoletak Stavanger', 'Skoletakrenovering', 'Ferdigstilt prosjekt', 'a0000011-0011-0011-0011-000000000011', 'Bergen Kommune', 'tak', 'completed', NOW() - INTERVAL '120 days', NOW() - INTERVAL '15 days', 1900000.00, 1850000.00, 'usr-silje-haugen-0010', 'Silje Haugen', ARRAY['usr-silje-haugen-0010'], NULL, 'c0000019-0019-0019-0019-000000000019', true, 'on_track', 100.00, 'TK-2025-004', NOW() - INTERVAL '150 days', NOW()),
+('e0000011-0011-0011-0011-000000000011', 'Tak Trondheim Kommune', 'Diverse takarbeid', 'Rammeavtale takarbeid', 'a0000010-0010-0010-0010-000000000010', 'Trondheim Kommune', 'tak', 'active', NOW() - INTERVAL '30 days', NOW() + INTERVAL '90 days', 3500000.00, 1050000.00, 'usr-ole-martinsen-0009', 'Ole Martinsen', ARRAY['usr-ole-martinsen-0009'], NULL, NULL, false, 'on_track', 30.00, 'TK-2025-005', NOW() - INTERVAL '35 days', NOW()),
 
--- Montasje projects
-('e0000012-0012-0012-0012-000000000012', 'Monteringsjobb Bodo', 'XXL butikkmontering', 'Ferdigstilt prosjekt', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'completed', NOW() - INTERVAL '70 days', NOW() - INTERVAL '10 days', 2100000.00, 2050000.00, 'usr-knut-svendsen-0011', 'Knut Svendsen', ARRAY['usr-knut-svendsen-0011'], 'd0000018-0018-0018-0018-000000000018', 'c0000023-0023-0023-0023-000000000023', true, 'on_track', 100.00, 'MO-2024-001', NOW() - INTERVAL '100 days', NOW()),
-('e0000013-0013-0013-0013-000000000013', 'IKEA Lager Vestby', 'Lagerinnredning IKEA', 'Tidligere prosjekt', 'a0000013-0013-0013-0013-000000000013', 'IKEA Norge AS', 'montasje', 'completed', NOW() - INTERVAL '150 days', NOW() - INTERVAL '60 days', 5500000.00, 5400000.00, 'usr-knut-svendsen-0011', 'Knut Svendsen', ARRAY['usr-knut-svendsen-0011', 'usr-maria-holm-0012'], NULL, NULL, true, 'on_track', 100.00, 'MO-2023-004', NOW() - INTERVAL '155 days', NOW()),
-('e0000014-0014-0014-0014-000000000014', 'Bama Lagerinnredning', 'Lagerhyller Bama', 'Planlagt prosjekt', 'a0000015-0015-0015-0015-000000000015', 'Bama Gruppen AS', 'montasje', 'planning', NOW() + INTERVAL '45 days', NOW() + INTERVAL '105 days', 3800000.00, 0.00, 'usr-maria-holm-0012', 'Maria Holm', ARRAY['usr-maria-holm-0012'], NULL, NULL, false, 'on_track', 0.00, 'MO-2024-002', NOW() - INTERVAL '10 days', NOW()),
-('e0000015-0015-0015-0015-000000000015', 'XXL Butikk Oslo', 'Butikkinnredning', 'Tidlig planlegging', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'planning', NOW() + INTERVAL '75 days', NOW() + INTERVAL '135 days', 4200000.00, 0.00, 'usr-knut-svendsen-0011', 'Knut Svendsen', ARRAY['usr-knut-svendsen-0011'], NULL, 'c0000021-0021-0021-0021-000000000021', false, 'on_track', 0.00, 'MO-2024-003', NOW() - INTERVAL '15 days', NOW());
+-- Montasje projects (using MO- prefix, shared sequence with offers)
+('e0000012-0012-0012-0012-000000000012', 'Monteringsjobb Bodo', 'XXL butikkmontering', 'Ferdigstilt prosjekt', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'completed', NOW() - INTERVAL '70 days', NOW() - INTERVAL '10 days', 2100000.00, 2050000.00, 'usr-knut-svendsen-0011', 'Knut Svendsen', ARRAY['usr-knut-svendsen-0011'], 'd0000018-0018-0018-0018-000000000018', 'c0000023-0023-0023-0023-000000000023', true, 'on_track', 100.00, 'MO-2025-004', NOW() - INTERVAL '100 days', NOW()),
+('e0000013-0013-0013-0013-000000000013', 'IKEA Lager Vestby', 'Lagerinnredning IKEA', 'Tidligere prosjekt', 'a0000013-0013-0013-0013-000000000013', 'IKEA Norge AS', 'montasje', 'completed', NOW() - INTERVAL '150 days', NOW() - INTERVAL '60 days', 5500000.00, 5400000.00, 'usr-knut-svendsen-0011', 'Knut Svendsen', ARRAY['usr-knut-svendsen-0011', 'usr-maria-holm-0012'], NULL, NULL, true, 'on_track', 100.00, 'MO-2025-005', NOW() - INTERVAL '155 days', NOW()),
+('e0000014-0014-0014-0014-000000000014', 'Bama Lagerinnredning', 'Lagerhyller Bama', 'Planlagt prosjekt', 'a0000015-0015-0015-0015-000000000015', 'Bama Gruppen AS', 'montasje', 'planning', NOW() + INTERVAL '45 days', NOW() + INTERVAL '105 days', 3800000.00, 0.00, 'usr-maria-holm-0012', 'Maria Holm', ARRAY['usr-maria-holm-0012'], NULL, NULL, false, 'on_track', 0.00, 'MO-2025-006', NOW() - INTERVAL '10 days', NOW()),
+('e0000015-0015-0015-0015-000000000015', 'XXL Butikk Oslo', 'Butikkinnredning', 'Tidlig planlegging', 'a0000014-0014-0014-0014-000000000014', 'XXL Sport og Villmark', 'montasje', 'planning', NOW() + INTERVAL '75 days', NOW() + INTERVAL '135 days', 4200000.00, 0.00, 'usr-knut-svendsen-0011', 'Knut Svendsen', ARRAY['usr-knut-svendsen-0011'], NULL, 'c0000021-0021-0021-0021-000000000021', false, 'on_track', 0.00, 'MO-2025-007', NOW() - INTERVAL '15 days', NOW());
 
 -- ============================================================================
 -- PART 12: BUDGET DIMENSIONS FOR PROJECTS
@@ -497,6 +511,26 @@ INSERT INTO notifications (id, user_id, type, title, message, read, entity_id, e
 (gen_random_uuid(), md5('usr-maria-holm-0012')::uuid, 'project_update', 'Prosjektinformasjon', 'Du er lagt til i team for XXL Butikk Oslo', false, 'e0000015-0015-0015-0015-000000000015', 'Project', NOW() - INTERVAL '3 days', NOW());
 
 -- ============================================================================
+-- PART 17: NUMBER SEQUENCES (shared between offers and projects)
+-- ============================================================================
+-- These sequences track the next available number for each company/year combination.
+-- The last_sequence reflects the highest number already assigned.
+-- Format: {PREFIX}-{YEAR}-{NNN} where PREFIX is company slug (ST, HB, IN, TK, MO, GR)
+
+INSERT INTO number_sequences (id, company_id, year, last_sequence, created_at, updated_at) VALUES
+-- Stalbygg: 5 offers (ST-2025-001 to 005) + 3 projects (ST-2025-006 to 008) = 8 total
+(gen_random_uuid(), 'stalbygg', 2025, 8, NOW(), NOW()),
+-- Hybridbygg: 4 offers (HB-2025-001 to 004) + 2 projects (HB-2025-005 to 006) = 6 total
+(gen_random_uuid(), 'hybridbygg', 2025, 6, NOW(), NOW()),
+-- Industri: 2 offers (IN-2025-001 to 002) + 3 projects (IN-2025-003 to 005) = 5 total
+(gen_random_uuid(), 'industri', 2025, 5, NOW(), NOW()),
+-- Tak: 2 offers (TK-2025-001 to 002) + 3 projects (TK-2025-003 to 005) = 5 total
+(gen_random_uuid(), 'tak', 2025, 5, NOW(), NOW()),
+-- Montasje: 3 offers (MO-2025-001 to 003) + 4 projects (MO-2025-004 to 007) = 7 total
+(gen_random_uuid(), 'montasje', 2025, 7, NOW(), NOW());
+-- Note: Gruppen (GR) has no offers or projects in seed data
+
+-- ============================================================================
 -- END OF SEED DATA
 -- ============================================================================
 
@@ -508,11 +542,12 @@ INSERT INTO notifications (id, user_id, type, title, message, read, entity_id, e
 -- Contact Relationships: 18
 -- Deals: 25
 -- Deal Stage History: 18
--- Offers: 18
+-- Offers: 18 (16 with offer_number, 2 drafts with NULL)
 -- Budget Dimensions (Offers): 22
 -- Projects: 15
 -- Budget Dimensions (Projects): 12
 -- Activities: 40
 -- Notifications: 20
+-- Number Sequences: 5
 --
--- Total: ~246 records
+-- Total: ~251 records

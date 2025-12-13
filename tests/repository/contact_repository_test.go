@@ -14,7 +14,7 @@ import (
 )
 
 func setupContactTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -132,8 +132,14 @@ func TestContactRepository_Delete(t *testing.T) {
 	err := repo.Delete(context.Background(), contact.ID)
 	assert.NoError(t, err)
 
-	// Contact should still exist but be inactive
-	found, err := repo.GetByID(context.Background(), contact.ID)
+	// GetByID should return not found since it filters by is_active = true
+	_, err = repo.GetByID(context.Background(), contact.ID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
+
+	// Verify the contact still exists in DB but is inactive (using raw query)
+	var found domain.Contact
+	err = db.Unscoped().Where("id = ?", contact.ID).First(&found).Error
 	assert.NoError(t, err)
 	assert.False(t, found.IsActive)
 }

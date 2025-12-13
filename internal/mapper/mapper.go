@@ -25,6 +25,12 @@ func ToCustomerDTO(customer *domain.Customer, totalValue float64, activeOffers i
 		Status:        customer.Status,
 		Tier:          customer.Tier,
 		Industry:      customer.Industry,
+		Notes:         customer.Notes,
+		CustomerClass: customer.CustomerClass,
+		CreditLimit:   customer.CreditLimit,
+		IsInternal:    customer.IsInternal,
+		Municipality:  customer.Municipality,
+		County:        customer.County,
 		CreatedAt:     customer.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:     customer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 		TotalValue:    totalValue,
@@ -141,29 +147,45 @@ func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHis
 
 // ToProjectDTO converts Project to ProjectDTO
 func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
+	// Set default phase for backwards compatibility if not set
+	phase := project.Phase
+	if phase == "" {
+		phase = domain.ProjectPhaseTilbud
+	}
+
 	dto := domain.ProjectDTO{
-		ID:                project.ID,
-		Name:              project.Name,
-		ProjectNumber:     project.ProjectNumber,
-		Summary:           project.Summary,
-		Description:       project.Description,
-		CustomerID:        project.CustomerID,
-		CustomerName:      project.CustomerName,
-		CompanyID:         project.CompanyID,
-		Status:            project.Status,
-		StartDate:         project.StartDate.Format("2006-01-02T15:04:05Z"),
-		Budget:            project.Budget,
-		Spent:             project.Spent,
-		ManagerID:         project.ManagerID,
-		ManagerName:       project.ManagerName,
-		TeamMembers:       project.TeamMembers,
-		CreatedAt:         project.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:         project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		OfferID:           project.OfferID,
-		DealID:            project.DealID,
-		HasDetailedBudget: project.HasDetailedBudget,
-		Health:            project.Health,
-		CompletionPercent: project.CompletionPercent,
+		ID:                   project.ID,
+		Name:                 project.Name,
+		ProjectNumber:        project.ProjectNumber,
+		Summary:              project.Summary,
+		Description:          project.Description,
+		CustomerID:           project.CustomerID,
+		CustomerName:         project.CustomerName,
+		CompanyID:            project.CompanyID,
+		Status:               project.Status,
+		Phase:                phase,
+		Value:                project.Value,
+		Cost:                 project.Cost,
+		MarginPercent:        project.MarginPercent,
+		Spent:                project.Spent,
+		ManagerID:            project.ManagerID,
+		ManagerName:          project.ManagerName,
+		TeamMembers:          project.TeamMembers,
+		CreatedAt:            project.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:            project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		OfferID:              project.OfferID,
+		DealID:               project.DealID,
+		HasDetailedBudget:    project.HasDetailedBudget,
+		Health:               project.Health,
+		CompletionPercent:    project.CompletionPercent,
+		WinningOfferID:       project.WinningOfferID,
+		InheritedOfferNumber: project.InheritedOfferNumber,
+		CalculatedOfferValue: project.CalculatedOfferValue,
+		IsEconomicsEditable:  phase.IsEditablePhase(),
+	}
+
+	if !project.StartDate.IsZero() {
+		dto.StartDate = project.StartDate.Format("2006-01-02T15:04:05Z")
 	}
 
 	if project.EndDate != nil {
@@ -172,6 +194,10 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 
 	if project.EstimatedCompletionDate != nil {
 		dto.EstimatedCompletionDate = project.EstimatedCompletionDate.Format("2006-01-02")
+	}
+
+	if project.WonAt != nil {
+		dto.WonAt = project.WonAt.Format("2006-01-02T15:04:05Z")
 	}
 
 	return dto
@@ -190,26 +216,50 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		dueDate = &formatted
 	}
 
+	var sentDate *string
+	if offer.SentDate != nil {
+		formatted := offer.SentDate.Format("2006-01-02T15:04:05Z")
+		sentDate = &formatted
+	}
+
+	var expirationDate *string
+	if offer.ExpirationDate != nil {
+		formatted := offer.ExpirationDate.Format("2006-01-02T15:04:05Z")
+		expirationDate = &formatted
+	}
+
+	// Calculate margin (Value - Cost), margin_percent is stored in DB
+	margin := offer.Value - offer.Cost
+
 	return domain.OfferDTO{
-		ID:                  offer.ID,
-		Title:               offer.Title,
-		OfferNumber:         offer.OfferNumber,
-		CustomerID:          offer.CustomerID,
-		CustomerName:        offer.CustomerName,
-		ProjectID:           offer.ProjectID,
-		CompanyID:           offer.CompanyID,
-		Phase:               offer.Phase,
-		Probability:         offer.Probability,
-		Value:               offer.Value,
-		Status:              offer.Status,
-		CreatedAt:           offer.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:           offer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		ResponsibleUserID:   offer.ResponsibleUserID,
-		ResponsibleUserName: offer.ResponsibleUserName,
-		Items:               items,
-		Description:         offer.Description,
-		Notes:               offer.Notes,
-		DueDate:             dueDate,
+		ID:                    offer.ID,
+		Title:                 offer.Title,
+		OfferNumber:           offer.OfferNumber,
+		ExternalReference:     offer.ExternalReference,
+		CustomerID:            offer.CustomerID,
+		CustomerName:          offer.CustomerName,
+		ProjectID:             offer.ProjectID,
+		ProjectName:           offer.ProjectName,
+		CompanyID:             offer.CompanyID,
+		Phase:                 offer.Phase,
+		Probability:           offer.Probability,
+		Value:                 offer.Value,
+		Status:                offer.Status,
+		CreatedAt:             offer.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:             offer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		ResponsibleUserID:     offer.ResponsibleUserID,
+		ResponsibleUserName:   offer.ResponsibleUserName,
+		Items:                 items,
+		Description:           offer.Description,
+		Notes:                 offer.Notes,
+		DueDate:               dueDate,
+		Cost:                  offer.Cost,
+		Margin:                margin,
+		MarginPercent:         offer.MarginPercent, // Stored in DB, auto-calculated by trigger
+		Location:              offer.Location,
+		SentDate:              sentDate,
+		ExpirationDate:        expirationDate,
+		CustomerHasWonProject: offer.CustomerHasWonProject,
 	}
 }
 
@@ -227,92 +277,73 @@ func ToOfferItemDTO(item *domain.OfferItem) domain.OfferItemDTO {
 	}
 }
 
-// ToBudgetDimensionCategoryDTO converts BudgetDimensionCategory to BudgetDimensionCategoryDTO
-func ToBudgetDimensionCategoryDTO(cat *domain.BudgetDimensionCategory) domain.BudgetDimensionCategoryDTO {
-	return domain.BudgetDimensionCategoryDTO{
-		ID:           cat.ID,
-		Name:         cat.Name,
-		Description:  cat.Description,
-		DisplayOrder: cat.DisplayOrder,
-		IsActive:     cat.IsActive,
+// ToBudgetItemDTO converts BudgetItem to BudgetItemDTO
+func ToBudgetItemDTO(item *domain.BudgetItem) domain.BudgetItemDTO {
+	return domain.BudgetItemDTO{
+		ID:              item.ID,
+		ParentType:      item.ParentType,
+		ParentID:        item.ParentID,
+		Name:            item.Name,
+		ExpectedCost:    item.ExpectedCost,
+		ExpectedMargin:  item.ExpectedMargin,
+		ExpectedRevenue: item.ExpectedRevenue,
+		ExpectedProfit:  item.ExpectedProfit,
+		Quantity:        item.Quantity,
+		PricePerItem:    item.PricePerItem,
+		Description:     item.Description,
+		DisplayOrder:    item.DisplayOrder,
+		CreatedAt:       item.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:       item.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
 
-// ToBudgetDimensionDTO converts BudgetDimension to BudgetDimensionDTO
-func ToBudgetDimensionDTO(dim *domain.BudgetDimension) domain.BudgetDimensionDTO {
-	dto := domain.BudgetDimensionDTO{
-		ID:                  dim.ID,
-		ParentType:          dim.ParentType,
-		ParentID:            dim.ParentID,
-		CategoryID:          dim.CategoryID,
-		CustomName:          dim.CustomName,
-		Name:                dim.GetName(),
-		Cost:                dim.Cost,
-		Revenue:             dim.Revenue,
-		TargetMarginPercent: dim.TargetMarginPercent,
-		MarginOverride:      dim.MarginOverride,
-		MarginPercent:       dim.MarginPercent,
-		Description:         dim.Description,
-		Quantity:            dim.Quantity,
-		Unit:                dim.Unit,
-		DisplayOrder:        dim.DisplayOrder,
-		CreatedAt:           dim.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:           dim.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-	}
-
-	if dim.Category != nil {
-		catDTO := ToBudgetDimensionCategoryDTO(dim.Category)
-		dto.Category = &catDTO
-	}
-
-	return dto
-}
-
-// ToBudgetSummaryDTO creates a summary DTO from budget dimensions
-func ToBudgetSummaryDTO(parentType domain.BudgetParentType, parentID uuid.UUID, dimensions []domain.BudgetDimension) domain.BudgetSummaryDTO {
+// ToBudgetSummaryDTO creates a summary DTO from budget items
+func ToBudgetSummaryDTO(parentType domain.BudgetParentType, parentID uuid.UUID, items []domain.BudgetItem) domain.BudgetSummaryDTO {
 	totalCost := 0.0
 	totalRevenue := 0.0
+	totalProfit := 0.0
 
-	for _, dim := range dimensions {
-		totalCost += dim.Cost
-		totalRevenue += dim.Revenue
+	for _, item := range items {
+		totalCost += item.ExpectedCost
+		totalRevenue += item.ExpectedRevenue
+		totalProfit += item.ExpectedProfit
 	}
 
-	overallMargin := 0.0
+	marginPercent := 0.0
 	if totalRevenue > 0 {
-		overallMargin = ((totalRevenue - totalCost) / totalRevenue) * 100
+		marginPercent = (totalProfit / totalRevenue) * 100
 	}
 
 	return domain.BudgetSummaryDTO{
-		ParentType:           parentType,
-		ParentID:             parentID,
-		DimensionCount:       len(dimensions),
-		TotalCost:            totalCost,
-		TotalRevenue:         totalRevenue,
-		OverallMarginPercent: overallMargin,
-		TotalProfit:          totalRevenue - totalCost,
+		ParentType:    parentType,
+		ParentID:      parentID,
+		ItemCount:     len(items),
+		TotalCost:     totalCost,
+		TotalRevenue:  totalRevenue,
+		TotalProfit:   totalProfit,
+		MarginPercent: marginPercent,
 	}
 }
 
 // ToProjectActualCostDTO converts ProjectActualCost to ProjectActualCostDTO
 func ToProjectActualCostDTO(cost *domain.ProjectActualCost) domain.ProjectActualCostDTO {
 	dto := domain.ProjectActualCostDTO{
-		ID:                cost.ID,
-		ProjectID:         cost.ProjectID,
-		CostType:          cost.CostType,
-		Description:       cost.Description,
-		Amount:            cost.Amount,
-		Currency:          cost.Currency,
-		CostDate:          cost.CostDate.Format("2006-01-02"),
-		BudgetDimensionID: cost.BudgetDimensionID,
-		ERPSource:         cost.ERPSource,
-		ERPReference:      cost.ERPReference,
-		ERPTransactionID:  cost.ERPTransactionID,
-		IsApproved:        cost.IsApproved,
-		ApprovedByID:      cost.ApprovedByID,
-		Notes:             cost.Notes,
-		CreatedAt:         cost.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:         cost.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		ID:               cost.ID,
+		ProjectID:        cost.ProjectID,
+		CostType:         cost.CostType,
+		Description:      cost.Description,
+		Amount:           cost.Amount,
+		Currency:         cost.Currency,
+		CostDate:         cost.CostDate.Format("2006-01-02"),
+		BudgetItemID:     cost.BudgetItemID,
+		ERPSource:        cost.ERPSource,
+		ERPReference:     cost.ERPReference,
+		ERPTransactionID: cost.ERPTransactionID,
+		IsApproved:       cost.IsApproved,
+		ApprovedByID:     cost.ApprovedByID,
+		Notes:            cost.Notes,
+		CreatedAt:        cost.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:        cost.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
 	if cost.PostingDate != nil {
@@ -337,21 +368,23 @@ func ToProjectCostSummaryDTO(project *domain.Project, actualCosts []domain.Proje
 		totalActualCosts += cost.Amount
 	}
 
-	remainingBudget := project.Budget - totalActualCosts
-	budgetUsedPercent := 0.0
-	if project.Budget > 0 {
-		budgetUsedPercent = (totalActualCosts / project.Budget) * 100
+	remainingValue := project.Value - totalActualCosts
+	valueUsedPercent := 0.0
+	if project.Value > 0 {
+		valueUsedPercent = (totalActualCosts / project.Value) * 100
 	}
 
 	return domain.ProjectCostSummaryDTO{
-		ProjectID:         project.ID,
-		ProjectName:       project.Name,
-		Budget:            project.Budget,
-		Spent:             project.Spent,
-		ActualCosts:       totalActualCosts,
-		RemainingBudget:   remainingBudget,
-		BudgetUsedPercent: budgetUsedPercent,
-		CostEntryCount:    len(actualCosts),
+		ProjectID:        project.ID,
+		ProjectName:      project.Name,
+		Value:            project.Value,
+		Cost:             project.Cost,
+		MarginPercent:    project.MarginPercent,
+		Spent:            project.Spent,
+		ActualCosts:      totalActualCosts,
+		RemainingValue:   remainingValue,
+		ValueUsedPercent: valueUsedPercent,
+		CostEntryCount:   len(actualCosts),
 	}
 }
 
@@ -537,16 +570,18 @@ func ToAuditLogDTO(log *domain.AuditLog) domain.AuditLogDTO {
 
 // ToProjectBudgetDTO converts project budget info to DTO
 func ToProjectBudgetDTO(project *domain.Project) domain.ProjectBudgetDTO {
-	remaining := project.Budget - project.Spent
+	remaining := project.Value - project.Spent
 	percentUsed := 0.0
-	if project.Budget > 0 {
-		percentUsed = (project.Spent / project.Budget) * 100
+	if project.Value > 0 {
+		percentUsed = (project.Spent / project.Value) * 100
 	}
 	return domain.ProjectBudgetDTO{
-		Budget:      project.Budget,
-		Spent:       project.Spent,
-		Remaining:   remaining,
-		PercentUsed: percentUsed,
+		Value:         project.Value,
+		Cost:          project.Cost,
+		MarginPercent: project.MarginPercent,
+		Spent:         project.Spent,
+		Remaining:     remaining,
+		PercentUsed:   percentUsed,
 	}
 }
 

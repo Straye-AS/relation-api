@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
+	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -20,16 +22,29 @@ func NewDashboardHandler(dashboardService *service.DashboardService, logger *zap
 }
 
 // @Summary Get dashboard metrics
-// @Description Returns dashboard metrics using a rolling 12-month window. All metrics exclude draft and expired offers.
+// @Description Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.
+// @Description
+// @Description **IMPORTANT: Aggregation Logic (Avoids Double-Counting)**
+// @Description When a project has multiple offers, only the highest value offer per phase is counted.
+// @Description Orphan offers (without project) are included at full value.
+// @Description Example: Project A has offers 23M and 25M in "sent" phase - totalValue shows 25M, not 48M.
+// @Description
+// @Description **Time Range Options:**
+// @Description - `rolling12months` (default): Uses a rolling 12-month window from the current date
+// @Description - `allTime`: Calculates metrics without any date filter
 // @Description
 // @Description **Offer Metrics:**
 // @Description - `totalOfferCount`: Count of offers excluding drafts and expired
-// @Description - `offerReserve`: Total value of active offers (in_progress, sent)
+// @Description - `totalProjectCount`: Count of unique projects with offers (excludes orphan offers)
+// @Description - `offerReserve`: Total value of active offers - best per project (avoids double-counting)
 // @Description - `weightedOfferReserve`: Sum of (value * probability/100) for active offers
 // @Description - `averageProbability`: Average probability of active offers
 // @Description
 // @Description **Pipeline Data:**
 // @Description - Returns phases: in_progress, sent, won, lost with counts and values
+// @Description - `count`: Total offer count in phase
+// @Description - `projectCount`: Unique projects in phase (excludes orphan offers)
+// @Description - `totalValue`: Sum of best offer value per project (avoids double-counting)
 // @Description - Excludes draft and expired offers
 // @Description
 // @Description **Win Rate Metrics:**
@@ -40,22 +55,40 @@ func NewDashboardHandler(dashboardService *service.DashboardService, logger *zap
 // @Description **Order Reserve:** Sum of (budget - spent) on active projects
 // @Description
 // @Description **Financial Summary:**
-// @Description - `totalInvoiced`: Sum of spent on all projects in 12-month window
+// @Description - `totalInvoiced`: Sum of spent on all projects in the time range
 // @Description - `totalValue`: orderReserve + totalInvoiced
 // @Description
-// @Description **Recent Lists:** 12-month window, limit 10 each
+// @Description **Recent Lists:** Limit 5 each
 // @Description **Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue
 // @Tags Dashboard
 // @Produce json
+// @Param timeRange query string false "Time range for metrics" Enums(rolling12months, allTime) default(rolling12months)
 // @Success 200 {object} domain.DashboardMetrics
+// @Failure 400 {object} domain.APIError "Invalid timeRange value"
 // @Security BearerAuth
 // @Security ApiKeyAuth
 // @Router /dashboard/metrics [get]
 func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
-	metrics, err := h.dashboardService.GetMetrics(r.Context())
+	// Parse timeRange query parameter
+	timeRangeParam := r.URL.Query().Get("timeRange")
+	var timeRange domain.TimeRange
+
+	if timeRangeParam == "" {
+		// Default to rolling 12 months
+		timeRange = domain.TimeRangeRolling12Months
+	} else {
+		timeRange = domain.TimeRange(timeRangeParam)
+		if !timeRange.IsValid() {
+			respondWithError(w, http.StatusBadRequest,
+				fmt.Sprintf("Invalid timeRange value: '%s'. Must be one of: rolling12months, allTime", timeRangeParam))
+			return
+		}
+	}
+
+	metrics, err := h.dashboardService.GetMetrics(r.Context(), timeRange)
 	if err != nil {
 		h.logger.Error("failed to get dashboard metrics", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to retrieve dashboard metrics")
 		return
 	}
 

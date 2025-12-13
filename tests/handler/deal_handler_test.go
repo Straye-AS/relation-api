@@ -23,7 +23,7 @@ import (
 )
 
 func setupDealHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupTestDB(t)
+	db := testutil.SetupCleanTestDB(t)
 	t.Cleanup(func() {
 		testutil.CleanupTestData(t, db)
 	})
@@ -42,10 +42,10 @@ func createDealHandler(t *testing.T, db *gorm.DB) *handler.DealHandler {
 	projectRepo := repository.NewProjectRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
-	budgetDimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 
-	dealService := service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetDimensionRepo, notificationRepo, logger, db)
+	dealService := service.NewDealService(dealRepo, historyRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, logger, db)
 
 	return handler.NewDealHandler(dealService, logger)
 }

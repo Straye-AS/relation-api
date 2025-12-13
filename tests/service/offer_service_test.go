@@ -2,7 +2,9 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -41,42 +43,45 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 	offerItemRepo := repository.NewOfferItemRepository(db)
 	customerRepo := repository.NewCustomerRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
-	dimensionRepo := repository.NewBudgetDimensionRepository(db)
+	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, log)
+	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
 	svc := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
 		customerRepo,
 		projectRepo,
-		dimensionRepo,
+		budgetItemRepo,
 		fileRepo,
 		activityRepo,
 		companyService,
+		numberSequenceService,
 		log,
 		db,
 	)
 
 	fixtures := &offerTestFixtures{
-		db:            db,
-		customerRepo:  customerRepo,
-		offerRepo:     offerRepo,
-		dimensionRepo: dimensionRepo,
+		db:             db,
+		customerRepo:   customerRepo,
+		offerRepo:      offerRepo,
+		budgetItemRepo: budgetItemRepo,
 	}
 
 	return svc, fixtures
 }
 
 type offerTestFixtures struct {
-	db            *gorm.DB
-	customerRepo  *repository.CustomerRepository
-	offerRepo     *repository.OfferRepository
-	dimensionRepo *repository.BudgetDimensionRepository
+	db             *gorm.DB
+	customerRepo   *repository.CustomerRepository
+	offerRepo      *repository.OfferRepository
+	budgetItemRepo *repository.BudgetItemRepository
 }
 
 func (f *offerTestFixtures) createTestCustomer(t *testing.T, ctx context.Context, name string) *domain.Customer {
@@ -108,28 +113,35 @@ func (f *offerTestFixtures) createTestOffer(t *testing.T, ctx context.Context, t
 		ResponsibleUserID: "test-user-id",
 		Description:       "Test offer description",
 	}
+
+	// Non-draft offers should have an offer number
+	// Draft offers should NOT have an offer number
+	if phase != domain.OfferPhaseDraft {
+		offer.OfferNumber = fmt.Sprintf("TEST-%s-%d", domain.GetCompanyPrefix(domain.CompanyStalbygg), time.Now().UnixNano())
+	}
+
 	err := f.offerRepo.Create(ctx, offer)
 	require.NoError(t, err)
 	return offer
 }
 
-func (f *offerTestFixtures) createTestBudgetDimension(t *testing.T, ctx context.Context, offerID uuid.UUID, name string, cost, revenue float64, order int) *domain.BudgetDimension {
-	dimension := &domain.BudgetDimension{
-		ParentType:   domain.BudgetParentOffer,
-		ParentID:     offerID,
-		CustomName:   name,
-		Cost:         cost,
-		Revenue:      revenue,
-		DisplayOrder: order,
+func (f *offerTestFixtures) createTestBudgetItem(t *testing.T, ctx context.Context, offerID uuid.UUID, name string, expectedCost float64, marginPercent float64, order int) *domain.BudgetItem {
+	item := &domain.BudgetItem{
+		ParentType:     domain.BudgetParentOffer,
+		ParentID:       offerID,
+		Name:           name,
+		ExpectedCost:   expectedCost,
+		ExpectedMargin: marginPercent,
+		DisplayOrder:   order,
 	}
-	err := f.dimensionRepo.Create(ctx, dimension)
+	err := f.budgetItemRepo.Create(ctx, item)
 	require.NoError(t, err)
-	return dimension
+	return item
 }
 
 func (f *offerTestFixtures) cleanup(t *testing.T) {
 	f.db.Exec("DELETE FROM activities WHERE target_type = 'Offer' OR target_type = 'Project' OR target_type = 'Customer'")
-	f.db.Exec("DELETE FROM budget_dimensions WHERE parent_type = 'offer' OR parent_type = 'project'")
+	f.db.Exec("DELETE FROM budget_items WHERE parent_type = 'offer' OR parent_type = 'project'")
 	f.db.Exec("DELETE FROM files WHERE offer_id IS NOT NULL")
 	f.db.Exec("DELETE FROM offer_items")
 	f.db.Exec("DELETE FROM projects WHERE name LIKE 'Test%' OR name LIKE 'Copy of%'")
@@ -242,13 +254,13 @@ func TestOfferService_AcceptOffer(t *testing.T) {
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, domain.OfferPhaseWon, result.Offer.Phase)
 		assert.Equal(t, "New Project from Offer", result.Project.Name)
-		assert.Equal(t, offer.Value, result.Project.Budget)
+		assert.Equal(t, offer.Value, result.Project.Value)
 	})
 
-	t.Run("accept offer with project creation clones budget dimensions", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Accept Clone Dims", domain.OfferPhaseSent)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dimension 1", 1000, 1500, 0)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dimension 2", 2000, 3000, 1)
+	t.Run("accept offer with project creation clones budget items", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Clone Items", domain.OfferPhaseSent)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 1", 1000, 50, 0)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 2", 2000, 50, 1)
 
 		req := &domain.AcceptOfferRequest{
 			CreateProject: true,
@@ -258,10 +270,10 @@ func TestOfferService_AcceptOffer(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result.Project)
 
-		// Verify dimensions were cloned to project
-		projectDims, err := fixtures.dimensionRepo.GetByParent(ctx, domain.BudgetParentProject, result.Project.ID)
+		// Verify items were cloned to project
+		projectItems, err := fixtures.budgetItemRepo.ListByParent(ctx, domain.BudgetParentProject, result.Project.ID)
 		require.NoError(t, err)
-		assert.Len(t, projectDims, 2)
+		assert.Len(t, projectItems, 2)
 	})
 
 	t.Run("cannot accept draft offer", func(t *testing.T) {
@@ -411,7 +423,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Clone Default", domain.OfferPhaseDraft)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: boolPtr(true),
+			IncludeBudget: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -426,8 +438,8 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Clone Custom", domain.OfferPhaseSent)
 
 		req := &domain.CloneOfferRequest{
-			NewTitle:          "My Custom Clone Title",
-			IncludeDimensions: boolPtr(true),
+			NewTitle:      "My Custom Clone Title",
+			IncludeBudget: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -437,50 +449,50 @@ func TestOfferService_CloneOffer(t *testing.T) {
 		assert.Equal(t, domain.OfferPhaseDraft, result.Phase) // Cloned offers start as draft
 	})
 
-	t.Run("clone offer with budget dimensions", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Clone With Dims", domain.OfferPhaseDraft)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Clone Dim 1", 1000, 1500, 0)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Clone Dim 2", 2000, 3000, 1)
+	t.Run("clone offer with budget items", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Clone With Items", domain.OfferPhaseDraft)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Clone Item 1", 1000, 50, 0)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Clone Item 2", 2000, 50, 1)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: boolPtr(true),
+			IncludeBudget: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
-		// Verify dimensions were cloned
-		clonedDims, err := fixtures.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, result.ID)
+		// Verify items were cloned
+		clonedItems, err := fixtures.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, result.ID)
 		require.NoError(t, err)
-		assert.Len(t, clonedDims, 2)
-		assert.Equal(t, "Clone Dim 1", clonedDims[0].CustomName)
-		assert.Equal(t, "Clone Dim 2", clonedDims[1].CustomName)
+		assert.Len(t, clonedItems, 2)
+		assert.Equal(t, "Clone Item 1", clonedItems[0].Name)
+		assert.Equal(t, "Clone Item 2", clonedItems[1].Name)
 	})
 
-	t.Run("clone offer without budget dimensions", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Clone No Dims", domain.OfferPhaseDraft)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "No Clone Dim", 1000, 1500, 0)
+	t.Run("clone offer without budget items", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Clone No Items", domain.OfferPhaseDraft)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "No Clone Item", 1000, 50, 0)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: boolPtr(false), // Explicitly don't clone dimensions
+			IncludeBudget: boolPtr(false), // Explicitly don't clone budget items
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
-		// Verify dimensions were NOT cloned
-		clonedDims, err := fixtures.dimensionRepo.GetByParent(ctx, domain.BudgetParentOffer, result.ID)
+		// Verify items were NOT cloned
+		clonedItems, err := fixtures.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, result.ID)
 		require.NoError(t, err)
-		assert.Len(t, clonedDims, 0)
+		assert.Len(t, clonedItems, 0)
 	})
 
 	t.Run("clone won offer starts as draft", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Clone Won", domain.OfferPhaseWon)
 
 		req := &domain.CloneOfferRequest{
-			IncludeDimensions: boolPtr(true),
+			IncludeBudget: boolPtr(true),
 		}
 
 		result, err := svc.CloneOffer(ctx, offer.ID, req)
@@ -510,10 +522,10 @@ func TestOfferService_GetBudgetSummary(t *testing.T) {
 
 	ctx := createOfferTestContext()
 
-	t.Run("get summary with dimensions", func(t *testing.T) {
+	t.Run("get summary with budget items", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Summary", domain.OfferPhaseDraft)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dim 1", 1000, 1500, 0)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dim 2", 2000, 3000, 1)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 1", 1000, 50, 0) // Cost=1000, Revenue=1500
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 2", 2000, 50, 1) // Cost=2000, Revenue=3000
 		// Total: Cost=3000, Revenue=4500
 
 		result, err := svc.GetBudgetSummary(ctx, offer.ID)
@@ -522,10 +534,10 @@ func TestOfferService_GetBudgetSummary(t *testing.T) {
 		assert.Equal(t, 3000.0, result.TotalCost)
 		assert.Equal(t, 4500.0, result.TotalRevenue)
 		assert.Equal(t, 1500.0, result.TotalProfit)
-		assert.Equal(t, 2, result.DimensionCount)
+		assert.Equal(t, 2, result.ItemCount)
 	})
 
-	t.Run("get summary without dimensions", func(t *testing.T) {
+	t.Run("get summary without budget items", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Empty Summary", domain.OfferPhaseDraft)
 
 		result, err := svc.GetBudgetSummary(ctx, offer.ID)
@@ -533,7 +545,7 @@ func TestOfferService_GetBudgetSummary(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.Equal(t, 0.0, result.TotalCost)
 		assert.Equal(t, 0.0, result.TotalRevenue)
-		assert.Equal(t, 0, result.DimensionCount)
+		assert.Equal(t, 0, result.ItemCount)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -551,10 +563,10 @@ func TestOfferService_RecalculateTotals(t *testing.T) {
 
 	ctx := createOfferTestContext()
 
-	t.Run("recalculate totals from dimensions", func(t *testing.T) {
+	t.Run("recalculate totals from budget items", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Recalc", domain.OfferPhaseDraft)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dim 1", 1000, 1500, 0)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dim 2", 2000, 3000, 1)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 1", 1000, 50, 0) // Revenue=1500
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 2", 2000, 50, 1) // Revenue=3000
 		// Total revenue: 4500
 
 		result, err := svc.RecalculateTotals(ctx, offer.ID)
@@ -572,41 +584,41 @@ func TestOfferService_RecalculateTotals(t *testing.T) {
 }
 
 // ============================================================================
-// GetByIDWithBudgetDimensions Tests
+// GetByIDWithBudgetItems Tests
 // ============================================================================
 
-func TestOfferService_GetByIDWithBudgetDimensions(t *testing.T) {
+func TestOfferService_GetByIDWithBudgetItems(t *testing.T) {
 	db := setupOfferTestDB(t)
 	svc, fixtures := setupOfferTestService(t, db)
 	t.Cleanup(func() { fixtures.cleanup(t) })
 
 	ctx := createOfferTestContext()
 
-	t.Run("get offer with dimensions", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Get With Dims", domain.OfferPhaseDraft)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dim 1", 1000, 1500, 0)
-		fixtures.createTestBudgetDimension(t, ctx, offer.ID, "Dim 2", 2000, 3000, 1)
+	t.Run("get offer with budget items", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Get With Items", domain.OfferPhaseDraft)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 1", 1000, 50, 0)
+		fixtures.createTestBudgetItem(t, ctx, offer.ID, "Item 2", 2000, 50, 1)
 
-		result, err := svc.GetByIDWithBudgetDimensions(ctx, offer.ID)
+		result, err := svc.GetByIDWithBudgetItems(ctx, offer.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, offer.ID, result.ID)
-		assert.Len(t, result.BudgetDimensions, 2)
+		assert.Len(t, result.BudgetItems, 2)
 		assert.NotNil(t, result.BudgetSummary)
-		assert.Equal(t, 2, result.BudgetSummary.DimensionCount)
+		assert.Equal(t, 2, result.BudgetSummary.ItemCount)
 	})
 
-	t.Run("get offer without dimensions", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Get No Dims", domain.OfferPhaseDraft)
+	t.Run("get offer without budget items", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Get No Items", domain.OfferPhaseDraft)
 
-		result, err := svc.GetByIDWithBudgetDimensions(ctx, offer.ID)
+		result, err := svc.GetByIDWithBudgetItems(ctx, offer.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Len(t, result.BudgetDimensions, 0)
+		assert.Len(t, result.BudgetItems, 0)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		result, err := svc.GetByIDWithBudgetDimensions(ctx, uuid.New())
+		result, err := svc.GetByIDWithBudgetItems(ctx, uuid.New())
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.ErrorIs(t, err, service.ErrOfferNotFound)
@@ -738,7 +750,7 @@ func TestOfferService_ActivityLogging(t *testing.T) {
 	t.Run("clone offer logs activities on both offers", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Activity Clone", domain.OfferPhaseDraft)
 
-		req := &domain.CloneOfferRequest{IncludeDimensions: boolPtr(true)}
+		req := &domain.CloneOfferRequest{IncludeBudget: boolPtr(true)}
 		cloned, err := svc.CloneOffer(ctx, offer.ID, req)
 		require.NoError(t, err)
 
@@ -806,5 +818,151 @@ func TestOfferService_EdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, "Test Default Project Name", result.Project.Name)
+	})
+}
+
+// ============================================================================
+// Offer Number Business Rules Tests
+// ============================================================================
+
+func TestOfferService_OfferNumberRules(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("draft offer should not have offer number on creation", func(t *testing.T) {
+		customer := fixtures.createTestCustomer(t, ctx, "Customer Draft Number Test")
+
+		req := &domain.CreateOfferRequest{
+			Title:      "Test Draft No Number",
+			CustomerID: customer.ID,
+			Phase:      domain.OfferPhaseDraft,
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseDraft, result.Phase)
+		assert.Empty(t, result.OfferNumber, "draft offer should not have an offer number")
+	})
+
+	t.Run("non-draft offer should get offer number on creation", func(t *testing.T) {
+		customer := fixtures.createTestCustomer(t, ctx, "Customer NonDraft Number Test")
+
+		req := &domain.CreateOfferRequest{
+			Title:             "Test InProgress With Number",
+			CustomerID:        customer.ID,
+			Phase:             domain.OfferPhaseInProgress,
+			ResponsibleUserID: "test-user-id",
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "non-draft offer should have an offer number")
+	})
+
+	t.Run("send offer from draft generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Send Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		result, err := svc.SendOffer(ctx, offer.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseSent, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "sent offer should have an offer number")
+	})
+
+	t.Run("expire offer from draft generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Expire Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		result, err := svc.ExpireOffer(ctx, offer.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseExpired, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "expired offer should have an offer number")
+	})
+
+	t.Run("update draft to non-draft generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		req := &domain.UpdateOfferRequest{
+			Title:             offer.Title,
+			Phase:             domain.OfferPhaseInProgress,
+			ResponsibleUserID: "test-user-id",
+		}
+
+		result, err := svc.Update(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "non-draft offer should have an offer number")
+	})
+
+	t.Run("advance from draft to in_progress generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Advance Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseInProgress,
+		}
+
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "advanced offer should have an offer number")
+	})
+
+	t.Run("advance from draft to sent generates offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Advance Sent Generates Number", domain.OfferPhaseDraft)
+		assert.Empty(t, offer.OfferNumber, "draft offer should start without number")
+
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseSent,
+		}
+
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseSent, result.Phase)
+		assert.NotEmpty(t, result.OfferNumber, "advanced offer should have an offer number")
+	})
+
+	t.Run("cannot manually set offer number on draft offer", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Cannot Set Number On Draft", domain.OfferPhaseDraft)
+
+		_, err := svc.UpdateOfferNumber(ctx, offer.ID, "MANUAL-001")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrDraftOfferCannotHaveNumber)
+	})
+
+	t.Run("cannot clear offer number on non-draft offer", func(t *testing.T) {
+		// Create offer in non-draft state (it will get an offer number)
+		offer := fixtures.createTestOffer(t, ctx, "Test Cannot Clear Number", domain.OfferPhaseInProgress)
+
+		_, err := svc.UpdateOfferNumber(ctx, offer.ID, "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrNonDraftOfferMustHaveNumber)
+	})
+
+	t.Run("cloned offer starts as draft without offer number", func(t *testing.T) {
+		// Start with a non-draft offer that has an offer number
+		offer := fixtures.createTestOffer(t, ctx, "Test Clone No Number", domain.OfferPhaseInProgress)
+
+		req := &domain.CloneOfferRequest{
+			IncludeBudget: boolPtr(true),
+		}
+
+		result, err := svc.CloneOffer(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseDraft, result.Phase)
+		assert.Empty(t, result.OfferNumber, "cloned offer should not have an offer number (starts as draft)")
 	})
 }

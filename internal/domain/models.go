@@ -104,6 +104,12 @@ type Customer struct {
 	Status        CustomerStatus   `gorm:"type:varchar(50);not null;default:'active';index"`
 	Tier          CustomerTier     `gorm:"type:varchar(50);not null;default:'bronze';index"`
 	Industry      CustomerIndustry `gorm:"type:varchar(50);index"`
+	Notes         string           `gorm:"type:text"`
+	CustomerClass string           `gorm:"type:varchar(50);column:customer_class"`
+	CreditLimit   *float64         `gorm:"type:decimal(15,2);column:credit_limit"`
+	IsInternal    bool             `gorm:"type:boolean;not null;default:false;column:is_internal"`
+	Municipality  string           `gorm:"type:varchar(100)"`
+	County        string           `gorm:"type:varchar(100)"`
 	CompanyID     *CompanyID       `gorm:"type:varchar(50);column:company_id;index"`
 	Company       *Company         `gorm:"foreignKey:CompanyID"`
 	Contacts      []Contact        `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
@@ -271,6 +277,91 @@ const (
 	ProjectHealthOverBudget ProjectHealth = "over_budget"
 )
 
+// ProjectPhase represents the lifecycle phase of a project
+// - tilbud: Offer/bidding phase (default). Economics mirror highest offer value (read-only)
+// - working: Project has started (has StartDate) but no WinningOfferID. Economics are editable.
+// - active: Project is active with a winning offer. Economics are fully editable
+// - completed: Project is finished
+// - cancelled: Project was cancelled
+type ProjectPhase string
+
+const (
+	ProjectPhaseTilbud    ProjectPhase = "tilbud"
+	ProjectPhaseWorking   ProjectPhase = "working"
+	ProjectPhaseActive    ProjectPhase = "active"
+	ProjectPhaseCompleted ProjectPhase = "completed"
+	ProjectPhaseCancelled ProjectPhase = "cancelled"
+)
+
+// IsValid checks if the ProjectPhase is a valid enum value
+func (p ProjectPhase) IsValid() bool {
+	switch p {
+	case ProjectPhaseTilbud, ProjectPhaseWorking, ProjectPhaseActive, ProjectPhaseCompleted, ProjectPhaseCancelled:
+		return true
+	}
+	return false
+}
+
+// IsEditablePhase returns true if economic values can be edited in this phase
+func (p ProjectPhase) IsEditablePhase() bool {
+	return p == ProjectPhaseActive || p == ProjectPhaseWorking
+}
+
+// IsActivePhase returns true if the phase represents an active project (working or active)
+func (p ProjectPhase) IsActivePhase() bool {
+	return p == ProjectPhaseWorking || p == ProjectPhaseActive
+}
+
+// IsClosedPhase returns true if the phase represents a closed/terminal state
+func (p ProjectPhase) IsClosedPhase() bool {
+	return p == ProjectPhaseCompleted || p == ProjectPhaseCancelled
+}
+
+// CanTransitionTo checks if a phase transition is valid
+// Valid transitions:
+// - tilbud -> working (start work without winning offer)
+// - tilbud -> active (via winning offer)
+// - tilbud -> cancelled (cancel before starting)
+// - working -> active (via winning offer)
+// - working -> completed (complete without formal offer win)
+// - working -> cancelled (cancel during work)
+// - working -> tilbud (reopen to tilbud - rare but allowed)
+// - active -> completed (normal completion)
+// - active -> cancelled (cancel active project)
+// - active -> working (reopen: revert winning offer to sent)
+// - completed -> working (reopen completed project)
+// - completed -> active (reopen completed project with winning offer retained)
+// - cancelled -> tilbud (reopen cancelled project)
+// - cancelled -> working (reopen cancelled project that had work)
+func (p ProjectPhase) CanTransitionTo(target ProjectPhase) bool {
+	if p == target {
+		return true // Same phase is always valid
+	}
+
+	switch p {
+	case ProjectPhaseTilbud:
+		return target == ProjectPhaseWorking ||
+			target == ProjectPhaseActive ||
+			target == ProjectPhaseCancelled
+	case ProjectPhaseWorking:
+		return target == ProjectPhaseActive ||
+			target == ProjectPhaseCompleted ||
+			target == ProjectPhaseCancelled ||
+			target == ProjectPhaseTilbud
+	case ProjectPhaseActive:
+		return target == ProjectPhaseCompleted ||
+			target == ProjectPhaseCancelled ||
+			target == ProjectPhaseWorking
+	case ProjectPhaseCompleted:
+		return target == ProjectPhaseWorking ||
+			target == ProjectPhaseActive
+	case ProjectPhaseCancelled:
+		return target == ProjectPhaseTilbud ||
+			target == ProjectPhaseWorking
+	}
+	return false
+}
+
 // Project represents work being performed for a customer
 type Project struct {
 	BaseModel
@@ -283,11 +374,14 @@ type Project struct {
 	CustomerName            string         `gorm:"type:varchar(200)"`
 	CompanyID               CompanyID      `gorm:"type:varchar(50);not null;index"`
 	Status                  ProjectStatus  `gorm:"type:varchar(50);not null;index"`
-	StartDate               time.Time      `gorm:"type:date;not null"`
+	Phase                   ProjectPhase   `gorm:"type:project_phase;not null;default:'tilbud';index"`
+	StartDate               time.Time      `gorm:"type:date"`
 	EndDate                 *time.Time     `gorm:"type:date"`
-	Budget                  float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	Value                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	Cost                    float64        `gorm:"type:decimal(15,2);not null;default:0"`
+	MarginPercent           float64        `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Auto-calculated by DB trigger
 	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	ManagerID               string         `gorm:"type:varchar(100);not null"`
+	ManagerID               *string        `gorm:"type:varchar(100)"`
 	ManagerName             string         `gorm:"type:varchar(200)"`
 	TeamMembers             pq.StringArray `gorm:"type:text[]"`
 	OfferID                 *uuid.UUID     `gorm:"type:uuid;index"`
@@ -298,6 +392,12 @@ type Project struct {
 	Health                  *ProjectHealth `gorm:"type:project_health;default:'on_track'"`
 	CompletionPercent       *float64       `gorm:"type:decimal(5,2);default:0;column:completion_percent"`
 	EstimatedCompletionDate *time.Time     `gorm:"type:date;column:estimated_completion_date"`
+	// Phase-related fields for offer folder functionality
+	WinningOfferID       *uuid.UUID `gorm:"type:uuid;index;column:winning_offer_id"`
+	WinningOffer         *Offer     `gorm:"foreignKey:WinningOfferID"`
+	InheritedOfferNumber string     `gorm:"type:varchar(50);column:inherited_offer_number"`
+	CalculatedOfferValue float64    `gorm:"type:decimal(15,2);default:0;column:calculated_offer_value"`
+	WonAt                *time.Time `gorm:"column:won_at"`
 }
 
 // ERPSource represents the source ERP system for cost data
@@ -326,27 +426,27 @@ const (
 
 // ProjectActualCost represents an actual cost entry for a project (from ERP or manual)
 type ProjectActualCost struct {
-	ID                uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	ProjectID         uuid.UUID        `gorm:"type:uuid;not null;index;column:project_id"`
-	Project           *Project         `gorm:"foreignKey:ProjectID"`
-	CostType          CostType         `gorm:"type:cost_type;not null;column:cost_type"`
-	Description       string           `gorm:"type:varchar(500);not null"`
-	Amount            float64          `gorm:"type:decimal(15,2);not null"`
-	Currency          string           `gorm:"type:varchar(3);not null;default:'NOK'"`
-	CostDate          time.Time        `gorm:"type:date;not null;column:cost_date"`
-	PostingDate       *time.Time       `gorm:"type:date;column:posting_date"`
-	BudgetDimensionID *uuid.UUID       `gorm:"type:uuid;column:budget_dimension_id"`
-	BudgetDimension   *BudgetDimension `gorm:"foreignKey:BudgetDimensionID"`
-	ERPSource         ERPSource        `gorm:"type:erp_source;not null;default:'manual';column:erp_source"`
-	ERPReference      string           `gorm:"type:varchar(100);column:erp_reference"`
-	ERPTransactionID  string           `gorm:"type:varchar(100);column:erp_transaction_id"`
-	ERPSyncedAt       *time.Time       `gorm:"column:erp_synced_at"`
-	IsApproved        bool             `gorm:"not null;default:false;column:is_approved"`
-	ApprovedByID      string           `gorm:"type:varchar(100);column:approved_by_id"`
-	ApprovedAt        *time.Time       `gorm:"column:approved_at"`
-	Notes             string           `gorm:"type:text"`
-	CreatedAt         time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt         time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	ID               uuid.UUID   `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	ProjectID        uuid.UUID   `gorm:"type:uuid;not null;index;column:project_id"`
+	Project          *Project    `gorm:"foreignKey:ProjectID"`
+	CostType         CostType    `gorm:"type:cost_type;not null;column:cost_type"`
+	Description      string      `gorm:"type:varchar(500);not null"`
+	Amount           float64     `gorm:"type:decimal(15,2);not null"`
+	Currency         string      `gorm:"type:varchar(3);not null;default:'NOK'"`
+	CostDate         time.Time   `gorm:"type:date;not null;column:cost_date"`
+	PostingDate      *time.Time  `gorm:"type:date;column:posting_date"`
+	BudgetItemID     *uuid.UUID  `gorm:"type:uuid;column:budget_item_id"`
+	BudgetItem       *BudgetItem `gorm:"foreignKey:BudgetItemID"`
+	ERPSource        ERPSource   `gorm:"type:erp_source;not null;default:'manual';column:erp_source"`
+	ERPReference     string      `gorm:"type:varchar(100);column:erp_reference"`
+	ERPTransactionID string      `gorm:"type:varchar(100);column:erp_transaction_id"`
+	ERPSyncedAt      *time.Time  `gorm:"column:erp_synced_at"`
+	IsApproved       bool        `gorm:"not null;default:false;column:is_approved"`
+	ApprovedByID     string      `gorm:"type:varchar(100);column:approved_by_id"`
+	ApprovedAt       *time.Time  `gorm:"column:approved_at"`
+	Notes            string      `gorm:"type:text"`
+	CreatedAt        time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt        time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
 // OfferPhase represents the phase of an offer in the sales pipeline
@@ -373,29 +473,62 @@ const (
 // Offer represents a sales proposal
 type Offer struct {
 	BaseModel
-	Title               string      `gorm:"type:varchar(200);not null;index"`
-	OfferNumber         string      `gorm:"type:varchar(50);column:offer_number;index"` // Unique per company, e.g., "STB-2024-001"
-	CustomerID          uuid.UUID   `gorm:"type:uuid;not null;index"`
-	Customer            *Customer   `gorm:"foreignKey:CustomerID"`
-	CustomerName        string      `gorm:"type:varchar(200)"`
-	ProjectID           *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project
-	Project             *Project    `gorm:"foreignKey:ProjectID"`
-	CompanyID           CompanyID   `gorm:"type:varchar(50);not null;index"`
-	Phase               OfferPhase  `gorm:"type:varchar(50);not null;index"`
-	Probability         int         `gorm:"type:int;not null;default:0"`
-	Value               float64     `gorm:"type:decimal(15,2);not null;default:0"`
-	Status              OfferStatus `gorm:"type:varchar(50);not null;index"`
-	ResponsibleUserID   string      `gorm:"type:varchar(100);index"` // Optional for inquiries (draft phase)
-	ResponsibleUserName string      `gorm:"type:varchar(200)"`
-	Description         string      `gorm:"type:text"`
-	Notes               string      `gorm:"type:text"`
-	DueDate             *time.Time  `gorm:"type:timestamp;index"`
-	Items               []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
-	Files               []File      `gorm:"foreignKey:OfferID"`
+	Title                 string      `gorm:"type:varchar(200);not null;index"`
+	OfferNumber           string      `gorm:"type:varchar(50);column:offer_number;index"`  // Internal number, e.g., "TK-2025-001"
+	ExternalReference     string      `gorm:"type:varchar(100);column:external_reference"` // External/customer reference number
+	CustomerID            uuid.UUID   `gorm:"type:uuid;not null;index"`
+	Customer              *Customer   `gorm:"foreignKey:CustomerID"`
+	CustomerName          string      `gorm:"type:varchar(200)"`
+	ProjectID             *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project
+	Project               *Project    `gorm:"foreignKey:ProjectID"`
+	ProjectName           string      `gorm:"type:varchar(200);column:project_name"`
+	CompanyID             CompanyID   `gorm:"type:varchar(50);not null;index"`
+	Phase                 OfferPhase  `gorm:"type:varchar(50);not null;index"`
+	Probability           int         `gorm:"type:int;not null;default:0"`
+	Value                 float64     `gorm:"type:decimal(15,2);not null;default:0"`
+	Status                OfferStatus `gorm:"type:varchar(50);not null;index"`
+	ResponsibleUserID     string      `gorm:"type:varchar(100);index"` // Optional for inquiries (draft phase)
+	ResponsibleUserName   string      `gorm:"type:varchar(200)"`
+	Description           string      `gorm:"type:text"`
+	Notes                 string      `gorm:"type:text"`
+	DueDate               *time.Time  `gorm:"type:timestamp;index"`
+	Cost                  float64     `gorm:"type:decimal(15,2);default:0"`                               // Internal cost
+	MarginPercent         float64     `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Dekningsgrad: (value - cost) / value * 100, auto-calculated
+	Location              string      `gorm:"type:varchar(200)"`
+	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
+	ExpirationDate        *time.Time  `gorm:"type:timestamp;index;column:expiration_date"` // When the offer expires (default: 60 days after sent_date)
+	CustomerHasWonProject bool        `gorm:"not null;default:false;column:customer_has_won_project"`
+	Items                 []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
+	Files                 []File      `gorm:"foreignKey:OfferID"`
 }
 
-// OfferNumberSequence tracks the last used offer number sequence per company per year
-type OfferNumberSequence struct {
+// CalculateMarginPercent calculates the dekningsgrad based on value and cost.
+// Formula: (value - cost) / value * 100
+// Edge cases:
+//   - cost=0 and value>0: returns 100%
+//   - value=0: returns 0%
+//   - both 0: returns 0%
+func (o *Offer) CalculateMarginPercent() float64 {
+	if o.Value > 0 {
+		return ((o.Value - o.Cost) / o.Value) * 100
+	}
+	return 0
+}
+
+// CalculateMarginPercentFromValues is a helper function to calculate margin percent
+// from value and cost without needing an Offer instance.
+func CalculateMarginPercentFromValues(value, cost float64) float64 {
+	if value > 0 {
+		return ((value - cost) / value) * 100
+	}
+	return 0
+}
+
+// NumberSequence tracks the last used sequence number per company per year
+// This sequence is SHARED between offers and projects to ensure unique numbers
+// across both entity types within a company/year combination.
+// Format: {PREFIX}-{YEAR}-{SEQUENCE} e.g., "ST-2025-001"
+type NumberSequence struct {
 	ID           uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	CompanyID    CompanyID `gorm:"type:varchar(50);not null;column:company_id"`
 	Year         int       `gorm:"not null"`
@@ -404,28 +537,33 @@ type OfferNumberSequence struct {
 	UpdatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
-// TableName returns the table name for OfferNumberSequence
-func (OfferNumberSequence) TableName() string {
-	return "offer_number_sequences"
+// TableName returns the table name for NumberSequence
+func (NumberSequence) TableName() string {
+	return "number_sequences"
 }
 
+// OfferNumberSequence is an alias for backwards compatibility
+// Deprecated: Use NumberSequence instead
+type OfferNumberSequence = NumberSequence
+
 // GetCompanyPrefix returns the offer number prefix for a company
+// Format: 2-letter slug used in offer numbers e.g., ST-2025-001
 func GetCompanyPrefix(companyID CompanyID) string {
 	switch companyID {
 	case CompanyStalbygg:
-		return "STB"
+		return "ST"
 	case CompanyHybridbygg:
-		return "HYB"
+		return "HB"
 	case CompanyIndustri:
-		return "IND"
+		return "IN"
 	case CompanyTak:
-		return "TAK"
+		return "TK"
 	case CompanyMontasje:
-		return "MON"
+		return "MO"
 	case CompanyGruppen:
-		return "GRP"
+		return "GR"
 	default:
-		return "GRP"
+		return "GR"
 	}
 }
 
@@ -443,44 +581,7 @@ type OfferItem struct {
 	Unit        string    `gorm:"type:varchar(50)"`
 }
 
-// BudgetDimensionCategory represents a predefined budget line type
-// Categories can be company-specific (CompanyID set) or global (CompanyID null)
-type BudgetDimensionCategory struct {
-	ID           string     `gorm:"type:varchar(50);primaryKey" json:"id"`
-	CompanyID    *CompanyID `gorm:"type:varchar(50);column:company_id;index" json:"companyId,omitempty"` // nil = global category available to all companies
-	Name         string     `gorm:"type:varchar(200);not null" json:"name"`
-	Description  string     `gorm:"type:text" json:"description,omitempty"`
-	DisplayOrder int        `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
-	IsActive     bool       `gorm:"not null;default:true;column:is_active" json:"isActive"`
-	CreatedAt    time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt    time.Time  `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
-}
-
-// TableName returns the table name for BudgetDimensionCategory
-func (BudgetDimensionCategory) TableName() string {
-	return "budget_dimension_categories"
-}
-
-// BudgetCategoryID represents known budget dimension category IDs
-// These are reference constants - actual seed data is loaded separately
-type BudgetCategoryID string
-
-const (
-	BudgetCategorySteelStructure  BudgetCategoryID = "steel_structure"
-	BudgetCategoryHybridStructure BudgetCategoryID = "hybrid_structure"
-	BudgetCategoryRoofing         BudgetCategoryID = "roofing"
-	BudgetCategoryCladding        BudgetCategoryID = "cladding"
-	BudgetCategoryFoundation      BudgetCategoryID = "foundation"
-	BudgetCategoryAssembly        BudgetCategoryID = "assembly"
-	BudgetCategoryTransport       BudgetCategoryID = "transport"
-	BudgetCategoryEngineering     BudgetCategoryID = "engineering"
-	BudgetCategoryProjectMgmt     BudgetCategoryID = "project_management"
-	BudgetCategoryCraneRigging    BudgetCategoryID = "crane_rigging"
-	BudgetCategoryMiscellaneous   BudgetCategoryID = "miscellaneous"
-	BudgetCategoryContingency     BudgetCategoryID = "contingency"
-)
-
-// BudgetParentType represents the type of entity a budget dimension belongs to
+// BudgetParentType represents the type of entity a budget item belongs to
 type BudgetParentType string
 
 const (
@@ -488,42 +589,37 @@ const (
 	BudgetParentProject BudgetParentType = "project"
 )
 
-// BudgetDimension represents a budget line item that can belong to an offer or project
-type BudgetDimension struct {
-	ID                  uuid.UUID                `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	ParentType          BudgetParentType         `gorm:"type:budget_parent_type;not null;column:parent_type" json:"parentType"`
-	ParentID            uuid.UUID                `gorm:"type:uuid;not null;column:parent_id" json:"parentId"`
-	CategoryID          *string                  `gorm:"type:varchar(50);column:category_id" json:"categoryId,omitempty"`
-	Category            *BudgetDimensionCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
-	CustomName          string                   `gorm:"type:varchar(200);column:custom_name" json:"customName,omitempty"`
-	Cost                float64                  `gorm:"type:decimal(15,2);not null;default:0" json:"cost"`
-	Revenue             float64                  `gorm:"type:decimal(15,2);not null;default:0" json:"revenue"`
-	TargetMarginPercent *float64                 `gorm:"type:decimal(5,2);column:target_margin_percent" json:"targetMarginPercent,omitempty"`
-	MarginOverride      bool                     `gorm:"not null;default:false;column:margin_override" json:"marginOverride"`
-	MarginPercent       float64                  `gorm:"type:decimal(5,2);column:margin_percent;->" json:"marginPercent"` // Read-only, computed by DB
-	Description         string                   `gorm:"type:text" json:"description,omitempty"`
-	Quantity            *float64                 `gorm:"type:decimal(10,2)" json:"quantity,omitempty"`
-	Unit                string                   `gorm:"type:varchar(50)" json:"unit,omitempty"`
-	DisplayOrder        int                      `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
-	CreatedAt           time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt           time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+// BudgetItem represents a flexible budget line item that can belong to an offer or project
+// Users define their own budget items with name, cost, margin, and optional quantity/price fields
+type BudgetItem struct {
+	ID              uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	ParentType      BudgetParentType `gorm:"type:budget_parent_type;not null;column:parent_type" json:"parentType"`
+	ParentID        uuid.UUID        `gorm:"type:uuid;not null;column:parent_id" json:"parentId"`
+	Name            string           `gorm:"type:varchar(200);not null" json:"name"`
+	ExpectedCost    float64          `gorm:"type:decimal(15,2);not null;default:0;column:expected_cost" json:"expectedCost"`
+	ExpectedMargin  float64          `gorm:"type:decimal(5,2);not null;default:0;column:expected_margin" json:"expectedMargin"` // Percentage 0-100
+	ExpectedRevenue float64          `gorm:"type:decimal(15,2);column:expected_revenue;->" json:"expectedRevenue"`              // Computed: cost / (1 - margin/100)
+	ExpectedProfit  float64          `gorm:"type:decimal(15,2);column:expected_profit;->" json:"expectedProfit"`                // Computed: revenue - cost
+	Quantity        *float64         `gorm:"type:decimal(10,2)" json:"quantity,omitempty"`
+	PricePerItem    *float64         `gorm:"type:decimal(15,2);column:price_per_item" json:"pricePerItem,omitempty"`
+	Description     string           `gorm:"type:text" json:"description,omitempty"`
+	DisplayOrder    int              `gorm:"not null;default:0;column:display_order" json:"displayOrder"`
+	CreatedAt       time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt       time.Time        `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
-// GetName returns the display name (category name or custom name)
-func (bd *BudgetDimension) GetName() string {
-	if bd.Category != nil {
-		return bd.Category.Name
-	}
-	return bd.CustomName
+// TableName returns the table name for BudgetItem
+func (BudgetItem) TableName() string {
+	return "budget_items"
 }
 
 // BudgetSummary holds aggregated budget totals for a parent entity (offer or project)
 type BudgetSummary struct {
-	TotalCost      float64 `json:"totalCost"`
-	TotalRevenue   float64 `json:"totalRevenue"`
-	TotalMargin    float64 `json:"totalMargin"`   // Revenue - Cost
-	MarginPercent  float64 `json:"marginPercent"` // ((Revenue - Cost) / Revenue) * 100, 0 if revenue=0
-	DimensionCount int     `json:"dimensionCount"`
+	TotalCost     float64 `json:"totalCost"`
+	TotalRevenue  float64 `json:"totalRevenue"`
+	TotalProfit   float64 `json:"totalProfit"`
+	MarginPercent float64 `json:"marginPercent"` // (Profit / Revenue) * 100, 0 if revenue=0
+	ItemCount     int     `json:"itemCount"`
 }
 
 // ActivityTargetType represents the type of entity an activity is associated with

@@ -174,6 +174,12 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 		Status:        status,
 		Tier:          tier,
 		Industry:      req.Industry,
+		Notes:         req.Notes,
+		CustomerClass: req.CustomerClass,
+		CreditLimit:   req.CreditLimit,
+		IsInternal:    req.IsInternal,
+		Municipality:  req.Municipality,
+		County:        req.County,
 	}
 
 	if err := s.customerRepo.Create(ctx, customer); err != nil {
@@ -380,6 +386,14 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	// Update industry (can be empty to clear)
 	customer.Industry = req.Industry
 
+	// Update extended fields
+	customer.Notes = req.Notes
+	customer.CustomerClass = req.CustomerClass
+	customer.CreditLimit = req.CreditLimit
+	customer.IsInternal = req.IsInternal
+	customer.Municipality = req.Municipality
+	customer.County = req.County
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			return nil, ErrDuplicateOrgNumber
@@ -450,10 +464,11 @@ func (s *CustomerService) Delete(ctx context.Context, id uuid.UUID) error {
 
 func (s *CustomerService) List(ctx context.Context, page, pageSize int, search string) (*domain.PaginatedResponse, error) {
 	filters := &repository.CustomerFilters{Search: search}
-	return s.ListWithFilters(ctx, page, pageSize, filters, repository.CustomerSortByCreatedDesc)
+	return s.ListWithSort(ctx, page, pageSize, filters, repository.DefaultSortConfig())
 }
 
 // ListWithFilters returns a paginated list of customers with filter and sort options
+// Deprecated: Use ListWithSort for new code
 func (s *CustomerService) ListWithFilters(ctx context.Context, page, pageSize int, filters *repository.CustomerFilters, sortBy repository.CustomerSortOption) (*domain.PaginatedResponse, error) {
 	// Clamp page size
 	if pageSize < 1 {
@@ -546,3 +561,398 @@ func (s *CustomerService) FuzzySearchBestMatch(ctx context.Context, query string
 		Found:      true,
 	}, nil
 }
+
+// ListWithSort returns a paginated list of customers with filter and sort options using SortConfig
+func (s *CustomerService) ListWithSort(ctx context.Context, page, pageSize int, filters *repository.CustomerFilters, sort repository.SortConfig) (*domain.PaginatedResponse, error) {
+	// Clamp page size
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	if page < 1 {
+		page = 1
+	}
+
+	customers, total, err := s.customerRepo.ListWithSortConfig(ctx, page, pageSize, filters, sort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list customers: %w", err)
+	}
+
+	dtos := make([]domain.CustomerDTO, len(customers))
+	for i, customer := range customers {
+		// Get stats for each customer (optional optimization: batch query)
+		stats, err := s.customerRepo.GetCustomerStats(ctx, customer.ID)
+		if err != nil {
+			s.logger.Warn("failed to get customer stats", zap.String("customerID", customer.ID.String()), zap.Error(err))
+			stats = &repository.CustomerStats{}
+		}
+		dtos[i] = mapper.ToCustomerDTO(&customer, stats.TotalValue, stats.ActiveOffers)
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	return &domain.PaginatedResponse{
+		Data:       dtos,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// UpdateStatus updates only the customer status
+func (s *CustomerService) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.CustomerStatus) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.Status = status
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer status: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Status updated", fmt.Sprintf("Customer status changed to '%s'", status))
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateTier updates only the customer tier
+func (s *CustomerService) UpdateTier(ctx context.Context, id uuid.UUID, tier domain.CustomerTier) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.Tier = tier
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer tier: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Tier updated", fmt.Sprintf("Customer tier changed to '%s'", tier))
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateIndustry updates only the customer industry
+func (s *CustomerService) UpdateIndustry(ctx context.Context, id uuid.UUID, industry domain.CustomerIndustry) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.Industry = industry
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer industry: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Industry updated", fmt.Sprintf("Customer industry changed to '%s'", industry))
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateNotes updates only the customer notes
+func (s *CustomerService) UpdateNotes(ctx context.Context, id uuid.UUID, notes string) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.Notes = notes
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer notes: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Notes updated", "Customer notes were updated")
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateCompanyID updates the company assignment for a customer
+func (s *CustomerService) UpdateCompanyID(ctx context.Context, id uuid.UUID, companyID *domain.CompanyID) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.CompanyID = companyID
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer company: %w", err)
+	}
+
+	activityMsg := "Customer unassigned from company"
+	if companyID != nil {
+		activityMsg = fmt.Sprintf("Customer assigned to company '%s'", *companyID)
+	}
+	s.logActivity(ctx, customer.ID, "Company updated", activityMsg)
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateCustomerClass updates the customer class
+func (s *CustomerService) UpdateCustomerClass(ctx context.Context, id uuid.UUID, customerClass string) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.CustomerClass = customerClass
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer class: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Customer class updated", fmt.Sprintf("Customer class changed to '%s'", customerClass))
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateCreditLimit updates the customer credit limit
+func (s *CustomerService) UpdateCreditLimit(ctx context.Context, id uuid.UUID, creditLimit *float64) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.CreditLimit = creditLimit
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer credit limit: %w", err)
+	}
+
+	activityMsg := "Credit limit cleared"
+	if creditLimit != nil {
+		activityMsg = fmt.Sprintf("Credit limit set to %.2f", *creditLimit)
+	}
+	s.logActivity(ctx, customer.ID, "Credit limit updated", activityMsg)
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateIsInternal updates the customer internal flag
+func (s *CustomerService) UpdateIsInternal(ctx context.Context, id uuid.UUID, isInternal bool) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.IsInternal = isInternal
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer internal flag: %w", err)
+	}
+
+	activityMsg := "Customer marked as external"
+	if isInternal {
+		activityMsg = "Customer marked as internal"
+	}
+	s.logActivity(ctx, customer.ID, "Internal flag updated", activityMsg)
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateAddress updates the customer address fields
+func (s *CustomerService) UpdateAddress(ctx context.Context, id uuid.UUID, address, city, postalCode, country string) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.Address = address
+	customer.City = city
+	customer.PostalCode = postalCode
+	customer.Country = country
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer address: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Address updated", "Customer address was updated")
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdatePostalCode updates only the customer postal code
+func (s *CustomerService) UpdatePostalCode(ctx context.Context, id uuid.UUID, postalCode string) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	oldPostalCode := customer.PostalCode
+	customer.PostalCode = postalCode
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer postal code: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Postal code updated", fmt.Sprintf("Customer postal code changed from '%s' to '%s'", oldPostalCode, postalCode))
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateCity updates only the customer city
+func (s *CustomerService) UpdateCity(ctx context.Context, id uuid.UUID, city string) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	oldCity := customer.City
+	customer.City = city
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer city: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "City updated", fmt.Sprintf("Customer city changed from '%s' to '%s'", oldCity, city))
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateContactInfo updates the customer contact information
+func (s *CustomerService) UpdateContactInfo(ctx context.Context, id uuid.UUID, contactPerson, contactEmail, contactPhone string) (*domain.CustomerDTO, error) {
+	// Validate email format
+	if err := validateEmail(contactEmail); err != nil {
+		return nil, fmt.Errorf("%w: contactEmail", ErrInvalidEmailFormat)
+	}
+
+	// Validate phone format
+	if err := validatePhone(contactPhone); err != nil {
+		return nil, fmt.Errorf("%w: contactPhone", ErrInvalidPhoneFormat)
+	}
+
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	customer.ContactPerson = contactPerson
+	customer.ContactEmail = contactEmail
+	customer.ContactPhone = contactPhone
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer contact info: %w", err)
+	}
+
+	s.logActivity(ctx, customer.ID, "Contact info updated", "Customer contact information was updated")
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// logActivity is a helper to log customer activities
+func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID, title, body string) {
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		activity := &domain.Activity{
+			TargetType:  domain.ActivityTargetCustomer,
+			TargetID:    customerID,
+			Title:       title,
+			Body:        body,
+			CreatorName: userCtx.DisplayName,
+		}
+		s.activityRepo.Create(ctx, activity)
+	}
+}
+
