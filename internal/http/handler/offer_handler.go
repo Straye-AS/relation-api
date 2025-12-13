@@ -91,11 +91,18 @@ func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Create offer
+// @Description Creates a new offer. Defaults to in_progress phase (use /inquiries for draft phase).
+// @Description Supports three scenarios for customer/project association:
+// @Description - customerId only: Creates offer with that customer, auto-creates project
+// @Description - projectId only: Inherits customer from the existing project
+// @Description - Both: Uses provided customer, links to specified project
 // @Tags Offers
 // @Accept json
 // @Produce json
 // @Param request body domain.CreateOfferRequest true "Offer data"
 // @Success 201 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Validation error (missing customerId/projectId, project has no customer, etc.)"
+// @Failure 404 {object} domain.ErrorResponse "Customer or project not found"
 // @Security BearerAuth
 // @Security ApiKeyAuth
 // @Router /offers [post]
@@ -696,6 +703,10 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Customer not found")
 	case errors.Is(err, service.ErrProjectNotFound):
 		respondWithError(w, http.StatusBadRequest, "Project not found")
+	case errors.Is(err, service.ErrMissingCustomerOrProject):
+		respondWithError(w, http.StatusBadRequest, "Either customerId or projectId must be provided")
+	case errors.Is(err, service.ErrProjectHasNoCustomer):
+		respondWithError(w, http.StatusBadRequest, "Project has no customer to inherit from")
 	case errors.Is(err, service.ErrUnauthorized):
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
 	case errors.Is(err, service.ErrOfferNumberConflict):

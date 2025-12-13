@@ -198,7 +198,7 @@ func TestOfferHandler_Create(t *testing.T) {
 		userCtx, _ := auth.FromContext(ctx)
 		reqBody := domain.CreateOfferRequest{
 			Title:             "New Offer",
-			CustomerID:        customer.ID,
+			CustomerID:        &customer.ID,
 			CompanyID:         domain.CompanyStalbygg,
 			Phase:             domain.OfferPhaseDraft,
 			Status:            domain.OfferStatusActive,

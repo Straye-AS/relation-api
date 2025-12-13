@@ -836,6 +836,7 @@ definitions:
         minimum: 0
         type: number
       customerId:
+        description: Optional if projectId is provided (inherits from project)
         type: string
       description:
         type: string
@@ -873,7 +874,6 @@ definitions:
         maxLength: 200
         type: string
     required:
-    - customerId
     - title
     type: object
   domain.CreateProjectRequest:
@@ -6406,6 +6406,12 @@ paths:
     post:
       consumes:
       - application/json
+      description: |-
+        Creates a new offer. Defaults to in_progress phase (use /inquiries for draft phase).
+        Supports three scenarios for customer/project association:
+        - customerId only: Creates offer with that customer, auto-creates project
+        - projectId only: Inherits customer from the existing project
+        - Both: Uses provided customer, links to specified project
       parameters:
       - description: Offer data
         in: body
@@ -6420,6 +6426,15 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Validation error (missing customerId/projectId, project has
+            no customer, etc.)
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Customer or project not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []

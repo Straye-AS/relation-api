@@ -837,7 +837,7 @@ func TestOfferService_OfferNumberRules(t *testing.T) {
 
 		req := &domain.CreateOfferRequest{
 			Title:      "Test Draft No Number",
-			CustomerID: customer.ID,
+			CustomerID: &customer.ID,
 			Phase:      domain.OfferPhaseDraft,
 		}
 
@@ -853,7 +853,7 @@ func TestOfferService_OfferNumberRules(t *testing.T) {
 
 		req := &domain.CreateOfferRequest{
 			Title:             "Test InProgress With Number",
-			CustomerID:        customer.ID,
+			CustomerID:        &customer.ID,
 			Phase:             domain.OfferPhaseInProgress,
 			ResponsibleUserID: "test-user-id",
 		}
