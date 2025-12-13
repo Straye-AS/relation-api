@@ -123,6 +123,9 @@ var (
 	// ErrOfferAlreadyWon is returned when trying to win an offer that is already won
 	ErrOfferAlreadyWon = errors.New("offer is already won")
 
+	// ErrOfferCannotAdvanceToTerminalPhase is returned when trying to use Advance to transition to won/lost/expired
+	ErrOfferCannotAdvanceToTerminalPhase = errors.New("cannot advance to terminal phase (won/lost/expired) - use dedicated endpoints: WinOffer, RejectOffer, or ExpireOffer")
+
 	// ErrProjectNotInTilbudPhase is returned when trying to win an offer for a project not in tilbud phase
 	ErrProjectNotInTilbudPhase = errors.New("project must be in tilbud phase to win an offer")
 

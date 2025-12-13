@@ -6206,6 +6206,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/cost": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates only the cost field of an offer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer cost",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cost data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferCostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or offer closed",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/customer": {
             "put": {
                 "security": [
@@ -12931,6 +12998,18 @@ const docTemplate = `{
                 },
                 "stage": {
                     "$ref": "#/definitions/domain.DealStage"
+                }
+            }
+        },
+        "domain.UpdateOfferCostRequest": {
+            "type": "object",
+            "required": [
+                "cost"
+            ],
+            "properties": {
+                "cost": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },

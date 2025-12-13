@@ -989,6 +989,15 @@ func (s *ProjectService) UpdateName(ctx context.Context, id uuid.UUID, name stri
 		return nil, fmt.Errorf("failed to update project name: %w", err)
 	}
 
+	// Update project_name on linked offers
+	if oldName != name && s.offerRepo != nil {
+		if err := s.offerRepo.UpdateProjectNameByProjectID(ctx, id, name); err != nil {
+			s.logger.Warn("failed to update project_name on linked offers",
+				zap.String("project_id", id.String()),
+				zap.Error(err))
+		}
+	}
+
 	s.logActivity(ctx, project.ID, "Project name updated", fmt.Sprintf("Project name changed from '%s' to '%s'", oldName, name))
 
 	dto := mapper.ToProjectDTO(project)

@@ -2376,6 +2376,14 @@ definitions:
     required:
     - stage
     type: object
+  domain.UpdateOfferCostRequest:
+    properties:
+      cost:
+        minimum: 0
+        type: number
+    required:
+    - cost
+    type: object
   domain.UpdateOfferCustomerHasWonProjectRequest:
     properties:
       customerHasWonProject:
@@ -6856,6 +6864,48 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Clone offer
+      tags:
+      - Offers
+  /offers/{id}/cost:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the cost field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Cost data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferCostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer cost
       tags:
       - Offers
   /offers/{id}/customer:

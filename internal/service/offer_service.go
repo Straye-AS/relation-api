@@ -416,6 +416,12 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 		return nil, ErrOfferAlreadyClosed
 	}
 
+	// Block transitions to terminal phases - must use dedicated endpoints
+	// WinOffer, RejectOffer, or ExpireOffer handle proper project state transitions
+	if s.isClosedPhase(req.Phase) {
+		return nil, ErrOfferCannotAdvanceToTerminalPhase
+	}
+
 	// Track if we're transitioning from draft to non-draft
 	wasInDraft := s.isDraftPhase(offer.Phase)
 	willBeInDraft := s.isDraftPhase(req.Phase)
@@ -632,6 +638,8 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 
 	var project *domain.Project
 	var projectDTO *domain.ProjectDTO
+	var expiredOfferIDs []uuid.UUID
+	wonAt := time.Now()
 
 	// Use transaction for atomicity
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -641,8 +649,72 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 			return fmt.Errorf("failed to update offer: %w", err)
 		}
 
-		// Create project if requested
-		if req.CreateProject {
+		// Case 1: Offer already linked to a project - transition that project to active
+		if offer.ProjectID != nil {
+			// Get the existing project
+			existingProject, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
+			if err != nil {
+				return fmt.Errorf("failed to get linked project: %w", err)
+			}
+			project = existingProject
+
+			// Only transition if project is in tilbud phase
+			if project.Phase == domain.ProjectPhaseTilbud {
+				// Store original offer number for project
+				originalOfferNumber := offer.OfferNumber
+
+				// Update offer number with "_P" suffix
+				if originalOfferNumber != "" {
+					newOfferNumber := originalOfferNumber + "_P"
+					if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
+						s.logger.Warn("failed to update offer number with suffix", zap.Error(err))
+					}
+				}
+
+				// Expire sibling offers
+				expiredIDs, err := s.offerRepo.ExpireSiblingOffers(ctx, *offer.ProjectID, id)
+				if err != nil {
+					s.logger.Warn("failed to expire sibling offers", zap.Error(err))
+				}
+				expiredOfferIDs = expiredIDs
+
+				// Transition project to active phase with winning offer details
+				if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, wonAt); err != nil {
+					return fmt.Errorf("failed to update project with winning offer: %w", err)
+				}
+
+				// Clone budget items from offer to project
+				if s.budgetItemRepo != nil {
+					items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, offer.ID)
+					if err == nil && len(items) > 0 {
+						for _, item := range items {
+							cloned := domain.BudgetItem{
+								ParentType:     domain.BudgetParentProject,
+								ParentID:       project.ID,
+								Name:           item.Name,
+								ExpectedCost:   item.ExpectedCost,
+								ExpectedMargin: item.ExpectedMargin,
+								Quantity:       item.Quantity,
+								PricePerItem:   item.PricePerItem,
+								Description:    item.Description,
+								DisplayOrder:   item.DisplayOrder,
+							}
+							if err := tx.Create(&cloned).Error; err != nil {
+								s.logger.Warn("failed to clone budget item",
+									zap.Error(err),
+									zap.String("item_id", item.ID.String()))
+							}
+						}
+						// Mark project as having detailed budget
+						if err := tx.Model(&domain.Project{}).Where("id = ?", project.ID).
+							Update("has_detailed_budget", true).Error; err != nil {
+							s.logger.Warn("failed to update project HasDetailedBudget flag", zap.Error(err))
+						}
+					}
+				}
+			}
+		} else if req.CreateProject {
+			// Case 2: No linked project - create a new one if requested
 			// Get user context for manager
 			userCtx, ok := auth.FromContext(ctx)
 			if !ok {
@@ -666,16 +738,23 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				CustomerID:   offer.CustomerID,
 				CustomerName: offer.CustomerName,
 				CompanyID:    offer.CompanyID,
+				Phase:        domain.ProjectPhaseActive, // New projects from accepted offers start as active
 				StartDate:    time.Now(),
 				Value:        offer.Value,
 				Cost:         offer.Cost,
 				ManagerID:    &managerID,
 				OfferID:      &offer.ID,
+				WonAt:        &wonAt,
 				Description:  offer.Description,
 			}
 
 			if err := tx.Create(project).Error; err != nil {
 				return fmt.Errorf("%w: %v", ErrProjectCreationFailed, err)
+			}
+
+			// Link offer to new project
+			if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("project_id", project.ID).Error; err != nil {
+				s.logger.Warn("failed to link offer to new project", zap.Error(err))
 			}
 
 			// Clone budget items from offer to project
@@ -723,15 +802,30 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 	}
 	offerDTO := mapper.ToOfferDTO(offer)
 
-	// Convert project to DTO if created
+	// Reload and convert project to DTO
 	if project != nil {
+		reloadedProject, err := s.projectRepo.GetByID(ctx, project.ID)
+		if err == nil {
+			project = reloadedProject
+		}
 		dto := mapper.ToProjectDTO(project)
 		projectDTO = &dto
 	}
 
 	// Log activity
 	activityBody := fmt.Sprintf("Offer '%s' was accepted (won)", offer.Title)
-	if project != nil {
+	if project != nil && offer.ProjectID != nil {
+		// Existing project was transitioned to active
+		activityBody = fmt.Sprintf("Offer '%s' was accepted, transitioning project '%s' to active phase", offer.Title, project.Name)
+		if len(expiredOfferIDs) > 0 {
+			activityBody = fmt.Sprintf("%s. %d sibling offer(s) were expired.", activityBody, len(expiredOfferIDs))
+		}
+		// Also log on the project
+		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
+			"Project activated",
+			fmt.Sprintf("Project activated with winning offer '%s'.", offer.Title))
+	} else if project != nil {
+		// New project was created
 		activityBody = fmt.Sprintf("Offer '%s' was accepted and project '%s' was created", offer.Title, project.Name)
 	}
 	s.logActivity(ctx, offer.ID, "Offer accepted", activityBody)
@@ -1336,6 +1430,12 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 			return nil, ErrOfferNotFound
 		}
 		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Block transitions to terminal phases - must use dedicated endpoints
+	// WinOffer, RejectOffer, or ExpireOffer handle proper project state transitions
+	if s.isClosedPhase(req.Phase) {
+		return nil, ErrOfferCannotAdvanceToTerminalPhase
 	}
 
 	oldPhase := offer.Phase
@@ -1997,6 +2097,38 @@ func (s *OfferService) UpdateValue(ctx context.Context, id uuid.UUID, value floa
 
 	s.logActivity(ctx, id, "Offer value updated",
 		fmt.Sprintf("Value changed from %.2f to %.2f", oldValue, value))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateCost updates only the cost field of an offer
+func (s *OfferService) UpdateCost(ctx context.Context, id uuid.UUID, cost float64) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	oldCost := offer.Cost
+	if err := s.offerRepo.UpdateField(ctx, id, "cost", cost); err != nil {
+		return nil, fmt.Errorf("failed to update cost: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, "Offer cost updated",
+		fmt.Sprintf("Cost changed from %.2f to %.2f", oldCost, cost))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil

@@ -1277,6 +1277,11 @@ type UpdateOfferValueRequest struct {
 	Value float64 `json:"value" validate:"required,gte=0"`
 }
 
+// UpdateOfferCostRequest for updating offer cost
+type UpdateOfferCostRequest struct {
+	Cost float64 `json:"cost" validate:"required,gte=0"`
+}
+
 // UpdateOfferDueDateRequest for updating offer due date
 type UpdateOfferDueDateRequest struct {
 	DueDate *time.Time `json:"dueDate"` // nullable to allow clearing

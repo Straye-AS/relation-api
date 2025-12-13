@@ -937,6 +937,49 @@ func (h *OfferHandler) UpdateValue(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, offer)
 }
 
+// UpdateCost godoc
+// @Summary Update offer cost
+// @Description Updates only the cost field of an offer
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferCostRequest true "Cost data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID or offer closed"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/cost [put]
+func (h *OfferHandler) UpdateCost(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferCostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateCost(r.Context(), id, req.Cost)
+	if err != nil {
+		h.logger.Error("failed to update offer cost", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
 // UpdateDueDate godoc
 // @Summary Update offer due date
 // @Description Updates only the due date field of an offer (can be null to clear)
