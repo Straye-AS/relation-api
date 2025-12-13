@@ -38,6 +38,16 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	return &user, nil
 }
 
+// GetByStringID retrieves a user by their string ID (e.g., Azure AD object ID)
+func (r *UserRepository) GetByStringID(ctx context.Context, id string) (*domain.User, error) {
+	var user domain.User
+	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *UserRepository) Upsert(ctx context.Context, user *domain.User) error {
 	var existing domain.User
 	err := r.db.WithContext(ctx).Where("email = ?", user.Email).First(&existing).Error
