@@ -1,14 +1,17 @@
 -- =============================================================================
 -- Straye Tak Projects Import: NON-WON Offers
 -- =============================================================================
--- Generated: 2025-12-12
+-- Generated: 2025-12-13 (FIXED)
 --
--- Creates 329 projects from non-won offers:
---   - 264 from 'sent' offers → status 'planning'
---   - 10 from 'in_progress' offers → status 'planning'
---   - 55 from 'lost' offers → status 'cancelled'
+-- Creates projects from non-won offers:
+--   - 'sent' offers -> phase 'tilbud'
+--   - 'in_progress' offers -> phase 'tilbud'
+--   - 'lost' offers -> phase 'cancelled'
 --
--- IMPORTANT: Run AFTER import_offers.sql
+-- Note: Non-won projects do NOT get a project_number assigned
+-- (only projects from won offers get numbered)
+--
+-- IMPORTANT: Run AFTER import_offers_fixed.sql
 -- =============================================================================
 
 -- Create projects for non-won offers
@@ -20,7 +23,7 @@ INSERT INTO projects (
     customer_id,
     customer_name,
     company_id,
-    status,
+    phase,
     start_date,
     value,
     cost,
@@ -40,10 +43,10 @@ SELECT
     o.customer_name,
     o.company_id,
     CASE
-        WHEN o.phase = 'lost' THEN 'cancelled'
-        ELSE 'planning'
-    END as status,
-    o.sent_date::date as start_date,  -- NULL if no sent_date, fix later from ERP
+        WHEN o.phase = 'lost' THEN 'cancelled'::project_phase
+        ELSE 'tilbud'::project_phase
+    END as phase,
+    o.sent_date::date as start_date,
     o.value as value,
     o.cost as cost,
     0 as spent,
@@ -68,9 +71,9 @@ WHERE p.offer_id = o.id
 -- =============================================================================
 -- Summary
 -- =============================================================================
--- Projects created: 329
---   - planning: 274 (from sent + in_progress offers)
---   - cancelled: 55 (from lost offers)
+-- Projects created from non-won offers:
+--   - tilbud: from sent + in_progress offers
+--   - cancelled: from lost offers
 --
 -- Notes:
 --   - No project_number assigned (only won projects get numbers)
@@ -78,5 +81,5 @@ WHERE p.offer_id = o.id
 --   - Bidirectional link: project.offer_id <-> offer.project_id
 --
 -- To run:
--- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_not_won.sql
+-- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_not_won_fixed.sql
 -- =============================================================================
