@@ -627,6 +627,12 @@ func (s *CustomerService) UpdateStatus(ctx context.Context, id uuid.UUID, status
 
 	customer.Status = status
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer status: %w", err)
 	}
@@ -652,6 +658,12 @@ func (s *CustomerService) UpdateTier(ctx context.Context, id uuid.UUID, tier dom
 	}
 
 	customer.Tier = tier
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer tier: %w", err)
@@ -679,6 +691,12 @@ func (s *CustomerService) UpdateIndustry(ctx context.Context, id uuid.UUID, indu
 
 	customer.Industry = industry
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer industry: %w", err)
 	}
@@ -705,6 +723,12 @@ func (s *CustomerService) UpdateNotes(ctx context.Context, id uuid.UUID, notes s
 
 	customer.Notes = notes
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer notes: %w", err)
 	}
@@ -730,6 +754,12 @@ func (s *CustomerService) UpdateCompanyID(ctx context.Context, id uuid.UUID, com
 	}
 
 	customer.CompanyID = companyID
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer company: %w", err)
@@ -761,6 +791,12 @@ func (s *CustomerService) UpdateCustomerClass(ctx context.Context, id uuid.UUID,
 
 	customer.CustomerClass = customerClass
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer class: %w", err)
 	}
@@ -786,6 +822,12 @@ func (s *CustomerService) UpdateCreditLimit(ctx context.Context, id uuid.UUID, c
 	}
 
 	customer.CreditLimit = creditLimit
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer credit limit: %w", err)
@@ -816,6 +858,12 @@ func (s *CustomerService) UpdateIsInternal(ctx context.Context, id uuid.UUID, is
 	}
 
 	customer.IsInternal = isInternal
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer internal flag: %w", err)
@@ -850,6 +898,12 @@ func (s *CustomerService) UpdateAddress(ctx context.Context, id uuid.UUID, addre
 	customer.PostalCode = postalCode
 	customer.Country = country
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer address: %w", err)
 	}
@@ -877,6 +931,12 @@ func (s *CustomerService) UpdatePostalCode(ctx context.Context, id uuid.UUID, po
 	oldPostalCode := customer.PostalCode
 	customer.PostalCode = postalCode
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer postal code: %w", err)
 	}
@@ -903,6 +963,12 @@ func (s *CustomerService) UpdateCity(ctx context.Context, id uuid.UUID, city str
 
 	oldCity := customer.City
 	customer.City = city
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer city: %w", err)
@@ -941,6 +1007,12 @@ func (s *CustomerService) UpdateContactInfo(ctx context.Context, id uuid.UUID, c
 	customer.ContactPerson = contactPerson
 	customer.ContactEmail = contactEmail
 	customer.ContactPhone = contactPhone
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		return nil, fmt.Errorf("failed to update customer contact info: %w", err)

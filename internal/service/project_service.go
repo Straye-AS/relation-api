@@ -317,6 +317,12 @@ func (s *ProjectService) UpdateHealthAndCompletion(ctx context.Context, id uuid.
 		}
 	}
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
@@ -755,6 +761,12 @@ func (s *ProjectService) UpdateCompletionPercent(ctx context.Context, id uuid.UU
 		project.Phase = domain.ProjectPhaseCompleted
 	}
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update completion percent: %w", err)
 	}
@@ -999,6 +1011,12 @@ func (s *ProjectService) UpdateName(ctx context.Context, id uuid.UUID, name stri
 	oldName := project.Name
 	project.Name = name
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project name: %w", err)
 	}
@@ -1034,6 +1052,12 @@ func (s *ProjectService) UpdateDescription(ctx context.Context, id uuid.UUID, su
 
 	project.Summary = summary
 	project.Description = description
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project description: %w", err)
@@ -1080,6 +1104,12 @@ func (s *ProjectService) UpdatePhase(ctx context.Context, id uuid.UUID, phase do
 
 	oldPhase := project.Phase
 	project.Phase = phase
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project phase: %w", err)
@@ -1177,6 +1207,12 @@ func (s *ProjectService) ReopenProject(ctx context.Context, id uuid.UUID, req *d
 	// Update phase
 	project.Phase = req.TargetPhase
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	// Save project
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
@@ -1242,6 +1278,12 @@ func (s *ProjectService) UpdateManager(ctx context.Context, id uuid.UUID, manage
 	project.ManagerID = &managerID
 	project.ManagerName = managerName
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project manager: %w", err)
 	}
@@ -1271,6 +1313,12 @@ func (s *ProjectService) UpdateDates(ctx context.Context, id uuid.UUID, startDat
 	}
 	// EndDate is a pointer in the model, so we can assign directly
 	project.EndDate = endDate
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project dates: %w", err)
@@ -1304,6 +1352,12 @@ func (s *ProjectService) UpdateBudget(ctx context.Context, id uuid.UUID, value f
 
 	oldValue := project.Value
 	project.Value = value
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project value: %w", err)
@@ -1345,6 +1399,12 @@ func (s *ProjectService) UpdateSpent(ctx context.Context, id uuid.UUID, spent fl
 	oldSpent := project.Spent
 	project.Spent = spent
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project spent: %w", err)
 	}
@@ -1379,6 +1439,12 @@ func (s *ProjectService) UpdateTeamMembers(ctx context.Context, id uuid.UUID, te
 
 	project.TeamMembers = teamMembers
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project team members: %w", err)
 	}
@@ -1409,6 +1475,12 @@ func (s *ProjectService) UpdateHealth(ctx context.Context, id uuid.UUID, health 
 	}
 	project.Health = &health
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project health: %w", err)
 	}
@@ -1434,6 +1506,12 @@ func (s *ProjectService) UpdateEstimatedCompletionDate(ctx context.Context, id u
 	}
 
 	project.EstimatedCompletionDate = estimatedDate
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update estimated completion date: %w", err)
@@ -1466,6 +1544,12 @@ func (s *ProjectService) UpdateProjectNumber(ctx context.Context, id uuid.UUID, 
 	oldNumber := project.ProjectNumber
 	project.ProjectNumber = projectNumber
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project number: %w", err)
 	}
@@ -1492,6 +1576,12 @@ func (s *ProjectService) UpdateCompanyID(ctx context.Context, id uuid.UUID, comp
 
 	oldCompany := project.CompanyID
 	project.CompanyID = companyID
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to update project company: %w", err)
@@ -1547,6 +1637,12 @@ func (s *ProjectService) ResyncFromBestOffer(ctx context.Context, id uuid.UUID) 
 	// If offer has project number, sync that too (for won offers)
 	if bestOffer.Phase == domain.OfferPhaseWon && bestOffer.ExternalReference != "" {
 		project.InheritedOfferNumber = bestOffer.ExternalReference
+	}
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
 	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {

@@ -880,6 +880,12 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 		}
 	}
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
@@ -984,6 +990,12 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 	// Store the original offer number for the project
 	originalOfferNumber := offer.OfferNumber
 	wonAt := time.Now()
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
 
 	// Use transaction for atomicity
 	var expiredOfferIDs []uuid.UUID
@@ -1155,6 +1167,12 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	}
 
 	offer.Phase = domain.OfferPhaseExpired
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
@@ -1528,6 +1546,12 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 	}
 	if !s.isDraftPhase(req.Phase) && offer.OfferNumber == "" {
 		return nil, ErrNonDraftOfferMustHaveNumber
+	}
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
 	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
@@ -1958,7 +1982,16 @@ func (s *OfferService) UpdateProbability(ctx context.Context, id uuid.UUID, prob
 	}
 
 	oldValue := offer.Probability
-	if err := s.offerRepo.UpdateField(ctx, id, "probability", probability); err != nil {
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"probability": probability,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update probability: %w", err)
 	}
 
@@ -1990,7 +2023,16 @@ func (s *OfferService) UpdateTitle(ctx context.Context, id uuid.UUID, title stri
 	}
 
 	oldTitle := offer.Title
-	if err := s.offerRepo.UpdateField(ctx, id, "title", title); err != nil {
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"title": title,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update title: %w", err)
 	}
 
@@ -2022,7 +2064,16 @@ func (s *OfferService) UpdateResponsible(ctx context.Context, id uuid.UUID, resp
 	}
 
 	oldResponsible := offer.ResponsibleUserID
-	if err := s.offerRepo.UpdateField(ctx, id, "responsible_user_id", responsibleUserID); err != nil {
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"responsible_user_id": responsibleUserID,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update responsible: %w", err)
 	}
 
@@ -2063,9 +2114,15 @@ func (s *OfferService) UpdateCustomer(ctx context.Context, id uuid.UUID, custome
 	}
 
 	oldCustomerName := offer.CustomerName
+
+	// Build updates including user tracking fields
 	updates := map[string]interface{}{
 		"customer_id":   customerID,
 		"customer_name": customer.Name,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
 	}
 	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update customer: %w", err)
@@ -2099,7 +2156,16 @@ func (s *OfferService) UpdateValue(ctx context.Context, id uuid.UUID, value floa
 	}
 
 	oldValue := offer.Value
-	if err := s.offerRepo.UpdateField(ctx, id, "value", value); err != nil {
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"value": value,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update value: %w", err)
 	}
 
@@ -2131,7 +2197,16 @@ func (s *OfferService) UpdateCost(ctx context.Context, id uuid.UUID, cost float6
 	}
 
 	oldCost := offer.Cost
-	if err := s.offerRepo.UpdateField(ctx, id, "cost", cost); err != nil {
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"cost": cost,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update cost: %w", err)
 	}
 
@@ -2162,7 +2237,15 @@ func (s *OfferService) UpdateDueDate(ctx context.Context, id uuid.UUID, dueDate 
 		return nil, ErrOfferAlreadyClosed
 	}
 
-	if err := s.offerRepo.UpdateField(ctx, id, "due_date", dueDate); err != nil {
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"due_date": dueDate,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update due date: %w", err)
 	}
 
@@ -2215,7 +2298,15 @@ func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, e
 		}
 	}
 
-	if err := s.offerRepo.UpdateField(ctx, id, "expiration_date", finalExpirationDate); err != nil {
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"expiration_date": finalExpirationDate,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update expiration date: %w", err)
 	}
 
@@ -2250,7 +2341,15 @@ func (s *OfferService) UpdateDescription(ctx context.Context, id uuid.UUID, desc
 		return nil, ErrOfferAlreadyClosed
 	}
 
-	if err := s.offerRepo.UpdateField(ctx, id, "description", description); err != nil {
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"description": description,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
 		return nil, fmt.Errorf("failed to update description: %w", err)
 	}
 
@@ -2291,6 +2390,17 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 
 	if err := s.offerRepo.LinkToProject(ctx, offerID, projectID); err != nil {
 		return nil, fmt.Errorf("failed to link offer to project: %w", err)
+	}
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates := map[string]interface{}{
+			"updated_by_id":   userCtx.UserID.String(),
+			"updated_by_name": userCtx.DisplayName,
+		}
+		if err := s.offerRepo.UpdateFields(ctx, offerID, updates); err != nil {
+			s.logger.Warn("failed to set updated by fields after link", zap.Error(err))
+		}
 	}
 
 	// Reload and return
@@ -2334,6 +2444,17 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 		return nil, fmt.Errorf("failed to unlink offer from project: %w", err)
 	}
 
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates := map[string]interface{}{
+			"updated_by_id":   userCtx.UserID.String(),
+			"updated_by_name": userCtx.DisplayName,
+		}
+		if err := s.offerRepo.UpdateFields(ctx, offerID, updates); err != nil {
+			s.logger.Warn("failed to set updated by fields after unlink", zap.Error(err))
+		}
+	}
+
 	// Recalculate project economics after unlinking (in case draft was contributing)
 	if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, oldProjectID); err != nil {
 		s.logger.Warn("failed to recalculate project economics after unlink", zap.Error(err))
@@ -2366,6 +2487,12 @@ func (s *OfferService) UpdateCustomerHasWonProject(ctx context.Context, offerID 
 	}
 
 	offer.CustomerHasWonProject = customerHasWonProject
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
@@ -2416,6 +2543,12 @@ func (s *OfferService) UpdateOfferNumber(ctx context.Context, offerID uuid.UUID,
 	oldNumber := offer.OfferNumber
 	offer.OfferNumber = offerNumber
 
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
@@ -2450,6 +2583,12 @@ func (s *OfferService) UpdateExternalReference(ctx context.Context, offerID uuid
 
 	oldRef := offer.ExternalReference
 	offer.ExternalReference = externalReference
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
