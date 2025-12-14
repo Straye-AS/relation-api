@@ -450,6 +450,11 @@ definitions:
       createdAt:
         description: ISO 8601
         type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
+        type: string
       department:
         type: string
       email:
@@ -488,6 +493,10 @@ definitions:
         type: string
       updatedAt:
         description: ISO 8601
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
         type: string
     type: object
   domain.ContactEntityType:
@@ -960,6 +969,11 @@ definitions:
       createdAt:
         description: ISO 8601
         type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
+        type: string
       creditLimit:
         type: number
       customerClass:
@@ -992,6 +1006,10 @@ definitions:
         type: number
       updatedAt:
         description: ISO 8601
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
         type: string
     type: object
   domain.CustomerIndustry:
@@ -1093,6 +1111,11 @@ definitions:
       createdAt:
         description: ISO 8601
         type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
+        type: string
       creditLimit:
         type: number
       customerClass:
@@ -1127,6 +1150,10 @@ definitions:
         type: number
       updatedAt:
         description: ISO 8601
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
         type: string
     type: object
   domain.DashboardMetrics:
@@ -1408,6 +1435,11 @@ definitions:
       createdAt:
         description: ISO 8601
         type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
+        type: string
       customerHasWonProject:
         description: Whether customer has won their project
         type: boolean
@@ -1468,6 +1500,10 @@ definitions:
       updatedAt:
         description: ISO 8601
         type: string
+      updatedById:
+        type: string
+      updatedByName:
+        type: string
       value:
         type: number
     type: object
@@ -1486,6 +1522,11 @@ definitions:
         type: number
       createdAt:
         description: ISO 8601
+        type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
         type: string
       customerHasWonProject:
         description: Whether customer has won their project
@@ -1548,6 +1589,10 @@ definitions:
         type: string
       updatedAt:
         description: ISO 8601
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
         type: string
       value:
         type: number
@@ -1736,6 +1781,11 @@ definitions:
       createdAt:
         description: ISO 8601
         type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
+        type: string
       customerId:
         type: string
       customerName:
@@ -1790,6 +1840,10 @@ definitions:
       updatedAt:
         description: ISO 8601
         type: string
+      updatedById:
+        type: string
+      updatedByName:
+        type: string
       value:
         type: number
       winningOfferId:
@@ -1839,6 +1893,11 @@ definitions:
         type: number
       createdAt:
         description: ISO 8601
+        type: string
+      createdById:
+        description: User tracking fields
+        type: string
+      createdByName:
         type: string
       customerId:
         type: string
@@ -1901,6 +1960,10 @@ definitions:
         type: array
       updatedAt:
         description: ISO 8601
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
         type: string
       value:
         type: number
