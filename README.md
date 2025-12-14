@@ -297,26 +297,71 @@ If not using OIDC, configure:
 
 ### Azure Setup for OIDC Authentication
 
-1. Create a service principal with federated credentials:
-```bash
-# Create service principal
-az ad sp create-for-rbac --name "github-actions-relation-api" --role contributor \
-  --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group}
+OIDC (Workload Identity Federation) is the recommended approach - **no secrets or passwords are stored**, only IDs. GitHub and Azure establish trust through federated credentials.
 
-# Configure federated credentials for GitHub Actions
-az ad app federated-credential create --id {app-id} --parameters '{
-  "name": "github-actions-main",
+#### Step 1: Create App Registration (no secret needed)
+```bash
+# Create the app registration
+az ad app create --display-name "github-actions-relation-api"
+
+# Get the App (Client) ID - save this for AZURE_CLIENT_ID secret
+az ad app list --display-name "github-actions-relation-api" --query "[0].appId" -o tsv
+```
+
+#### Step 2: Create Service Principal
+```bash
+# Create service principal for the app
+APP_ID=$(az ad app list --display-name "github-actions-relation-api" --query "[0].appId" -o tsv)
+az ad sp create --id $APP_ID
+
+# Get the Service Principal Object ID (needed for role assignment)
+az ad sp show --id $APP_ID --query "id" -o tsv
+```
+
+#### Step 3: Grant ACR Push Permissions
+```bash
+# Assign AcrPush role to the service principal
+SP_OBJECT_ID=$(az ad sp show --id $APP_ID --query "id" -o tsv)
+
+az role assignment create \
+  --assignee-object-id $SP_OBJECT_ID \
+  --assignee-principal-type ServicePrincipal \
+  --role "AcrPush" \
+  --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name}
+```
+
+#### Step 4: Configure Federated Credentials for GitHub
+```bash
+# This establishes trust between GitHub Actions and Azure AD
+az ad app federated-credential create --id $APP_ID --parameters '{
+  "name": "github-main-branch",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "repo:Straye-AS/relation-api:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }'
+
+# Optional: Add credential for pull requests too
+az ad app federated-credential create --id $APP_ID --parameters '{
+  "name": "github-pull-requests",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:Straye-AS/relation-api:pull_request",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
 ```
 
-2. Grant ACR push permissions:
+#### Step 5: Get Required Values for GitHub Secrets
 ```bash
-az role assignment create --assignee {service-principal-id} \
-  --role AcrPush \
-  --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name}
+# AZURE_CLIENT_ID (App ID)
+az ad app list --display-name "github-actions-relation-api" --query "[0].appId" -o tsv
+
+# AZURE_TENANT_ID
+az account show --query "tenantId" -o tsv
+
+# AZURE_SUBSCRIPTION_ID
+az account show --query "id" -o tsv
+
+# ACR_LOGIN_SERVER (your ACR hostname)
+az acr show --name {acr-name} --query "loginServer" -o tsv
 ```
 
 ### Docker Image Tags
