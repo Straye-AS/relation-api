@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -677,11 +678,11 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				// Store original offer number for project
 				originalOfferNumber := offer.OfferNumber
 
-				// Update offer number with "_P" suffix
-				if originalOfferNumber != "" {
-					newOfferNumber := originalOfferNumber + "_P"
+				// Update offer number with "W" suffix to mark as won (only if not already suffixed)
+				if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "W") {
+					newOfferNumber := originalOfferNumber + "W"
 					if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
-						s.logger.Warn("failed to update offer number with suffix", zap.Error(err))
+						s.logger.Warn("failed to update offer number with W suffix", zap.Error(err))
 					}
 				}
 
@@ -1006,11 +1007,11 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 			return fmt.Errorf("failed to update winning offer: %w", err)
 		}
 
-		// 2. Update the winning offer's number with "_P" suffix
-		if originalOfferNumber != "" {
-			newOfferNumber := originalOfferNumber + "_P"
+		// 2. Update the winning offer's number with "W" suffix to mark as won (only if not already suffixed)
+		if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "W") {
+			newOfferNumber := originalOfferNumber + "W"
 			if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
-				s.logger.Warn("failed to update offer number with suffix", zap.Error(err))
+				s.logger.Warn("failed to update offer number with W suffix", zap.Error(err))
 			}
 		}
 
@@ -1237,7 +1238,7 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 // RevertToSent transitions a won offer back to sent phase
 // This is used when reopening a project - the winning offer reverts to sent
 // so that it can be won again or managed as a normal sent offer.
-// Note: This does NOT remove the _P suffix from the offer number.
+// Note: This does NOT remove the W suffix from the offer number.
 func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {

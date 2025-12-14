@@ -503,6 +503,7 @@ func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.
 		"phase":                  domain.ProjectPhaseActive,
 		"winning_offer_id":       offerID,
 		"inherited_offer_number": inheritedOfferNumber,
+		"project_number":         inheritedOfferNumber, // Project gets the original offer number
 		"calculated_offer_value": offerValue,
 		"value":                  offerValue,   // Set value from winning offer
 		"cost":                   offerCost,    // Set cost from winning offer (margin_percent auto-calculated by trigger)
