@@ -703,6 +703,8 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Customer not found")
 	case errors.Is(err, service.ErrProjectNotFound):
 		respondWithError(w, http.StatusBadRequest, "Project not found")
+	case errors.Is(err, service.ErrProjectNotInOfferPhase):
+		respondWithError(w, http.StatusBadRequest, "Project must be in tilbud (offer) phase to link offers")
 	case errors.Is(err, service.ErrMissingCustomerOrProject):
 		respondWithError(w, http.StatusBadRequest, "Either customerId or projectId must be provided")
 	case errors.Is(err, service.ErrProjectHasNoCustomer):

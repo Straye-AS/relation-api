@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -677,11 +678,11 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				// Store original offer number for project
 				originalOfferNumber := offer.OfferNumber
 
-				// Update offer number with "_P" suffix
-				if originalOfferNumber != "" {
-					newOfferNumber := originalOfferNumber + "_P"
+				// Update offer number with "W" suffix to mark as won (only if not already suffixed)
+				if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "W") {
+					newOfferNumber := originalOfferNumber + "W"
 					if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
-						s.logger.Warn("failed to update offer number with suffix", zap.Error(err))
+						s.logger.Warn("failed to update offer number with W suffix", zap.Error(err))
 					}
 				}
 
@@ -692,8 +693,8 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				}
 				expiredOfferIDs = expiredIDs
 
-				// Transition project to active phase with winning offer details
-				if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, wonAt); err != nil {
+				// Transition project to active phase with winning offer details (conditionally inherits manager, description, location, external reference)
+				if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, offer.Description, offer.Location, offer.ExternalReference, wonAt); err != nil {
 					return fmt.Errorf("failed to update project with winning offer: %w", err)
 				}
 
@@ -1006,11 +1007,11 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 			return fmt.Errorf("failed to update winning offer: %w", err)
 		}
 
-		// 2. Update the winning offer's number with "_P" suffix
-		if originalOfferNumber != "" {
-			newOfferNumber := originalOfferNumber + "_P"
+		// 2. Update the winning offer's number with "W" suffix to mark as won (only if not already suffixed)
+		if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "W") {
+			newOfferNumber := originalOfferNumber + "W"
 			if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
-				s.logger.Warn("failed to update offer number with suffix", zap.Error(err))
+				s.logger.Warn("failed to update offer number with W suffix", zap.Error(err))
 			}
 		}
 
@@ -1021,8 +1022,8 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 		}
 		expiredOfferIDs = expiredIDs
 
-		// 4. Update the project to active phase with winning offer details (value, cost, margin, customer)
-		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, wonAt); err != nil {
+		// 4. Update the project to active phase with winning offer details (conditionally inherits manager, description, location, external reference)
+		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, offer.Description, offer.Location, offer.ExternalReference, wonAt); err != nil {
 			return fmt.Errorf("failed to update project with winning offer: %w", err)
 		}
 
@@ -1098,6 +1099,13 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 			"Project activated",
 			fmt.Sprintf("Project activated with winning offer '%s'. %d sibling offer(s) were expired.",
 				offer.Title, len(expiredOfferIDs)))
+
+		// Log activity for each auto-expired offer individually
+		for _, expiredOfferID := range expiredOfferIDs {
+			s.logActivity(ctx, expiredOfferID, "Offer auto-expired",
+				fmt.Sprintf("Offer was auto-expired because offer '%s' (%s) won on project '%s'",
+					offer.Title, offer.OfferNumber, project.Name))
+		}
 	} else {
 		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
 			"Project activated",
@@ -1230,7 +1238,7 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 // RevertToSent transitions a won offer back to sent phase
 // This is used when reopening a project - the winning offer reverts to sent
 // so that it can be won again or managed as a normal sent offer.
-// Note: This does NOT remove the _P suffix from the offer number.
+// Note: This does NOT remove the W suffix from the offer number.
 func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1727,9 +1735,13 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 			return nil, fmt.Errorf("failed to get project: %w", err)
 		}
 
-		// Validate project is not cancelled
+		// Validate project is in tilbud (offer) phase - offers can only be linked to projects in offer phase
+		// This ensures offers cannot be added to projects that have already progressed past the bidding stage
 		if project.Phase == domain.ProjectPhaseCancelled {
 			return nil, ErrCannotAddOfferToCancelledProject
+		}
+		if project.Phase != domain.ProjectPhaseTilbud {
+			return nil, ErrProjectNotInOfferPhase
 		}
 
 		// Validate company match (always required)
@@ -2386,6 +2398,11 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 			return nil, ErrProjectNotFound
 		}
 		return nil, fmt.Errorf("failed to verify project: %w", err)
+	}
+
+	// Only allow linking offers to projects in tilbud (offer) phase
+	if project.Phase != domain.ProjectPhaseTilbud {
+		return nil, ErrProjectNotInOfferPhase
 	}
 
 	if err := s.offerRepo.LinkToProject(ctx, offerID, projectID); err != nil {

@@ -382,8 +382,10 @@ type Project struct {
 	MarginPercent           float64        `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Auto-calculated by DB trigger
 	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
 	Invoiced                float64        `gorm:"type:decimal(15,2);not null;default:0;column:invoiced"` // Amount invoiced to customer (hittil fakturert)
+	OrderReserve            float64        `gorm:"type:decimal(15,2);->"` // Generated column: value - invoiced (read-only)
 	ManagerID               *string        `gorm:"type:varchar(100)"`
 	ManagerName             string         `gorm:"type:varchar(200)"`
+	Location                string         `gorm:"type:varchar(200)"`
 	TeamMembers             pq.StringArray `gorm:"type:text[]"`
 	OfferID                 *uuid.UUID     `gorm:"type:uuid;index"`
 	Offer                   *Offer         `gorm:"foreignKey:OfferID"`
@@ -397,6 +399,7 @@ type Project struct {
 	WinningOfferID       *uuid.UUID `gorm:"type:uuid;index;column:winning_offer_id"`
 	WinningOffer         *Offer     `gorm:"foreignKey:WinningOfferID"`
 	InheritedOfferNumber string     `gorm:"type:varchar(50);column:inherited_offer_number"`
+	ExternalReference    string     `gorm:"type:varchar(100);column:external_reference"`
 	CalculatedOfferValue float64    `gorm:"type:decimal(15,2);default:0;column:calculated_offer_value"`
 	WonAt                *time.Time `gorm:"column:won_at"`
 	// User tracking fields

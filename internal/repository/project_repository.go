@@ -421,8 +421,8 @@ func (r *ProjectRepository) GetRecentProjects(ctx context.Context, limit int) ([
 
 // DashboardProjectStats holds project statistics for the dashboard
 type DashboardProjectStats struct {
-	OrderReserve  float64 // Sum of (budget - spent) on active projects
-	TotalInvoiced float64 // Sum of "spent" on all projects in the time window
+	OrderReserve  float64 // Sum of order_reserve (value - invoiced) on active projects
+	TotalInvoiced float64 // Sum of invoiced on all projects in the time window
 }
 
 // GetDashboardProjectStats returns project statistics for the dashboard
@@ -430,22 +430,22 @@ type DashboardProjectStats struct {
 func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since *time.Time) (*DashboardProjectStats, error) {
 	stats := &DashboardProjectStats{}
 
-	// Order reserve: sum of (budget - spent) on active projects
+	// Order reserve: sum of order_reserve (value - invoiced) on active projects
 	// Only count projects with phase "working" or "active"
 	reserveQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
 		Where("phase IN (?)", []domain.ProjectPhase{domain.ProjectPhaseWorking, domain.ProjectPhaseActive})
 	reserveQuery = ApplyCompanyFilter(ctx, reserveQuery)
-	if err := reserveQuery.Select("COALESCE(SUM(budget - spent), 0)").Scan(&stats.OrderReserve).Error; err != nil {
+	if err := reserveQuery.Select("COALESCE(SUM(order_reserve), 0)").Scan(&stats.OrderReserve).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate order reserve: %w", err)
 	}
 
-	// Total invoiced: sum of "spent" on all projects in the time window
+	// Total invoiced: sum of invoiced on all projects in the time window
 	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{})
 	if since != nil {
 		invoicedQuery = invoicedQuery.Where("created_at >= ?", *since)
 	}
 	invoicedQuery = ApplyCompanyFilter(ctx, invoicedQuery)
-	if err := invoicedQuery.Select("COALESCE(SUM(spent), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
+	if err := invoicedQuery.Select("COALESCE(SUM(invoiced), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate total invoiced: %w", err)
 	}
 
@@ -495,18 +495,48 @@ func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID
 }
 
 // SetWinningOffer sets the winning offer for a project and transitions it to active phase.
-// Also propagates the offer's customer to the project.
-func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, wonAt time.Time) error {
+// Also conditionally propagates the offer's customer, responsible user, description, location,
+// and external reference to the project (only if those fields are not already set on the project).
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, managerID string, managerName string, description string, location string, externalReference string, wonAt time.Time) error {
+	// Start with fields that are always set
 	updates := map[string]interface{}{
 		"phase":                  domain.ProjectPhaseActive,
 		"winning_offer_id":       offerID,
 		"inherited_offer_number": inheritedOfferNumber,
+		"project_number":         inheritedOfferNumber, // Project gets the original offer number
 		"calculated_offer_value": offerValue,
 		"value":                  offerValue,   // Set value from winning offer
 		"cost":                   offerCost,    // Set cost from winning offer (margin_percent auto-calculated by trigger)
 		"customer_id":            customerID,   // Propagate customer from winning offer
 		"customer_name":          customerName, // Propagate customer name from winning offer
 		"won_at":                 wonAt,
+	}
+
+	// Fetch current project to check which fields are empty
+	var project domain.Project
+	if err := r.db.WithContext(ctx).Where("id = ?", projectID).First(&project).Error; err != nil {
+		return fmt.Errorf("failed to fetch project: %w", err)
+	}
+
+	// Only inherit manager if not already set
+	if project.ManagerID == nil || *project.ManagerID == "" {
+		updates["manager_id"] = managerID
+		updates["manager_name"] = managerName
+	}
+
+	// Only inherit description if not already set
+	if project.Description == "" && description != "" {
+		updates["description"] = description
+	}
+
+	// Only inherit location if not already set
+	if project.Location == "" && location != "" {
+		updates["location"] = location
+	}
+
+	// Only inherit external reference if not already set
+	if project.ExternalReference == "" && externalReference != "" {
+		updates["external_reference"] = externalReference
 	}
 
 	query := r.db.WithContext(ctx).

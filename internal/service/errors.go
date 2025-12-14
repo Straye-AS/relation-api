@@ -140,6 +140,9 @@ var (
 	// ErrCannotAddOfferToCancelledProject is returned when trying to add an offer to a cancelled project
 	ErrCannotAddOfferToCancelledProject = errors.New("cannot add offer to cancelled project")
 
+	// ErrProjectNotInOfferPhase is returned when trying to link an offer to a project not in tilbud phase
+	ErrProjectNotInOfferPhase = errors.New("project must be in tilbud (offer) phase to link offers")
+
 	// ErrProjectCustomerMismatch is returned when project and offer have different customers
 	ErrProjectCustomerMismatch = errors.New("project customer does not match offer customer")
 

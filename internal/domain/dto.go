@@ -251,8 +251,10 @@ type ProjectDTO struct {
 	MarginPercent           float64        `json:"marginPercent"`
 	Spent                   float64        `json:"spent"`
 	Invoiced                float64        `json:"invoiced"` // Amount invoiced to customer (hittil fakturert)
+	OrderReserve            float64        `json:"orderReserve"` // Calculated: value - invoiced (remaining to invoice)
 	ManagerID               *string        `json:"managerId,omitempty"`
 	ManagerName             string         `json:"managerName,omitempty"`
+	Location                string         `json:"location,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	CreatedAt               string         `json:"createdAt"` // ISO 8601
 	UpdatedAt               string         `json:"updatedAt"` // ISO 8601
@@ -265,6 +267,7 @@ type ProjectDTO struct {
 	// Phase-related fields for offer folder functionality
 	WinningOfferID       *uuid.UUID `json:"winningOfferId,omitempty"`
 	InheritedOfferNumber string     `json:"inheritedOfferNumber,omitempty"`
+	ExternalReference    string     `json:"externalReference,omitempty"`
 	CalculatedOfferValue float64    `json:"calculatedOfferValue"`
 	WonAt                string     `json:"wonAt,omitempty"` // ISO 8601
 	IsEconomicsEditable  bool       `json:"isEconomicsEditable"`
