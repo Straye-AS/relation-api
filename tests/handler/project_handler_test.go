@@ -79,6 +79,7 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
+	userRepo := repository.NewUserRepository(db)
 
 	companyService := service.NewCompanyService(logger)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
@@ -89,6 +90,7 @@ func createProjectHandlerWithDeps(t *testing.T, db *gorm.DB) *handler.ProjectHan
 		customerRepo,
 		budgetItemRepo,
 		activityRepo,
+		userRepo,
 		companyService,
 		numberSequenceService,
 		logger,
