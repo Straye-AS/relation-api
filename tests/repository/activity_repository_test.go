@@ -224,12 +224,13 @@ func TestActivityRepository_List(t *testing.T) {
 	})
 
 	t.Run("pagination", func(t *testing.T) {
-		result, total, err := repo.List(context.Background(), 1, 2, nil, nil)
+		targetType := domain.ActivityTargetCustomer
+		result, total, err := repo.List(context.Background(), 1, 2, &targetType, &customer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, result, 2)
 
-		result, total, err = repo.List(context.Background(), 2, 2, nil, nil)
+		result, total, err = repo.List(context.Background(), 2, 2, &targetType, &customer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, result, 1)

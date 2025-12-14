@@ -205,8 +205,8 @@ func TestProjectHandler_List(t *testing.T) {
 		assert.Equal(t, 3, result.TotalPages)
 	})
 
-	t.Run("list with status filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/projects?status=active", nil)
+	t.Run("list with phase filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/projects?phase=active", nil)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
@@ -431,7 +431,7 @@ func TestProjectHandler_Update(t *testing.T) {
 	userCtx, _ := auth.FromContext(ctx)
 
 	customer := testutil.CreateTestCustomer(t, db, "Update Customer")
-	project := createTestProject(t, db, customer, "Original Project", domain.ProjectPhaseTilbud, userCtx.UserID.String())
+	project := createTestProject(t, db, customer, "Original Project", domain.ProjectPhaseActive, userCtx.UserID.String())
 
 	t.Run("update project successfully", func(t *testing.T) {
 		startDate := time.Now()
