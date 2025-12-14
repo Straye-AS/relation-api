@@ -515,6 +515,48 @@ func TestActivityService_GetMyTasks(t *testing.T) {
 	})
 }
 
+func TestActivityService_GetUpcoming(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+	userCtx, _ := auth.FromContext(ctx)
+
+	// Create upcoming scheduled activity
+	scheduledAt := time.Now().Add(3 * 24 * time.Hour)
+	req := &domain.CreateActivityRequest{
+		TargetType:   domain.ActivityTargetCustomer,
+		TargetID:     customer.ID,
+		Title:        "Upcoming Meeting",
+		ActivityType: domain.ActivityTypeMeeting,
+		Status:       domain.ActivityStatusPlanned,
+		ScheduledAt:  &scheduledAt,
+		AssignedToID: userCtx.UserID.String(),
+	}
+	_, err := svc.Create(ctx, req)
+	require.NoError(t, err)
+
+	t.Run("get upcoming activities", func(t *testing.T) {
+		activities, err := svc.GetUpcoming(ctx, 7, 10)
+		require.NoError(t, err)
+		require.Len(t, activities, 1, "expected 1 upcoming activity for user %s", userCtx.UserID)
+		assert.Equal(t, "Upcoming Meeting", activities[0].Title)
+	})
+
+	t.Run("limits days ahead", func(t *testing.T) {
+		activities, err := svc.GetUpcoming(ctx, 100, 10)
+		assert.NoError(t, err)
+		// Should clamp to 90 days
+		assert.NotNil(t, activities)
+	})
+
+	t.Run("limits result count", func(t *testing.T) {
+		activities, err := svc.GetUpcoming(ctx, 7, 200)
+		assert.NoError(t, err)
+		// Should clamp to 100
+		assert.NotNil(t, activities)
+	})
+}
 
 func TestActivityService_GetStatusCounts(t *testing.T) {
 	db := setupActivityServiceTestDB(t)
@@ -955,6 +997,70 @@ func TestActivityService_CreateMeetingWithAttendees(t *testing.T) {
 		task, err := svc.Create(ctx, req)
 		assert.NoError(t, err)
 		assert.Empty(t, task.Attendees)
+	})
+}
+
+func TestActivityService_UpdateMeetingAttendees(t *testing.T) {
+	db := setupActivityServiceTestDB(t)
+	svc := createActivityService(t, db)
+	customer := createActivityServiceTestCustomer(t, db)
+	ctx := createActivityTestContext()
+
+	t.Run("update meeting attendees", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		initialAttendee := uuid.New().String()
+
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Meeting to Update",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+			Attendees:    []string{initialAttendee},
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		require.Len(t, meeting.Attendees, 1)
+
+		// Update with new attendees
+		newAttendee1 := uuid.New().String()
+		newAttendee2 := uuid.New().String()
+		updateReq := &domain.UpdateActivityRequest{
+			Title:     "Updated Meeting",
+			Attendees: []string{newAttendee1, newAttendee2},
+		}
+		updated, err := svc.Update(ctx, meeting.ID, updateReq)
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		assert.Len(t, updated.Attendees, 2)
+		assert.Contains(t, updated.Attendees, newAttendee1)
+		assert.Contains(t, updated.Attendees, newAttendee2)
+		assert.NotContains(t, updated.Attendees, initialAttendee)
+	})
+
+	t.Run("clear meeting attendees", func(t *testing.T) {
+		scheduledAt := time.Now().Add(24 * time.Hour)
+		req := &domain.CreateActivityRequest{
+			TargetType:   domain.ActivityTargetCustomer,
+			TargetID:     customer.ID,
+			Title:        "Meeting to Clear",
+			ActivityType: domain.ActivityTypeMeeting,
+			ScheduledAt:  &scheduledAt,
+			Attendees:    []string{uuid.New().String()},
+		}
+		meeting, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		require.Len(t, meeting.Attendees, 1)
+
+		// Update with empty attendees
+		updateReq := &domain.UpdateActivityRequest{
+			Title:     "Cleared Meeting",
+			Attendees: []string{},
+		}
+		updated, err := svc.Update(ctx, meeting.ID, updateReq)
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		assert.Empty(t, updated.Attendees)
 	})
 }
 
