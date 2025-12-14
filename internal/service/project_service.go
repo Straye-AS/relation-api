@@ -183,6 +183,14 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		project.StartDate = *req.StartDate
 	}
 
+	// Set user tracking fields on creation
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.CreatedByID = userCtx.UserID.String()
+		project.CreatedByName = userCtx.DisplayName
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.projectRepo.Create(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
@@ -404,6 +412,12 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 	}
 	if req.EstimatedCompletionDate != nil {
 		project.EstimatedCompletionDate = req.EstimatedCompletionDate
+	}
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		project.UpdatedByID = userCtx.UserID.String()
+		project.UpdatedByName = userCtx.DisplayName
 	}
 
 	if err := s.projectRepo.Update(ctx, project); err != nil {

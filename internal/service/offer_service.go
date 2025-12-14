@@ -212,6 +212,14 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 		Items:               items,
 	}
 
+	// Set user tracking fields on creation
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.CreatedByID = userCtx.UserID.String()
+		offer.CreatedByName = userCtx.DisplayName
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
+
 	// Generate offer number only for non-draft offers
 	// Draft offers should NOT have offer numbers - they get one when transitioning out of draft
 	if !s.isDraftPhase(phase) {
@@ -476,6 +484,12 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	if !willBeInDraft && offer.OfferNumber == "" {
 		// Non-draft offer without number - this is a data integrity issue
 		return nil, ErrNonDraftOfferMustHaveNumber
+	}
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
 	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {

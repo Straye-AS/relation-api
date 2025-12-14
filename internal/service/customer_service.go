@@ -182,6 +182,14 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 		County:        req.County,
 	}
 
+	// Set user tracking fields on creation
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.CreatedByID = userCtx.UserID.String()
+		customer.CreatedByName = userCtx.DisplayName
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.customerRepo.Create(ctx, customer); err != nil {
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
@@ -393,6 +401,12 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 	customer.IsInternal = req.IsInternal
 	customer.Municipality = req.Municipality
 	customer.County = req.County
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.customerRepo.Update(ctx, customer); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {

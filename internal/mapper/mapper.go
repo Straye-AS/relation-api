@@ -35,6 +35,10 @@ func ToCustomerDTO(customer *domain.Customer, totalValue float64, activeOffers i
 		UpdatedAt:     customer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 		TotalValue:    totalValue,
 		ActiveOffers:  activeOffers,
+		CreatedByID:   customer.CreatedByID,
+		CreatedByName: customer.CreatedByName,
+		UpdatedByID:   customer.UpdatedByID,
+		UpdatedByName: customer.UpdatedByName,
 	}
 }
 
@@ -62,6 +66,10 @@ func ToContactDTO(contact *domain.Contact) domain.ContactDTO {
 		IsActive:               contact.IsActive,
 		CreatedAt:              contact.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:              contact.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedByID:            contact.CreatedByID,
+		CreatedByName:          contact.CreatedByName,
+		UpdatedByID:            contact.UpdatedByID,
+		UpdatedByName:          contact.UpdatedByName,
 	}
 
 	// Map relationships if loaded
@@ -182,6 +190,10 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		InheritedOfferNumber: project.InheritedOfferNumber,
 		CalculatedOfferValue: project.CalculatedOfferValue,
 		IsEconomicsEditable:  phase.IsEditablePhase(),
+		CreatedByID:          project.CreatedByID,
+		CreatedByName:        project.CreatedByName,
+		UpdatedByID:          project.UpdatedByID,
+		UpdatedByName:        project.UpdatedByName,
 	}
 
 	if !project.StartDate.IsZero() {
@@ -260,6 +272,10 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		SentDate:              sentDate,
 		ExpirationDate:        expirationDate,
 		CustomerHasWonProject: offer.CustomerHasWonProject,
+		CreatedByID:           offer.CreatedByID,
+		CreatedByName:         offer.CreatedByName,
+		UpdatedByID:           offer.UpdatedByID,
+		UpdatedByName:         offer.UpdatedByName,
 	}
 }
 
