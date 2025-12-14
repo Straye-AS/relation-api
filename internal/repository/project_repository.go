@@ -495,8 +495,8 @@ func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID
 }
 
 // SetWinningOffer sets the winning offer for a project and transitions it to active phase.
-// Also propagates the offer's customer to the project.
-func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, wonAt time.Time) error {
+// Also propagates the offer's customer and responsible user (as project manager) to the project.
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, managerID string, managerName string, wonAt time.Time) error {
 	updates := map[string]interface{}{
 		"phase":                  domain.ProjectPhaseActive,
 		"winning_offer_id":       offerID,
@@ -506,6 +506,8 @@ func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.
 		"cost":                   offerCost,    // Set cost from winning offer (margin_percent auto-calculated by trigger)
 		"customer_id":            customerID,   // Propagate customer from winning offer
 		"customer_name":          customerName, // Propagate customer name from winning offer
+		"manager_id":             managerID,    // Inherit responsible user as project manager
+		"manager_name":           managerName,  // Inherit responsible user name as project manager name
 		"won_at":                 wonAt,
 	}
 
