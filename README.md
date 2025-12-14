@@ -253,6 +253,78 @@ make security
 └── Makefile
 ```
 
+## CI/CD Pipeline
+
+The project includes a GitHub Actions CI/CD pipeline (`.github/workflows/ci.yml`) that runs automatically on:
+- **Pull Requests to main**: Runs linting, security scanning, and tests
+- **Pushes to main**: Runs all checks plus builds and pushes Docker image to ACR
+
+### Pipeline Jobs
+
+| Job | Description | Trigger |
+|-----|-------------|---------|
+| `lint` | Runs golangci-lint for static code analysis | PR + Push |
+| `security` | Runs gosec security vulnerability scan | PR + Push |
+| `test-unit` | Runs fast unit tests (no DB required) | PR + Push |
+| `test-integration` | Runs integration tests with PostgreSQL | PR + Push |
+| `build` | Builds application binaries | PR + Push |
+| `docker` | Builds and pushes Docker image to ACR | Push to main only |
+| `notify-failure` | Sends Slack notification on failure | Push to main only |
+
+### Required GitHub Secrets
+
+Configure these secrets in your GitHub repository settings (`Settings > Secrets and variables > Actions`):
+
+#### Azure Authentication (OIDC - Recommended)
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `AZURE_CLIENT_ID` | Azure service principal client ID | `12345678-1234-1234-1234-123456789012` |
+| `AZURE_TENANT_ID` | Azure AD tenant ID | `12345678-1234-1234-1234-123456789012` |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | `12345678-1234-1234-1234-123456789012` |
+| `ACR_LOGIN_SERVER` | ACR login server hostname | `myregistry.azurecr.io` |
+
+#### Alternative: ACR Username/Password
+If not using OIDC, configure:
+| Secret | Description |
+|--------|-------------|
+| `ACR_USERNAME` | ACR username |
+| `ACR_PASSWORD` | ACR password |
+
+#### Optional
+| Secret | Description |
+|--------|-------------|
+| `SLACK_WEBHOOK_URL` | Slack webhook URL for failure notifications |
+
+### Azure Setup for OIDC Authentication
+
+1. Create a service principal with federated credentials:
+```bash
+# Create service principal
+az ad sp create-for-rbac --name "github-actions-relation-api" --role contributor \
+  --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group}
+
+# Configure federated credentials for GitHub Actions
+az ad app federated-credential create --id {app-id} --parameters '{
+  "name": "github-actions-main",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:Straye-AS/relation-api:ref:refs/heads/main",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+```
+
+2. Grant ACR push permissions:
+```bash
+az role assignment create --assignee {service-principal-id} \
+  --role AcrPush \
+  --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name}
+```
+
+### Docker Image Tags
+
+Images pushed to ACR are tagged with:
+- Git commit SHA (e.g., `a1b2c3d4`)
+- `latest` (always points to the most recent main branch build)
+
 ## Deployment
 
 ### Docker
