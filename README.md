@@ -367,8 +367,14 @@ az acr show --name {acr-name} --query "loginServer" -o tsv
 ### Docker Image Tags
 
 Images pushed to ACR are tagged with:
-- Git commit SHA (e.g., `a1b2c3d4`)
-- `latest` (always points to the most recent main branch build)
+- Full Git commit SHA (e.g., `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0`) - for easy comparison and rollback
+- `latest` - always points to the most recent main branch build
+
+Example:
+```
+myregistry.azurecr.io/relation-api:abc123def456...  # specific version
+myregistry.azurecr.io/relation-api:latest           # current version
+```
 
 ## Deployment
 

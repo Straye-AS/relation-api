@@ -248,7 +248,7 @@ jobs:
         with:
           images: ${{ secrets.ACR_LOGIN_SERVER }}/relation-api
           tags: |
-            type=sha,prefix=
+            type=raw,value=${{ github.sha }}
             type=raw,value=latest
 
       - name: Build and push Docker image
