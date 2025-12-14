@@ -692,8 +692,8 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 				}
 				expiredOfferIDs = expiredIDs
 
-				// Transition project to active phase with winning offer details (including manager from responsible)
-				if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, wonAt); err != nil {
+				// Transition project to active phase with winning offer details (conditionally inherits manager, description, location)
+				if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, offer.Description, offer.Location, wonAt); err != nil {
 					return fmt.Errorf("failed to update project with winning offer: %w", err)
 				}
 
@@ -1021,8 +1021,8 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 		}
 		expiredOfferIDs = expiredIDs
 
-		// 4. Update the project to active phase with winning offer details (value, cost, margin, customer, manager)
-		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, wonAt); err != nil {
+		// 4. Update the project to active phase with winning offer details (conditionally inherits manager, description, location)
+		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, offer.Description, offer.Location, wonAt); err != nil {
 			return fmt.Errorf("failed to update project with winning offer: %w", err)
 		}
 

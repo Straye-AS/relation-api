@@ -178,6 +178,7 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		Invoiced:             project.Invoiced,
 		ManagerID:            project.ManagerID,
 		ManagerName:          project.ManagerName,
+		Location:             project.Location,
 		TeamMembers:          project.TeamMembers,
 		CreatedAt:            project.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:            project.UpdatedAt.Format("2006-01-02T15:04:05Z"),

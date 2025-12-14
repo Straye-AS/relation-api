@@ -495,8 +495,10 @@ func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID
 }
 
 // SetWinningOffer sets the winning offer for a project and transitions it to active phase.
-// Also propagates the offer's customer and responsible user (as project manager) to the project.
-func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, managerID string, managerName string, wonAt time.Time) error {
+// Also conditionally propagates the offer's customer, responsible user, description, and location
+// to the project (only if those fields are not already set on the project).
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, managerID string, managerName string, description string, location string, wonAt time.Time) error {
+	// Start with fields that are always set
 	updates := map[string]interface{}{
 		"phase":                  domain.ProjectPhaseActive,
 		"winning_offer_id":       offerID,
@@ -506,9 +508,29 @@ func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.
 		"cost":                   offerCost,    // Set cost from winning offer (margin_percent auto-calculated by trigger)
 		"customer_id":            customerID,   // Propagate customer from winning offer
 		"customer_name":          customerName, // Propagate customer name from winning offer
-		"manager_id":             managerID,    // Inherit responsible user as project manager
-		"manager_name":           managerName,  // Inherit responsible user name as project manager name
 		"won_at":                 wonAt,
+	}
+
+	// Fetch current project to check which fields are empty
+	var project domain.Project
+	if err := r.db.WithContext(ctx).Where("id = ?", projectID).First(&project).Error; err != nil {
+		return fmt.Errorf("failed to fetch project: %w", err)
+	}
+
+	// Only inherit manager if not already set
+	if project.ManagerID == nil || *project.ManagerID == "" {
+		updates["manager_id"] = managerID
+		updates["manager_name"] = managerName
+	}
+
+	// Only inherit description if not already set
+	if project.Description == "" && description != "" {
+		updates["description"] = description
+	}
+
+	// Only inherit location if not already set
+	if project.Location == "" && location != "" {
+		updates["location"] = location
 	}
 
 	query := r.db.WithContext(ctx).

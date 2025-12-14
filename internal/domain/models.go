@@ -384,6 +384,7 @@ type Project struct {
 	Invoiced                float64        `gorm:"type:decimal(15,2);not null;default:0;column:invoiced"` // Amount invoiced to customer (hittil fakturert)
 	ManagerID               *string        `gorm:"type:varchar(100)"`
 	ManagerName             string         `gorm:"type:varchar(200)"`
+	Location                string         `gorm:"type:varchar(200)"`
 	TeamMembers             pq.StringArray `gorm:"type:text[]"`
 	OfferID                 *uuid.UUID     `gorm:"type:uuid;index"`
 	Offer                   *Offer         `gorm:"foreignKey:OfferID"`

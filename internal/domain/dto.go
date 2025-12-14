@@ -253,6 +253,7 @@ type ProjectDTO struct {
 	Invoiced                float64        `json:"invoiced"` // Amount invoiced to customer (hittil fakturert)
 	ManagerID               *string        `json:"managerId,omitempty"`
 	ManagerName             string         `json:"managerName,omitempty"`
+	Location                string         `json:"location,omitempty"`
 	TeamMembers             []string       `json:"teamMembers,omitempty"`
 	CreatedAt               string         `json:"createdAt"` // ISO 8601
 	UpdatedAt               string         `json:"updatedAt"` // ISO 8601
