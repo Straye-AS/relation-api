@@ -251,6 +251,7 @@ type ProjectDTO struct {
 	MarginPercent           float64        `json:"marginPercent"`
 	Spent                   float64        `json:"spent"`
 	Invoiced                float64        `json:"invoiced"` // Amount invoiced to customer (hittil fakturert)
+	OrderReserve            float64        `json:"orderReserve"` // Calculated: value - invoiced (remaining to invoice)
 	ManagerID               *string        `json:"managerId,omitempty"`
 	ManagerName             string         `json:"managerName,omitempty"`
 	Location                string         `json:"location,omitempty"`

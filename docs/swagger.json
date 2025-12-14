@@ -12152,6 +12152,9 @@
                 "estimatedCompletionDate": {
                     "type": "string"
                 },
+                "externalReference": {
+                    "type": "string"
+                },
                 "hasDetailedBudget": {
                     "type": "boolean"
                 },
@@ -12171,6 +12174,9 @@
                 "isEconomicsEditable": {
                     "type": "boolean"
                 },
+                "location": {
+                    "type": "string"
+                },
                 "managerId": {
                     "type": "string"
                 },
@@ -12185,6 +12191,10 @@
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "orderReserve": {
+                    "description": "Calculated: value - invoiced (remaining to invoice)",
+                    "type": "number"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.ProjectPhase"
@@ -12314,6 +12324,9 @@
                 "estimatedCompletionDate": {
                     "type": "string"
                 },
+                "externalReference": {
+                    "type": "string"
+                },
                 "hasDetailedBudget": {
                     "type": "boolean"
                 },
@@ -12333,6 +12346,9 @@
                 "isEconomicsEditable": {
                     "type": "boolean"
                 },
+                "location": {
+                    "type": "string"
+                },
                 "managerId": {
                     "type": "string"
                 },
@@ -12350,6 +12366,10 @@
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "orderReserve": {
+                    "description": "Calculated: value - invoiced (remaining to invoice)",
+                    "type": "number"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.ProjectPhase"

@@ -12158,6 +12158,9 @@ const docTemplate = `{
                 "estimatedCompletionDate": {
                     "type": "string"
                 },
+                "externalReference": {
+                    "type": "string"
+                },
                 "hasDetailedBudget": {
                     "type": "boolean"
                 },
@@ -12177,6 +12180,9 @@ const docTemplate = `{
                 "isEconomicsEditable": {
                     "type": "boolean"
                 },
+                "location": {
+                    "type": "string"
+                },
                 "managerId": {
                     "type": "string"
                 },
@@ -12191,6 +12197,10 @@ const docTemplate = `{
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "orderReserve": {
+                    "description": "Calculated: value - invoiced (remaining to invoice)",
+                    "type": "number"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.ProjectPhase"
@@ -12320,6 +12330,9 @@ const docTemplate = `{
                 "estimatedCompletionDate": {
                     "type": "string"
                 },
+                "externalReference": {
+                    "type": "string"
+                },
                 "hasDetailedBudget": {
                     "type": "boolean"
                 },
@@ -12339,6 +12352,9 @@ const docTemplate = `{
                 "isEconomicsEditable": {
                     "type": "boolean"
                 },
+                "location": {
+                    "type": "string"
+                },
                 "managerId": {
                     "type": "string"
                 },
@@ -12356,6 +12372,10 @@ const docTemplate = `{
                 },
                 "offerId": {
                     "type": "string"
+                },
+                "orderReserve": {
+                    "description": "Calculated: value - invoiced (remaining to invoice)",
+                    "type": "number"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.ProjectPhase"

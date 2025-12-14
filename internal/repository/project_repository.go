@@ -421,8 +421,8 @@ func (r *ProjectRepository) GetRecentProjects(ctx context.Context, limit int) ([
 
 // DashboardProjectStats holds project statistics for the dashboard
 type DashboardProjectStats struct {
-	OrderReserve  float64 // Sum of (budget - spent) on active projects
-	TotalInvoiced float64 // Sum of "spent" on all projects in the time window
+	OrderReserve  float64 // Sum of order_reserve (value - invoiced) on active projects
+	TotalInvoiced float64 // Sum of invoiced on all projects in the time window
 }
 
 // GetDashboardProjectStats returns project statistics for the dashboard
@@ -430,22 +430,22 @@ type DashboardProjectStats struct {
 func (r *ProjectRepository) GetDashboardProjectStats(ctx context.Context, since *time.Time) (*DashboardProjectStats, error) {
 	stats := &DashboardProjectStats{}
 
-	// Order reserve: sum of (budget - spent) on active projects
+	// Order reserve: sum of order_reserve (value - invoiced) on active projects
 	// Only count projects with phase "working" or "active"
 	reserveQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
 		Where("phase IN (?)", []domain.ProjectPhase{domain.ProjectPhaseWorking, domain.ProjectPhaseActive})
 	reserveQuery = ApplyCompanyFilter(ctx, reserveQuery)
-	if err := reserveQuery.Select("COALESCE(SUM(budget - spent), 0)").Scan(&stats.OrderReserve).Error; err != nil {
+	if err := reserveQuery.Select("COALESCE(SUM(order_reserve), 0)").Scan(&stats.OrderReserve).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate order reserve: %w", err)
 	}
 
-	// Total invoiced: sum of "spent" on all projects in the time window
+	// Total invoiced: sum of invoiced on all projects in the time window
 	invoicedQuery := r.db.WithContext(ctx).Model(&domain.Project{})
 	if since != nil {
 		invoicedQuery = invoicedQuery.Where("created_at >= ?", *since)
 	}
 	invoicedQuery = ApplyCompanyFilter(ctx, invoicedQuery)
-	if err := invoicedQuery.Select("COALESCE(SUM(spent), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
+	if err := invoicedQuery.Select("COALESCE(SUM(invoiced), 0)").Scan(&stats.TotalInvoiced).Error; err != nil {
 		return nil, fmt.Errorf("failed to calculate total invoiced: %w", err)
 	}
 

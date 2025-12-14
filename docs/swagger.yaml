@@ -1799,6 +1799,8 @@ definitions:
         type: string
       estimatedCompletionDate:
         type: string
+      externalReference:
+        type: string
       hasDetailedBudget:
         type: boolean
       health:
@@ -1812,6 +1814,8 @@ definitions:
         type: number
       isEconomicsEditable:
         type: boolean
+      location:
+        type: string
       managerId:
         type: string
       managerName:
@@ -1822,6 +1826,9 @@ definitions:
         type: string
       offerId:
         type: string
+      orderReserve:
+        description: 'Calculated: value - invoiced (remaining to invoice)'
+        type: number
       phase:
         $ref: '#/definitions/domain.ProjectPhase'
       projectNumber:
@@ -1914,6 +1921,8 @@ definitions:
         type: string
       estimatedCompletionDate:
         type: string
+      externalReference:
+        type: string
       hasDetailedBudget:
         type: boolean
       health:
@@ -1927,6 +1936,8 @@ definitions:
         type: number
       isEconomicsEditable:
         type: boolean
+      location:
+        type: string
       managerId:
         type: string
       managerName:
@@ -1939,6 +1950,9 @@ definitions:
         $ref: '#/definitions/domain.OfferDTO'
       offerId:
         type: string
+      orderReserve:
+        description: 'Calculated: value - invoiced (remaining to invoice)'
+        type: number
       phase:
         $ref: '#/definitions/domain.ProjectPhase'
       projectNumber:

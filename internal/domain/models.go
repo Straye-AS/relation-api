@@ -382,6 +382,7 @@ type Project struct {
 	MarginPercent           float64        `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Auto-calculated by DB trigger
 	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
 	Invoiced                float64        `gorm:"type:decimal(15,2);not null;default:0;column:invoiced"` // Amount invoiced to customer (hittil fakturert)
+	OrderReserve            float64        `gorm:"type:decimal(15,2);->"` // Generated column: value - invoiced (read-only)
 	ManagerID               *string        `gorm:"type:varchar(100)"`
 	ManagerName             string         `gorm:"type:varchar(200)"`
 	Location                string         `gorm:"type:varchar(200)"`
