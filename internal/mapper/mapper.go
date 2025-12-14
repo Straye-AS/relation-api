@@ -189,6 +189,7 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 		CompletionPercent:    project.CompletionPercent,
 		WinningOfferID:       project.WinningOfferID,
 		InheritedOfferNumber: project.InheritedOfferNumber,
+		ExternalReference:    project.ExternalReference,
 		CalculatedOfferValue: project.CalculatedOfferValue,
 		IsEconomicsEditable:  phase.IsEditablePhase(),
 		CreatedByID:          project.CreatedByID,

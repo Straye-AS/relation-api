@@ -398,6 +398,7 @@ type Project struct {
 	WinningOfferID       *uuid.UUID `gorm:"type:uuid;index;column:winning_offer_id"`
 	WinningOffer         *Offer     `gorm:"foreignKey:WinningOfferID"`
 	InheritedOfferNumber string     `gorm:"type:varchar(50);column:inherited_offer_number"`
+	ExternalReference    string     `gorm:"type:varchar(100);column:external_reference"`
 	CalculatedOfferValue float64    `gorm:"type:decimal(15,2);default:0;column:calculated_offer_value"`
 	WonAt                *time.Time `gorm:"column:won_at"`
 	// User tracking fields

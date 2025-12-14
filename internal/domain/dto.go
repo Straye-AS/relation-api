@@ -266,6 +266,7 @@ type ProjectDTO struct {
 	// Phase-related fields for offer folder functionality
 	WinningOfferID       *uuid.UUID `json:"winningOfferId,omitempty"`
 	InheritedOfferNumber string     `json:"inheritedOfferNumber,omitempty"`
+	ExternalReference    string     `json:"externalReference,omitempty"`
 	CalculatedOfferValue float64    `json:"calculatedOfferValue"`
 	WonAt                string     `json:"wonAt,omitempty"` // ISO 8601
 	IsEconomicsEditable  bool       `json:"isEconomicsEditable"`

@@ -495,9 +495,9 @@ func (r *ProjectRepository) UpdatePhase(ctx context.Context, projectID uuid.UUID
 }
 
 // SetWinningOffer sets the winning offer for a project and transitions it to active phase.
-// Also conditionally propagates the offer's customer, responsible user, description, and location
-// to the project (only if those fields are not already set on the project).
-func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, managerID string, managerName string, description string, location string, wonAt time.Time) error {
+// Also conditionally propagates the offer's customer, responsible user, description, location,
+// and external reference to the project (only if those fields are not already set on the project).
+func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.UUID, offerID uuid.UUID, inheritedOfferNumber string, offerValue float64, offerCost float64, customerID uuid.UUID, customerName string, managerID string, managerName string, description string, location string, externalReference string, wonAt time.Time) error {
 	// Start with fields that are always set
 	updates := map[string]interface{}{
 		"phase":                  domain.ProjectPhaseActive,
@@ -532,6 +532,11 @@ func (r *ProjectRepository) SetWinningOffer(ctx context.Context, projectID uuid.
 	// Only inherit location if not already set
 	if project.Location == "" && location != "" {
 		updates["location"] = location
+	}
+
+	// Only inherit external reference if not already set
+	if project.ExternalReference == "" && externalReference != "" {
+		updates["external_reference"] = externalReference
 	}
 
 	query := r.db.WithContext(ctx).

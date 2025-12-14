@@ -39,6 +39,7 @@ INSERT INTO projects (
     offer_id,
     project_number,
     inherited_offer_number,
+    external_reference,
     location,
     created_at,
     updated_at
@@ -73,6 +74,7 @@ SELECT
     o.id as offer_id,
     o.offer_number as project_number,          -- Project claims offer's original number
     o.offer_number as inherited_offer_number,  -- Same as project_number
+    o.external_reference as external_reference, -- Inherit external reference from offer
     o.location as location,                    -- Inherit location from offer
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
@@ -103,6 +105,7 @@ WHERE company_id = 'tak'
 --   - phase: 'completed' (61 finished projects) or 'active' (ongoing)
 --   - project_number: offer's original number (e.g., "TK-2023-001")
 --   - inherited_offer_number: same as project_number
+--   - external_reference: inherited from offer
 --   - location: inherited from offer
 --
 -- Won offers updated:

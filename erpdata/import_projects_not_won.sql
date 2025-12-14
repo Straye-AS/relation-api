@@ -31,6 +31,7 @@ INSERT INTO projects (
     manager_id,
     manager_name,
     offer_id,
+    external_reference,
     location,
     created_at,
     updated_at
@@ -54,7 +55,8 @@ SELECT
     NULL as manager_id,
     o.responsible_user_name as manager_name,
     o.id as offer_id,
-    o.location as location,  -- Inherit location from offer
+    o.external_reference as external_reference,  -- Inherit external reference from offer
+    o.location as location,                      -- Inherit location from offer
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 FROM offers o
@@ -80,6 +82,7 @@ WHERE p.offer_id = o.id
 -- Notes:
 --   - No project_number assigned (only won projects get numbers)
 --   - start_date may be NULL if offer had no sent_date
+--   - external_reference inherited from offer
 --   - location inherited from offer
 --   - Bidirectional link: project.offer_id <-> offer.project_id
 --
