@@ -33,8 +33,8 @@ docs/swagger/
 .env.*
 config.local.json
 
-# Local storage/uploads
-storage/
+# Local storage/uploads (root only, not internal/storage package)
+/storage/
 
 # Docker & compose overrides
 docker-compose.override.yml
