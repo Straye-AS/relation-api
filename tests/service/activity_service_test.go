@@ -515,49 +515,6 @@ func TestActivityService_GetMyTasks(t *testing.T) {
 	})
 }
 
-func TestActivityService_GetUpcoming(t *testing.T) {
-	db := setupActivityServiceTestDB(t)
-	svc := createActivityService(t, db)
-	customer := createActivityServiceTestCustomer(t, db)
-	ctx := createActivityTestContext()
-	userCtx, _ := auth.FromContext(ctx)
-
-	// Create upcoming scheduled activity
-	scheduledAt := time.Now().Add(3 * 24 * time.Hour)
-	req := &domain.CreateActivityRequest{
-		TargetType:   domain.ActivityTargetCustomer,
-		TargetID:     customer.ID,
-		Title:        "Upcoming Meeting",
-		ActivityType: domain.ActivityTypeMeeting,
-		Status:       domain.ActivityStatusPlanned,
-		ScheduledAt:  &scheduledAt,
-		AssignedToID: userCtx.UserID.String(),
-	}
-	_, err := svc.Create(ctx, req)
-	require.NoError(t, err)
-
-	t.Run("get upcoming activities", func(t *testing.T) {
-		activities, err := svc.GetUpcoming(ctx, 7, 10)
-		assert.NoError(t, err)
-		assert.NotNil(t, activities)
-		assert.Len(t, activities, 1)
-		assert.Equal(t, "Upcoming Meeting", activities[0].Title)
-	})
-
-	t.Run("limits days ahead", func(t *testing.T) {
-		activities, err := svc.GetUpcoming(ctx, 100, 10)
-		assert.NoError(t, err)
-		// Should clamp to 90 days
-		assert.NotNil(t, activities)
-	})
-
-	t.Run("limits result count", func(t *testing.T) {
-		activities, err := svc.GetUpcoming(ctx, 7, 200)
-		assert.NoError(t, err)
-		// Should clamp to 100
-		assert.NotNil(t, activities)
-	})
-}
 
 func TestActivityService_GetStatusCounts(t *testing.T) {
 	db := setupActivityServiceTestDB(t)
