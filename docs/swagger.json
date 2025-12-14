@@ -10213,6 +10213,13 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "department": {
                     "type": "string"
                 },
@@ -10269,6 +10276,12 @@
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 }
             }
@@ -10938,6 +10951,13 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "creditLimit": {
                     "type": "number"
                 },
@@ -10985,6 +11005,12 @@
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 }
             }
@@ -11124,6 +11150,13 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "creditLimit": {
                     "type": "number"
                 },
@@ -11174,6 +11207,12 @@
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 }
             }
@@ -11585,6 +11624,13 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "customerHasWonProject": {
                     "description": "Whether customer has won their project",
                     "type": "boolean"
@@ -11670,6 +11716,12 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
+                    "type": "string"
+                },
                 "value": {
                     "type": "number"
                 }
@@ -11696,6 +11748,13 @@
                 },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
                     "type": "string"
                 },
                 "customerHasWonProject": {
@@ -11784,6 +11843,12 @@
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 },
                 "value": {
@@ -12061,6 +12126,13 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "customerId": {
                     "type": "string"
                 },
@@ -12140,6 +12212,12 @@
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
+                    "type": "string"
+                },
                 "value": {
                     "type": "number"
                 },
@@ -12205,6 +12283,13 @@
                 },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
                     "type": "string"
                 },
                 "customerId": {
@@ -12296,6 +12381,12 @@
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 },
                 "value": {

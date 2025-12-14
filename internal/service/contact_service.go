@@ -95,6 +95,14 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 		contact.PreferredContactMethod = "email"
 	}
 
+	// Set user tracking fields on creation
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		contact.CreatedByID = userCtx.UserID.String()
+		contact.CreatedByName = userCtx.DisplayName
+		contact.UpdatedByID = userCtx.UserID.String()
+		contact.UpdatedByName = userCtx.DisplayName
+	}
+
 	if err := s.contactRepo.Create(ctx, contact); err != nil {
 		// Check for unique constraint violation on email
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
@@ -197,6 +205,12 @@ func (s *ContactService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 
 	if req.IsActive != nil {
 		contact.IsActive = *req.IsActive
+	}
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		contact.UpdatedByID = userCtx.UserID.String()
+		contact.UpdatedByName = userCtx.DisplayName
 	}
 
 	if err := s.contactRepo.Update(ctx, contact); err != nil {

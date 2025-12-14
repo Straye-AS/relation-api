@@ -10219,6 +10219,13 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "department": {
                     "type": "string"
                 },
@@ -10275,6 +10282,12 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 }
             }
@@ -10944,6 +10957,13 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "creditLimit": {
                     "type": "number"
                 },
@@ -10991,6 +11011,12 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 }
             }
@@ -11130,6 +11156,13 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "creditLimit": {
                     "type": "number"
                 },
@@ -11180,6 +11213,12 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 }
             }
@@ -11591,6 +11630,13 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "customerHasWonProject": {
                     "description": "Whether customer has won their project",
                     "type": "boolean"
@@ -11676,6 +11722,12 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
+                    "type": "string"
+                },
                 "value": {
                     "type": "number"
                 }
@@ -11702,6 +11754,13 @@ const docTemplate = `{
                 },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
                     "type": "string"
                 },
                 "customerHasWonProject": {
@@ -11790,6 +11849,12 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 },
                 "value": {
@@ -12067,6 +12132,13 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
+                    "type": "string"
+                },
                 "customerId": {
                     "type": "string"
                 },
@@ -12146,6 +12218,12 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
+                    "type": "string"
+                },
                 "value": {
                     "type": "number"
                 },
@@ -12211,6 +12289,13 @@ const docTemplate = `{
                 },
                 "createdAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "createdById": {
+                    "description": "User tracking fields",
+                    "type": "string"
+                },
+                "createdByName": {
                     "type": "string"
                 },
                 "customerId": {
@@ -12302,6 +12387,12 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updatedById": {
+                    "type": "string"
+                },
+                "updatedByName": {
                     "type": "string"
                 },
                 "value": {

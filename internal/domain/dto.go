@@ -34,6 +34,11 @@ type CustomerDTO struct {
 	UpdatedAt     string           `json:"updatedAt"` // ISO 8601
 	TotalValue    float64          `json:"totalValue,omitempty"`
 	ActiveOffers  int              `json:"activeOffers,omitempty"`
+	// User tracking fields
+	CreatedByID   string `json:"createdById,omitempty"`
+	CreatedByName string `json:"createdByName,omitempty"`
+	UpdatedByID   string `json:"updatedById,omitempty"`
+	UpdatedByName string `json:"updatedByName,omitempty"`
 }
 
 // CustomerWithDetailsDTO includes customer data with related entities and statistics
@@ -100,6 +105,11 @@ type ContactDTO struct {
 	Relationships          []ContactRelationshipDTO `json:"relationships,omitempty"`
 	CreatedAt              string                   `json:"createdAt"` // ISO 8601
 	UpdatedAt              string                   `json:"updatedAt"` // ISO 8601
+	// User tracking fields
+	CreatedByID   string `json:"createdById,omitempty"`
+	CreatedByName string `json:"createdByName,omitempty"`
+	UpdatedByID   string `json:"updatedById,omitempty"`
+	UpdatedByName string `json:"updatedByName,omitempty"`
 }
 
 type ContactRelationshipDTO struct {
@@ -177,6 +187,11 @@ type OfferDTO struct {
 	SentDate              *string        `json:"sentDate,omitempty"`       // ISO 8601
 	ExpirationDate        *string        `json:"expirationDate,omitempty"` // ISO 8601 - When offer expires (default 60 days after sent)
 	CustomerHasWonProject bool           `json:"customerHasWonProject"`    // Whether customer has won their project
+	// User tracking fields
+	CreatedByID   string `json:"createdById,omitempty"`
+	CreatedByName string `json:"createdByName,omitempty"`
+	UpdatedByID   string `json:"updatedById,omitempty"`
+	UpdatedByName string `json:"updatedByName,omitempty"`
 }
 
 type OfferItemDTO struct {
@@ -253,6 +268,11 @@ type ProjectDTO struct {
 	CalculatedOfferValue float64    `json:"calculatedOfferValue"`
 	WonAt                string     `json:"wonAt,omitempty"` // ISO 8601
 	IsEconomicsEditable  bool       `json:"isEconomicsEditable"`
+	// User tracking fields
+	CreatedByID   string `json:"createdById,omitempty"`
+	CreatedByName string `json:"createdByName,omitempty"`
+	UpdatedByID   string `json:"updatedById,omitempty"`
+	UpdatedByName string `json:"updatedByName,omitempty"`
 }
 
 // Project Actual Cost DTOs

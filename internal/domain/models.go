@@ -112,9 +112,15 @@ type Customer struct {
 	County        string           `gorm:"type:varchar(100)"`
 	CompanyID     *CompanyID       `gorm:"type:varchar(50);column:company_id;index"`
 	Company       *Company         `gorm:"foreignKey:CompanyID"`
-	Contacts      []Contact        `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
-	Projects      []Project        `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
-	Offers        []Offer          `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	// User tracking fields
+	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
+	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
+	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
+	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
+	// Relations
+	Contacts []Contact `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
+	Projects []Project `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	Offers   []Offer   `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
 }
 
 // ContactType represents the classification of a contact
@@ -132,25 +138,31 @@ const (
 // Contact represents an individual person
 type Contact struct {
 	BaseModel
-	FirstName              string                `gorm:"type:varchar(100);not null;column:first_name"`
-	LastName               string                `gorm:"type:varchar(100);not null;column:last_name"`
-	Email                  string                `gorm:"type:varchar(255);uniqueIndex"`
-	Phone                  string                `gorm:"type:varchar(50)"`
-	Mobile                 string                `gorm:"type:varchar(50)"`
-	Title                  string                `gorm:"type:varchar(100)"`
-	Department             string                `gorm:"type:varchar(100)"`
-	ContactType            ContactType           `gorm:"type:varchar(50);not null;default:'primary';column:contact_type;index"`
-	PrimaryCustomerID      *uuid.UUID            `gorm:"type:uuid;column:primary_customer_id"`
-	PrimaryCustomer        *Customer             `gorm:"foreignKey:PrimaryCustomerID"`
-	Address                string                `gorm:"type:varchar(500)"`
-	City                   string                `gorm:"type:varchar(100)"`
-	PostalCode             string                `gorm:"type:varchar(20)"`
-	Country                string                `gorm:"type:varchar(100);default:'Norway'"`
-	LinkedInURL            string                `gorm:"type:varchar(500);column:linkedin_url"`
-	PreferredContactMethod string                `gorm:"type:varchar(50);default:'email';column:preferred_contact_method"`
-	Notes                  string                `gorm:"type:text"`
-	IsActive               bool                  `gorm:"not null;default:true;column:is_active"`
-	Relationships          []ContactRelationship `gorm:"foreignKey:ContactID"`
+	FirstName              string      `gorm:"type:varchar(100);not null;column:first_name"`
+	LastName               string      `gorm:"type:varchar(100);not null;column:last_name"`
+	Email                  string      `gorm:"type:varchar(255);uniqueIndex"`
+	Phone                  string      `gorm:"type:varchar(50)"`
+	Mobile                 string      `gorm:"type:varchar(50)"`
+	Title                  string      `gorm:"type:varchar(100)"`
+	Department             string      `gorm:"type:varchar(100)"`
+	ContactType            ContactType `gorm:"type:varchar(50);not null;default:'primary';column:contact_type;index"`
+	PrimaryCustomerID      *uuid.UUID  `gorm:"type:uuid;column:primary_customer_id"`
+	PrimaryCustomer        *Customer   `gorm:"foreignKey:PrimaryCustomerID"`
+	Address                string      `gorm:"type:varchar(500)"`
+	City                   string      `gorm:"type:varchar(100)"`
+	PostalCode             string      `gorm:"type:varchar(20)"`
+	Country                string      `gorm:"type:varchar(100);default:'Norway'"`
+	LinkedInURL            string      `gorm:"type:varchar(500);column:linkedin_url"`
+	PreferredContactMethod string      `gorm:"type:varchar(50);default:'email';column:preferred_contact_method"`
+	Notes                  string      `gorm:"type:text"`
+	IsActive               bool        `gorm:"not null;default:true;column:is_active"`
+	// User tracking fields
+	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
+	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
+	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
+	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
+	// Relations
+	Relationships []ContactRelationship `gorm:"foreignKey:ContactID"`
 }
 
 // FullName returns the contact's full name
@@ -387,6 +399,11 @@ type Project struct {
 	InheritedOfferNumber string     `gorm:"type:varchar(50);column:inherited_offer_number"`
 	CalculatedOfferValue float64    `gorm:"type:decimal(15,2);default:0;column:calculated_offer_value"`
 	WonAt                *time.Time `gorm:"column:won_at"`
+	// User tracking fields
+	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
+	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
+	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
+	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
 }
 
 // ERPSource represents the source ERP system for cost data
@@ -487,8 +504,14 @@ type Offer struct {
 	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
 	ExpirationDate        *time.Time  `gorm:"type:timestamp;index;column:expiration_date"` // When the offer expires (default: 60 days after sent_date)
 	CustomerHasWonProject bool        `gorm:"not null;default:false;column:customer_has_won_project"`
-	Items                 []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
-	Files                 []File      `gorm:"foreignKey:OfferID"`
+	// User tracking fields
+	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
+	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
+	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
+	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
+	// Relations
+	Items []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
+	Files []File      `gorm:"foreignKey:OfferID"`
 }
 
 // CalculateMarginPercent calculates the dekningsgrad based on value and cost.
