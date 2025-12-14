@@ -2,8 +2,7 @@
 # Shortcut: sc-143
 #
 # This workflow:
-# - Runs tests on every PR and push to main
-# - Builds and pushes Docker image to ACR on push to main
+# - Runs tests, builds, and pushes Docker image to ACR on push to main
 #
 # Required GitHub Secrets:
 # - AZURE_CLIENT_ID: Azure service principal client ID
@@ -15,9 +14,6 @@ name: CI/CD
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
 
@@ -110,13 +106,12 @@ jobs:
           CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o bin/migrate ./cmd/migrate
 
   # =============================================================================
-  # Docker Build & Push - Only on push to main
+  # Docker Build & Push
   # =============================================================================
   docker:
     name: Docker Build & Push
     runs-on: ubuntu-latest
     needs: [build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       id-token: write
       contents: read
