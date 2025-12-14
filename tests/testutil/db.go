@@ -3,6 +3,7 @@ package testutil
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
+)
+
+var (
+	cleanupOnce sync.Once
+	sharedDB    *gorm.DB
+	dbMutex     sync.Mutex
 )
 
 // SetupTestDB creates a connection to the test PostgreSQL database
@@ -40,11 +47,33 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 
 // SetupCleanTestDB creates a connection to the test PostgreSQL database
 // and cleans all test data before returning, ensuring test isolation.
-// Use this when a test needs a completely clean database state.
 func SetupCleanTestDB(t *testing.T) *gorm.DB {
 	db := SetupTestDB(t)
-	CleanupTestData(t, db)
+	cleanupAllTestData(db)
 	return db
+}
+
+// cleanupAllTestData cleans up test data from all tables (internal helper)
+func cleanupAllTestData(db *gorm.DB) {
+	// Delete in order to respect foreign key constraints
+	tables := []string{
+		"deal_stage_history",
+		"deals",
+		"notifications",
+		"activities",
+		"offer_items",
+		"files",
+		"offers",
+		"projects",
+		"contact_relationships",
+		"contacts",
+		"customers",
+		"number_sequences",
+	}
+
+	for _, table := range tables {
+		db.Exec(fmt.Sprintf("DELETE FROM %s WHERE id IS NOT NULL", table))
+	}
 }
 
 // CleanupTestData cleans up test data from all tables

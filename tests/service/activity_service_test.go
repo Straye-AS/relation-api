@@ -18,11 +18,7 @@ import (
 )
 
 func setupActivityServiceTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createActivityServiceTestCustomer(t *testing.T, db *gorm.DB) *domain.Customer {
@@ -427,7 +423,9 @@ func TestActivityService_List(t *testing.T) {
 	}
 
 	t.Run("list all activities", func(t *testing.T) {
-		result, err := svc.List(ctx, nil, 1, 10)
+		// Filter by customer ID to isolate test data
+		filters := &domain.ActivityFilters{TargetID: &customer.ID}
+		result, err := svc.List(ctx, filters, 1, 10)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, int64(5), result.Total)
@@ -435,20 +433,22 @@ func TestActivityService_List(t *testing.T) {
 	})
 
 	t.Run("list with pagination", func(t *testing.T) {
-		result, err := svc.List(ctx, nil, 1, 2)
+		// Filter by customer ID to isolate test data
+		filters := &domain.ActivityFilters{TargetID: &customer.ID}
+		result, err := svc.List(ctx, filters, 1, 2)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(5), result.Total)
 		assert.Len(t, result.Data, 2)
 		assert.Equal(t, 3, result.TotalPages)
 
-		result, err = svc.List(ctx, nil, 2, 2)
+		result, err = svc.List(ctx, filters, 2, 2)
 		assert.NoError(t, err)
 		assert.Len(t, result.Data, 2)
 	})
 
 	t.Run("list with filters", func(t *testing.T) {
 		status := domain.ActivityStatusPlanned
-		filters := &domain.ActivityFilters{Status: &status}
+		filters := &domain.ActivityFilters{Status: &status, TargetID: &customer.ID}
 		result, err := svc.List(ctx, filters, 1, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(5), result.Total)

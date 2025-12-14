@@ -23,11 +23,7 @@ import (
 )
 
 func setupContactHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createContactHandlerTestCustomer(t *testing.T, db *gorm.DB) *domain.Customer {

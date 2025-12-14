@@ -15,11 +15,7 @@ import (
 )
 
 func setupCustomerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func TestCustomerRepository_Create(t *testing.T) {
