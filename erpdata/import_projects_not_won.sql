@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Straye Tak Projects Import: NON-WON Offers
 -- =============================================================================
--- Generated: 2025-12-13 (FIXED)
+-- Generated: 2025-12-14 (UPDATED)
 --
 -- Creates projects from non-won offers:
 --   - 'sent' offers -> phase 'tilbud'
@@ -11,7 +11,7 @@
 -- Note: Non-won projects do NOT get a project_number assigned
 -- (only projects from won offers get numbered)
 --
--- IMPORTANT: Run AFTER import_offers_fixed.sql
+-- IMPORTANT: Run AFTER import_offers.sql
 -- =============================================================================
 
 -- Create projects for non-won offers
@@ -31,6 +31,7 @@ INSERT INTO projects (
     manager_id,
     manager_name,
     offer_id,
+    location,
     created_at,
     updated_at
 )
@@ -53,6 +54,7 @@ SELECT
     NULL as manager_id,
     o.responsible_user_name as manager_name,
     o.id as offer_id,
+    o.location as location,  -- Inherit location from offer
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 FROM offers o
@@ -78,8 +80,9 @@ WHERE p.offer_id = o.id
 -- Notes:
 --   - No project_number assigned (only won projects get numbers)
 --   - start_date may be NULL if offer had no sent_date
+--   - location inherited from offer
 --   - Bidirectional link: project.offer_id <-> offer.project_id
 --
 -- To run:
--- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_not_won_fixed.sql
+-- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_not_won.sql
 -- =============================================================================

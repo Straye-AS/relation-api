@@ -1,30 +1,21 @@
 -- =============================================================================
 -- Straye Tak Projects Import: WON Offers
 -- =============================================================================
--- Generated: 2025-12-13 (FIXED)
+-- Generated: 2025-12-14 (UPDATED for new numbering convention)
 --
 -- Creates projects from won offers:
 --   - phase: 'active'
---   - project_number: generated from sequence (TK-YYYY-PNN)
---   - inherited_offer_number: from winning offer's offer_number
+--   - project_number: from offer's original offer_number (e.g., "TK-2023-001")
+--   - inherited_offer_number: same as project_number
 --
--- IMPORTANT: Run AFTER import_offers_fixed.sql
+-- Also updates won offers to add "W" suffix to their offer_number
+--   - e.g., "TK-2023-001" becomes "TK-2023-001W"
+--
+-- IMPORTANT: Run AFTER import_offers.sql
 -- =============================================================================
 
--- Create projects for won offers with proper number generation
--- Using a CTE to generate sequential project numbers
-WITH numbered_offers AS (
-    SELECT
-        o.*,
-        ROW_NUMBER() OVER (
-            PARTITION BY EXTRACT(YEAR FROM COALESCE(o.sent_date, CURRENT_DATE))
-            ORDER BY o.sent_date, o.id
-        ) as seq_num,
-        EXTRACT(YEAR FROM COALESCE(o.sent_date, CURRENT_DATE))::int as offer_year
-    FROM offers o
-    WHERE o.company_id = 'tak'
-      AND o.phase = 'won'
-)
+-- Step 1: Create projects for won offers
+-- Project claims the offer's original number as project_number
 INSERT INTO projects (
     id,
     name,
@@ -43,6 +34,7 @@ INSERT INTO projects (
     offer_id,
     project_number,
     inherited_offer_number,
+    location,
     created_at,
     updated_at
 )
@@ -62,13 +54,16 @@ SELECT
     NULL as manager_id,
     o.responsible_user_name as manager_name,
     o.id as offer_id,
-    'TK-' || o.offer_year::text || '-P' || LPAD(o.seq_num::text, 3, '0') as project_number,
-    o.offer_number as inherited_offer_number,
+    o.offer_number as project_number,          -- Project claims offer's original number
+    o.offer_number as inherited_offer_number,  -- Same as project_number
+    o.location as location,                    -- Inherit location from offer
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-FROM numbered_offers o;
+FROM offers o
+WHERE o.company_id = 'tak'
+  AND o.phase = 'won';
 
--- Update offers to link back to their projects (also set project_name)
+-- Step 2: Update offers to link back to their projects
 UPDATE offers o
 SET project_id = p.id,
     project_name = p.name
@@ -77,14 +72,30 @@ WHERE p.offer_id = o.id
   AND o.company_id = 'tak'
   AND o.phase = 'won';
 
+-- Step 3: Add "W" suffix to won offer numbers (only if not already suffixed)
+UPDATE offers
+SET offer_number = offer_number || 'W'
+WHERE company_id = 'tak'
+  AND phase = 'won'
+  AND offer_number NOT LIKE '%W';
+
 -- =============================================================================
 -- Summary
 -- =============================================================================
--- Projects created from won offers
---   - All with phase 'active'
---   - project_number = generated (e.g., "TK-2023-P001")
---   - inherited_offer_number = offer's internal number (e.g., "TK-2023-001")
+-- Projects created from won offers:
+--   - phase: 'active'
+--   - project_number: offer's original number (e.g., "TK-2023-001")
+--   - inherited_offer_number: same as project_number
+--   - location: inherited from offer
+--
+-- Won offers updated:
+--   - offer_number: now has "W" suffix (e.g., "TK-2023-001W")
+--   - project_id: linked to created project
+--
+-- Example:
+--   Before: Offer "TK-2023-001" (won)
+--   After:  Offer "TK-2023-001W" -> Project "TK-2023-001"
 --
 -- To run:
--- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_won_fixed.sql
+-- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_won.sql
 -- =============================================================================
