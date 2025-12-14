@@ -1098,6 +1098,13 @@ func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.W
 			"Project activated",
 			fmt.Sprintf("Project activated with winning offer '%s'. %d sibling offer(s) were expired.",
 				offer.Title, len(expiredOfferIDs)))
+
+		// Log activity for each auto-expired offer individually
+		for _, expiredOfferID := range expiredOfferIDs {
+			s.logActivity(ctx, expiredOfferID, "Offer auto-expired",
+				fmt.Sprintf("Offer was auto-expired because offer '%s' (%s) won on project '%s'",
+					offer.Title, offer.OfferNumber, project.Name))
+		}
 	} else {
 		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
 			"Project activated",
@@ -1727,9 +1734,13 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 			return nil, fmt.Errorf("failed to get project: %w", err)
 		}
 
-		// Validate project is not cancelled
+		// Validate project is in tilbud (offer) phase - offers can only be linked to projects in offer phase
+		// This ensures offers cannot be added to projects that have already progressed past the bidding stage
 		if project.Phase == domain.ProjectPhaseCancelled {
 			return nil, ErrCannotAddOfferToCancelledProject
+		}
+		if project.Phase != domain.ProjectPhaseTilbud {
+			return nil, ErrProjectNotInOfferPhase
 		}
 
 		// Validate company match (always required)
@@ -2386,6 +2397,11 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 			return nil, ErrProjectNotFound
 		}
 		return nil, fmt.Errorf("failed to verify project: %w", err)
+	}
+
+	// Only allow linking offers to projects in tilbud (offer) phase
+	if project.Phase != domain.ProjectPhaseTilbud {
+		return nil, ErrProjectNotInOfferPhase
 	}
 
 	if err := s.offerRepo.LinkToProject(ctx, offerID, projectID); err != nil {
