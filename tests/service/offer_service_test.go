@@ -966,3 +966,90 @@ func TestOfferService_OfferNumberRules(t *testing.T) {
 		assert.Empty(t, result.OfferNumber, "cloned offer should not have an offer number (starts as draft)")
 	})
 }
+
+// ============================================================================
+// Phase Transition Tests
+// ============================================================================
+
+func TestOfferService_PhaseTransitions(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("advance from sent to in_progress clears sent-related dates", func(t *testing.T) {
+		// Create a sent offer with sent_date and expiration_date set
+		offer := fixtures.createTestOffer(t, ctx, "Test Sent To InProgress", domain.OfferPhaseSent)
+		sentDate := time.Now().AddDate(0, 0, -5)
+		expirationDate := time.Now().AddDate(0, 1, 0)
+		offer.SentDate = &sentDate
+		offer.ExpirationDate = &expirationDate
+		fixtures.db.Save(offer)
+
+		// Verify dates are set
+		reloaded, _ := fixtures.offerRepo.GetByID(ctx, offer.ID)
+		require.NotNil(t, reloaded.SentDate, "sent_date should be set before test")
+		require.NotNil(t, reloaded.ExpirationDate, "expiration_date should be set before test")
+
+		// Move back to in_progress
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseInProgress,
+		}
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseInProgress, result.Phase)
+
+		// Verify dates are cleared
+		assert.Nil(t, result.SentDate, "sent_date should be cleared when moving back to in_progress")
+		assert.Nil(t, result.ExpirationDate, "expiration_date should be cleared when moving back to in_progress")
+	})
+
+	t.Run("advance from sent to in_progress preserves offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Sent To InProgress Number", domain.OfferPhaseSent)
+		originalNumber := offer.OfferNumber
+		require.NotEmpty(t, originalNumber, "sent offer should have an offer number")
+
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseInProgress,
+		}
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.Equal(t, originalNumber, result.OfferNumber, "offer number should be preserved when moving back to in_progress")
+	})
+
+	t.Run("advance from in_progress to sent is allowed", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test InProgress To Sent", domain.OfferPhaseInProgress)
+
+		req := &domain.AdvanceOfferRequest{
+			Phase: domain.OfferPhaseSent,
+		}
+		result, err := svc.Advance(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseSent, result.Phase)
+	})
+
+	t.Run("cannot advance to terminal phases", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Cannot Advance Terminal", domain.OfferPhaseSent)
+
+		// Cannot advance to won
+		req := &domain.AdvanceOfferRequest{Phase: domain.OfferPhaseWon}
+		_, err := svc.Advance(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrOfferCannotAdvanceToTerminalPhase)
+
+		// Cannot advance to lost
+		req = &domain.AdvanceOfferRequest{Phase: domain.OfferPhaseLost}
+		_, err = svc.Advance(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrOfferCannotAdvanceToTerminalPhase)
+
+		// Cannot advance to expired
+		req = &domain.AdvanceOfferRequest{Phase: domain.OfferPhaseExpired}
+		_, err = svc.Advance(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrOfferCannotAdvanceToTerminalPhase)
+	})
+}

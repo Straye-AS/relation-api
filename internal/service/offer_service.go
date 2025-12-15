@@ -1548,6 +1548,13 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 
 	offer.Phase = req.Phase
 
+	// Clear sent-related dates when moving back to in_progress (e.g., from sent)
+	// These will be set again when the offer is sent
+	if req.Phase == domain.OfferPhaseInProgress && oldPhase == domain.OfferPhaseSent {
+		offer.ExpirationDate = nil
+		offer.SentDate = nil
+	}
+
 	// Validate offer number rules after the phase change
 	if s.isDraftPhase(req.Phase) && offer.OfferNumber != "" {
 		return nil, ErrDraftOfferCannotHaveNumber
