@@ -2,6 +2,8 @@ package service_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -22,7 +24,14 @@ import (
 // Requires a running PostgreSQL database with migrations applied
 
 func setupProjectTestDB(t *testing.T) *gorm.DB {
-	dsn := "host=localhost port=5432 user=postgres password=postgres dbname=relation_test sslmode=disable"
+	host := getEnvOrDefaultProject("DATABASE_HOST", "localhost")
+	port := getEnvOrDefaultProject("DATABASE_PORT", "5433")
+	user := getEnvOrDefaultProject("DATABASE_USER", "relation_user")
+	password := getEnvOrDefaultProject("DATABASE_PASSWORD", "relation_password")
+	dbname := getEnvOrDefaultProject("DATABASE_NAME", "relation_test")
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -30,6 +39,13 @@ func setupProjectTestDB(t *testing.T) *gorm.DB {
 		t.Skipf("Skipping integration test: database not available: %v", err)
 	}
 	return db
+}
+
+func getEnvOrDefaultProject(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService, *projectTestFixtures) {

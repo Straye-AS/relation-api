@@ -1,0 +1,38 @@
+version: "3.8"
+
+# Separate test database that runs on port 5433
+# This ensures tests don't interfere with development data
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: relation-postgres-test
+    environment:
+      POSTGRES_DB: relation_test
+      POSTGRES_USER: relation_user
+      POSTGRES_PASSWORD: relation_password
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data  # Use tmpfs for faster tests, data is ephemeral
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relation_user -d relation_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    container_name: relation-migrate-test
+    environment:
+      DATABASE_HOST: postgres-test
+      DATABASE_PORT: 5432
+      DATABASE_NAME: relation_test
+      DATABASE_USER: relation_user
+      DATABASE_PASSWORD: relation_password
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    restart: "no"
