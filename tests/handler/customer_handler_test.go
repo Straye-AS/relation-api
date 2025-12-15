@@ -23,12 +23,7 @@ import (
 )
 
 func setupCustomerHandlerTestDB(t *testing.T) *gorm.DB {
-	// Use clean DB to ensure test isolation for handler tests
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {

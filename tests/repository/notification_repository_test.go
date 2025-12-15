@@ -15,11 +15,7 @@ import (
 )
 
 func setupNotificationTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createTestNotification(t *testing.T, db *gorm.DB, userID uuid.UUID, read bool) *domain.Notification {

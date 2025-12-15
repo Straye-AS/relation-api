@@ -14,11 +14,7 @@ import (
 )
 
 func setupContactTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createTestContact(t *testing.T, db *gorm.DB, firstName, lastName, email string) *domain.Contact {
@@ -154,25 +150,32 @@ func TestContactRepository_List(t *testing.T) {
 	db := setupContactTestDB(t)
 	repo := repository.NewContactRepository(db)
 
-	// Create test contacts
-	createTestContact(t, db, "Alice", "Anderson", "alice@example.com")
-	createTestContact(t, db, "Bob", "Brown", "bob@example.com")
-	createTestContact(t, db, "Charlie", "Clark", "charlie@example.com")
+	// Use unique prefix to isolate test data
+	uniquePrefix := "list-" + uuid.New().String()[:8]
+
+	// Create test contacts with unique emails
+	createTestContact(t, db, "Alice"+uniquePrefix, "Anderson", uniquePrefix+".alice@example.com")
+	createTestContact(t, db, "Bob"+uniquePrefix, "Brown", uniquePrefix+".bob@example.com")
+	createTestContact(t, db, "Charlie"+uniquePrefix, "Clark", uniquePrefix+".charlie@example.com")
 
 	t.Run("list all active contacts", func(t *testing.T) {
-		contacts, total, err := repo.List(context.Background(), 1, 10)
+		// Filter by unique prefix to isolate test data
+		filters := &repository.ContactFilters{Search: uniquePrefix}
+		contacts, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.ContactSortByNameAsc)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, contacts, 3)
 	})
 
 	t.Run("pagination", func(t *testing.T) {
-		contacts, total, err := repo.List(context.Background(), 1, 2)
+		// Filter by unique prefix to isolate test data
+		filters := &repository.ContactFilters{Search: uniquePrefix}
+		contacts, total, err := repo.ListWithFilters(context.Background(), 1, 2, filters, repository.ContactSortByNameAsc)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, contacts, 2)
 
-		contacts, total, err = repo.List(context.Background(), 2, 2)
+		contacts, total, err = repo.ListWithFilters(context.Background(), 2, 2, filters, repository.ContactSortByNameAsc)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, contacts, 1)
@@ -281,33 +284,42 @@ func TestContactRepository_ListSorting(t *testing.T) {
 	db := setupContactTestDB(t)
 	repo := repository.NewContactRepository(db)
 
-	// Create contacts
-	createTestContact(t, db, "Charlie", "Zoo", "charlie@example.com")
-	createTestContact(t, db, "Alice", "Anderson", "alice@example.com")
-	createTestContact(t, db, "Bob", "Baker", "bob@example.com")
+	// Use unique prefix to isolate test data
+	uniquePrefix := "sort-" + uuid.New().String()[:8]
+
+	// Create contacts with unique names for sorting test
+	createTestContact(t, db, "Charlie"+uniquePrefix, "Zoo"+uniquePrefix, uniquePrefix+".charlie@example.com")
+	createTestContact(t, db, "Alice"+uniquePrefix, "Anderson"+uniquePrefix, uniquePrefix+".alice@example.com")
+	createTestContact(t, db, "Bob"+uniquePrefix, "Baker"+uniquePrefix, uniquePrefix+".bob@example.com")
+
+	// Filter by unique prefix to isolate test data
+	filters := &repository.ContactFilters{Search: uniquePrefix}
 
 	t.Run("sort by name ascending", func(t *testing.T) {
-		contacts, _, err := repo.ListWithFilters(context.Background(), 1, 10, nil, repository.ContactSortByNameAsc)
+		contacts, _, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.ContactSortByNameAsc)
 		assert.NoError(t, err)
-		assert.Equal(t, "Anderson", contacts[0].LastName)
-		assert.Equal(t, "Baker", contacts[1].LastName)
-		assert.Equal(t, "Zoo", contacts[2].LastName)
+		require.Len(t, contacts, 3)
+		assert.Equal(t, "Anderson"+uniquePrefix, contacts[0].LastName)
+		assert.Equal(t, "Baker"+uniquePrefix, contacts[1].LastName)
+		assert.Equal(t, "Zoo"+uniquePrefix, contacts[2].LastName)
 	})
 
 	t.Run("sort by name descending", func(t *testing.T) {
-		contacts, _, err := repo.ListWithFilters(context.Background(), 1, 10, nil, repository.ContactSortByNameDesc)
+		contacts, _, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.ContactSortByNameDesc)
 		assert.NoError(t, err)
-		assert.Equal(t, "Zoo", contacts[0].LastName)
-		assert.Equal(t, "Baker", contacts[1].LastName)
-		assert.Equal(t, "Anderson", contacts[2].LastName)
+		require.Len(t, contacts, 3)
+		assert.Equal(t, "Zoo"+uniquePrefix, contacts[0].LastName)
+		assert.Equal(t, "Baker"+uniquePrefix, contacts[1].LastName)
+		assert.Equal(t, "Anderson"+uniquePrefix, contacts[2].LastName)
 	})
 
 	t.Run("sort by email ascending", func(t *testing.T) {
-		contacts, _, err := repo.ListWithFilters(context.Background(), 1, 10, nil, repository.ContactSortByEmailAsc)
+		contacts, _, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.ContactSortByEmailAsc)
 		assert.NoError(t, err)
-		assert.Equal(t, "alice@example.com", contacts[0].Email)
-		assert.Equal(t, "bob@example.com", contacts[1].Email)
-		assert.Equal(t, "charlie@example.com", contacts[2].Email)
+		require.Len(t, contacts, 3)
+		assert.Equal(t, uniquePrefix+".alice@example.com", contacts[0].Email)
+		assert.Equal(t, uniquePrefix+".bob@example.com", contacts[1].Email)
+		assert.Equal(t, uniquePrefix+".charlie@example.com", contacts[2].Email)
 	})
 }
 
@@ -348,39 +360,42 @@ func TestContactRepository_Search(t *testing.T) {
 	db := setupContactTestDB(t)
 	repo := repository.NewContactRepository(db)
 
-	createTestContact(t, db, "John", "Doe", "john.doe@example.com")
-	createTestContact(t, db, "Jane", "Doe", "jane.doe@example.com")
-	createTestContact(t, db, "Bob", "Smith", "bob.smith@example.com")
+	// Use unique prefix to isolate test data
+	uniquePrefix := "srch-" + uuid.New().String()[:8]
+
+	createTestContact(t, db, "John"+uniquePrefix, "Doe"+uniquePrefix, uniquePrefix+".john.doe@example.com")
+	createTestContact(t, db, "Jane"+uniquePrefix, "Doe"+uniquePrefix, uniquePrefix+".jane.doe@example.com")
+	createTestContact(t, db, "Bob"+uniquePrefix, "Smith"+uniquePrefix, uniquePrefix+".bob.smith@example.com")
 
 	t.Run("search by last name", func(t *testing.T) {
-		contacts, err := repo.Search(context.Background(), "doe", 10)
+		contacts, err := repo.Search(context.Background(), "Doe"+uniquePrefix, 10)
 		assert.NoError(t, err)
 		assert.Len(t, contacts, 2)
 	})
 
 	t.Run("search by first name", func(t *testing.T) {
-		contacts, err := repo.Search(context.Background(), "john", 10)
+		contacts, err := repo.Search(context.Background(), "John"+uniquePrefix, 10)
 		assert.NoError(t, err)
 		assert.Len(t, contacts, 1)
-		assert.Equal(t, "John", contacts[0].FirstName)
+		assert.Equal(t, "John"+uniquePrefix, contacts[0].FirstName)
 	})
 
 	t.Run("search by full name", func(t *testing.T) {
-		contacts, err := repo.Search(context.Background(), "jane doe", 10)
+		contacts, err := repo.Search(context.Background(), "Jane"+uniquePrefix+" Doe"+uniquePrefix, 10)
 		assert.NoError(t, err)
 		assert.Len(t, contacts, 1)
-		assert.Equal(t, "Jane", contacts[0].FirstName)
+		assert.Equal(t, "Jane"+uniquePrefix, contacts[0].FirstName)
 	})
 
 	t.Run("search by email", func(t *testing.T) {
-		contacts, err := repo.Search(context.Background(), "bob.smith", 10)
+		contacts, err := repo.Search(context.Background(), uniquePrefix+".bob.smith", 10)
 		assert.NoError(t, err)
 		assert.Len(t, contacts, 1)
-		assert.Equal(t, "Bob", contacts[0].FirstName)
+		assert.Equal(t, "Bob"+uniquePrefix, contacts[0].FirstName)
 	})
 
 	t.Run("search with limit", func(t *testing.T) {
-		contacts, err := repo.Search(context.Background(), "doe", 1)
+		contacts, err := repo.Search(context.Background(), "Doe"+uniquePrefix, 1)
 		assert.NoError(t, err)
 		assert.Len(t, contacts, 1)
 	})
@@ -677,10 +692,12 @@ func TestContactRepository_EmptyFilters(t *testing.T) {
 	db := setupContactTestDB(t)
 	repo := repository.NewContactRepository(db)
 
-	createTestContact(t, db, "Empty", "Filter", "empty.filter@example.com")
+	// Use unique prefix to isolate test data
+	uniquePrefix := "empty-" + uuid.New().String()[:8]
+	createTestContact(t, db, "Empty"+uniquePrefix, "Filter", uniquePrefix+".empty.filter@example.com")
 
-	// Empty filter struct should work the same as nil
-	filters := &repository.ContactFilters{}
+	// Filter by unique prefix to isolate test data
+	filters := &repository.ContactFilters{Search: uniquePrefix}
 	contacts, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.ContactSortByNameAsc)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), total)

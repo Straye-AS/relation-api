@@ -17,11 +17,7 @@ import (
 )
 
 func setupNotificationServiceTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createNotificationService(db *gorm.DB) *service.NotificationService {

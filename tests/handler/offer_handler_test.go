@@ -25,11 +25,7 @@ import (
 )
 
 func setupOfferHandlerTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {

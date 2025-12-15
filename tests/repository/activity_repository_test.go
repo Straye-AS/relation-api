@@ -15,11 +15,7 @@ import (
 )
 
 func setupActivityTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createActivityTestCustomer(t *testing.T, db *gorm.DB) *domain.Customer {
@@ -201,15 +197,18 @@ func TestActivityRepository_List(t *testing.T) {
 	}
 
 	t.Run("list all activities", func(t *testing.T) {
-		result, total, err := repo.List(context.Background(), 1, 10, nil, nil)
+		// Filter by customer ID to isolate test data from other tests
+		targetType := domain.ActivityTargetCustomer
+		result, total, err := repo.List(context.Background(), 1, 10, &targetType, &customer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, result, 3)
 	})
 
 	t.Run("list with target type filter", func(t *testing.T) {
+		// Filter by customer ID to isolate test data from other tests
 		targetType := domain.ActivityTargetCustomer
-		result, total, err := repo.List(context.Background(), 1, 10, &targetType, nil)
+		result, total, err := repo.List(context.Background(), 1, 10, &targetType, &customer.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, result, 3)
@@ -293,7 +292,7 @@ func TestActivityRepository_GetMyTasks(t *testing.T) {
 	repo := repository.NewActivityRepository(db)
 	customer := createActivityTestCustomer(t, db)
 
-	userID := "user-123"
+	userID := "user-repo-getmytasks-" + uuid.New().String()[:8]
 
 	// Create tasks with different statuses for the user
 	tasksToCreate := []struct {
@@ -475,7 +474,7 @@ func TestActivityRepository_ListWithFilters(t *testing.T) {
 
 	t.Run("filter by activity type", func(t *testing.T) {
 		activityType := domain.ActivityTypeTask
-		filters := &domain.ActivityFilters{ActivityType: &activityType}
+		filters := &domain.ActivityFilters{ActivityType: &activityType, TargetID: &customer.ID}
 		result, total, err := repo.ListWithFilters(context.Background(), filters, 1, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(2), total)
@@ -484,7 +483,7 @@ func TestActivityRepository_ListWithFilters(t *testing.T) {
 
 	t.Run("filter by status", func(t *testing.T) {
 		status := domain.ActivityStatusPlanned
-		filters := &domain.ActivityFilters{Status: &status}
+		filters := &domain.ActivityFilters{Status: &status, TargetID: &customer.ID}
 		result, total, err := repo.ListWithFilters(context.Background(), filters, 1, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
@@ -493,7 +492,7 @@ func TestActivityRepository_ListWithFilters(t *testing.T) {
 
 	t.Run("filter by assigned user", func(t *testing.T) {
 		assignedTo := "user-1"
-		filters := &domain.ActivityFilters{AssignedToID: &assignedTo}
+		filters := &domain.ActivityFilters{AssignedToID: &assignedTo, TargetID: &customer.ID}
 		result, total, err := repo.ListWithFilters(context.Background(), filters, 1, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
@@ -502,7 +501,7 @@ func TestActivityRepository_ListWithFilters(t *testing.T) {
 
 	t.Run("filter by private flag", func(t *testing.T) {
 		isPrivate := true
-		filters := &domain.ActivityFilters{IsPrivate: &isPrivate}
+		filters := &domain.ActivityFilters{IsPrivate: &isPrivate, TargetID: &customer.ID}
 		result, total, err := repo.ListWithFilters(context.Background(), filters, 1, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(1), total)
@@ -511,7 +510,7 @@ func TestActivityRepository_ListWithFilters(t *testing.T) {
 
 	t.Run("filter by priority", func(t *testing.T) {
 		priority := 2
-		filters := &domain.ActivityFilters{Priority: &priority}
+		filters := &domain.ActivityFilters{Priority: &priority, TargetID: &customer.ID}
 		result, total, err := repo.ListWithFilters(context.Background(), filters, 1, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(2), total)
@@ -524,6 +523,7 @@ func TestActivityRepository_ListWithFilters(t *testing.T) {
 		filters := &domain.ActivityFilters{
 			ActivityType: &activityType,
 			Status:       &status,
+			TargetID:     &customer.ID,
 		}
 		result, total, err := repo.ListWithFilters(context.Background(), filters, 1, 10)
 		assert.NoError(t, err)
@@ -537,7 +537,7 @@ func TestActivityRepository_CountByStatus(t *testing.T) {
 	repo := repository.NewActivityRepository(db)
 	customer := createActivityTestCustomer(t, db)
 
-	userID := "user-count"
+	userID := "user-repo-countbystatus-" + uuid.New().String()[:8]
 
 	// Create activities with different statuses
 	statusCounts := map[domain.ActivityStatus]int{

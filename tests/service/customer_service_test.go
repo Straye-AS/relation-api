@@ -20,11 +20,7 @@ import (
 )
 
 func setupCustomerServiceTestDB(t *testing.T) *gorm.DB {
-	db := testutil.SetupCleanTestDB(t)
-	t.Cleanup(func() {
-		testutil.CleanupTestData(t, db)
-	})
-	return db
+	return testutil.SetupCleanTestDB(t)
 }
 
 func createCustomerService(db *gorm.DB) *service.CustomerService {
