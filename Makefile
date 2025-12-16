@@ -1,4 +1,4 @@
-.PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed
+.PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed test-db-up test-db-down test-db-reset
 
 GO ?= go
 BIN_DIR ?= bin
@@ -32,16 +32,16 @@ api: run ## Alias for `make run`
 test: ## Run fast unit tests (no database required)
 	$(GO) test -v -race -cover ./tests/auth ./tests/mapper
 
-test-all: ## Run all tests including integration tests
+test-all: ## Run all tests including integration tests (uses test database on port 5433)
 	$(GO) test -v -race -cover ./tests/auth ./tests/mapper
-	$(GO) test -v -p 1 -cover ./tests/repository ./tests/service ./tests/handler ./tests/middleware
+	DATABASE_PORT=5433 DATABASE_NAME=relation_test $(GO) test -v -p 1 -cover ./tests/repository ./tests/service ./tests/handler ./tests/middleware
 
 test-coverage: ## Run tests with coverage report
 	$(GO) test -v -race -coverprofile=coverage.out ./tests/auth ./tests/mapper
 	$(GO) tool cover -html=coverage.out -o coverage.html
 
-test-integration: ## Run integration tests (requires database)
-	$(GO) test -v -p 1 -cover ./tests/repository ./tests/service
+test-integration: ## Run integration tests (uses test database on port 5433)
+	DATABASE_PORT=5433 DATABASE_NAME=relation_test $(GO) test -v -p 1 -cover ./tests/repository ./tests/service
 
 lint: ## Run linters
 	golangci-lint run ./...
@@ -97,5 +97,22 @@ seed: ## Load seed data (LOCAL DEVELOPMENT ONLY - will not run in staging/produc
 	@echo "Loading seed data into local database..."
 	PGPASSWORD=relation_password psql -h localhost -U relation_user -d relation -f testdata/seed.sql
 	@echo "Seed data loaded successfully!"
+
+# Test Database Management (separate from development database)
+test-db-up: ## Start test database (PostgreSQL on port 5433)
+	docker compose -f docker-compose.test.yml up -d
+	@echo "Waiting for test database to be ready..."
+	@sleep 3
+	@echo "Test database is running on port 5433"
+
+test-db-down: ## Stop test database
+	docker compose -f docker-compose.test.yml down
+
+test-db-reset: ## Reset test database (stop, remove volume, start fresh)
+	docker compose -f docker-compose.test.yml down -v
+	docker compose -f docker-compose.test.yml up -d
+	@echo "Waiting for test database to be ready..."
+	@sleep 3
+	@echo "Test database has been reset"
 
 .DEFAULT_GOAL := help
