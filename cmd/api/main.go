@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/straye-as/relation-api/docs"
+	"github.com/straye-as/relation-api/docs"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
@@ -77,6 +77,16 @@ func run() error {
 		zap.String("env", basicCfg.App.Environment),
 		zap.Int("port", basicCfg.App.Port),
 	)
+
+	// Configure Swagger host based on environment
+	switch basicCfg.App.Environment {
+	case "staging":
+		docs.SwaggerInfo.Host = "straye-relation-staging.proudsmoke-10281cc0.norwayeast.azurecontainerapps.io"
+	case "production":
+		docs.SwaggerInfo.Host = "api.straye.no" // TODO: Update when production URL is known
+	default:
+		docs.SwaggerInfo.Host = fmt.Sprintf("localhost:%d", basicCfg.App.Port)
+	}
 
 	// Load full configuration with secrets
 	// In development: uses environment variables

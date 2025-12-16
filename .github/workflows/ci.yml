@@ -305,7 +305,7 @@ jobs:
 
           # Update secrets first (for sensitive values)
           az containerapp secret set \
-            --name straye-relation-api-staging \
+            --name straye-relation-staging \
             --resource-group rg-straye-dev \
             --secrets \
               "azure-client-id=${{ secrets.AZURE_CLIENT_ID }}" \
@@ -313,7 +313,7 @@ jobs:
 
           # Update container with image and env vars
           az containerapp update \
-            --name straye-relation-api-staging \
+            --name straye-relation-staging \
             --resource-group rg-straye-dev \
             --image ${{ steps.acr.outputs.host }}/relation-api:${{ github.sha }} \
             --set-env-vars \
@@ -330,7 +330,7 @@ jobs:
         run: |
           echo "=== Verifying deployment ==="
           az containerapp show \
-            --name straye-relation-api-staging \
+            --name straye-relation-staging \
             --resource-group rg-straye-dev \
             --query "{name:name, image:properties.template.containers[0].image, provisioningState:properties.provisioningState}" \
             --output table
@@ -338,7 +338,7 @@ jobs:
           echo ""
           echo "=== Container App URL ==="
           az containerapp show \
-            --name straye-relation-api-staging \
+            --name straye-relation-staging \
             --resource-group rg-straye-dev \
             --query "properties.configuration.ingress.fqdn" \
             --output tsv
