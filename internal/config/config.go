@@ -3,7 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
-	"strconv"
+	"os"
 	"strings"
 	"time"
 
@@ -222,12 +222,21 @@ func Load() (*Config, error) {
 		cfg.AzureAd.ClientSecret = v.GetString("AZUREAD_CLIENTSECRET")
 	}
 
+	// Load Azure Key Vault name from environment if not in config
+	if cfg.Secrets.KeyVaultName == "" {
+		cfg.Secrets.KeyVaultName = v.GetString("AZURE_KEY_VAULT_NAME")
+	}
+
 	return &cfg, nil
 }
 
 // LoadWithSecrets loads configuration and resolves secrets from the configured source
 // In development (or when secrets.source = "environment"), secrets come from env vars
 // In staging/production (or when secrets.source = "vault"), secrets come from Azure Key Vault
+//
+// Key Vault is only used when BOTH conditions are met:
+// 1. USE_AZURE_KEY_VAULT environment variable is set to "true"
+// 2. Environment is "staging" or "production"
 func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 	// First load basic config
 	cfg, err := Load()
@@ -235,19 +244,40 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		return nil, err
 	}
 
-	// Determine secret source
-	source := secrets.SecretSource(cfg.Secrets.Source)
-	if source == "" {
-		source = secrets.SourceAuto
-	}
+	// Check if Azure Key Vault should be used
+	// Requires both USE_AZURE_KEY_VAULT=true AND environment is staging/production
+	useKeyVault := strings.ToLower(os.Getenv("USE_AZURE_KEY_VAULT")) == "true"
+	isValidEnv := cfg.App.Environment == "staging" || cfg.App.Environment == "production"
 
-	// If using environment source directly, we're done (secrets already loaded via viper)
-	if source == secrets.SourceEnvironment {
-		logger.Info("Using environment variables for secrets")
+	if !useKeyVault {
+		logger.Info("USE_AZURE_KEY_VAULT not enabled, using environment variables for secrets",
+			zap.String("environment", cfg.App.Environment),
+		)
 		return cfg, nil
 	}
 
-	// For auto or vault source, initialize the provider
+	if !isValidEnv {
+		logger.Warn("USE_AZURE_KEY_VAULT is enabled but environment is not staging or production, using environment variables",
+			zap.String("environment", cfg.App.Environment),
+			zap.Bool("use_key_vault", useKeyVault),
+		)
+		return cfg, nil
+	}
+
+	// Validate Key Vault name is provided
+	if cfg.Secrets.KeyVaultName == "" {
+		return nil, fmt.Errorf("AZURE_KEY_VAULT_NAME is required when USE_AZURE_KEY_VAULT=true")
+	}
+
+	logger.Info("Azure Key Vault enabled for secrets",
+		zap.String("environment", cfg.App.Environment),
+		zap.String("key_vault_name", cfg.Secrets.KeyVaultName),
+	)
+
+	// Determine secret source - force vault when USE_AZURE_KEY_VAULT is true
+	source := secrets.SourceVault
+
+	// For vault source, initialize the provider
 	provider, err := secrets.NewProvider(&secrets.ProviderConfig{
 		Source:       source,
 		VaultName:    cfg.Secrets.KeyVaultName,
@@ -256,44 +286,38 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		CacheTTL:     time.Duration(cfg.Secrets.CacheTTL) * time.Second,
 	}, logger)
 	if err != nil {
-		// If vault initialization fails in non-development, return error
-		if cfg.App.Environment != "development" && cfg.App.Environment != "local" && cfg.App.Environment != "" {
-			return nil, fmt.Errorf("failed to initialize secrets provider: %w", err)
-		}
-		// In development, fall back to environment variables
-		logger.Warn("Failed to initialize vault, falling back to environment variables",
-			zap.Error(err),
-		)
-		return cfg, nil
+		return nil, fmt.Errorf("failed to initialize secrets provider (USE_AZURE_KEY_VAULT=true requires valid vault): %w", err)
 	}
 
-	// If provider is using environment source (auto-detected), we're done
+	// Verify vault is enabled (should always be true at this point)
 	if !provider.IsVaultEnabled() {
-		logger.Info("Secrets provider using environment variables")
-		return cfg, nil
+		return nil, fmt.Errorf("vault provider not enabled despite USE_AZURE_KEY_VAULT=true")
 	}
 
 	// Load secrets from vault
 	logger.Info("Loading secrets from Azure Key Vault")
 
-	// Database secrets - use vault secret names, allow env override
-	// Vault secret naming convention: lowercase-kebab-case
-	if host, err := provider.GetSecretOrEnv(ctx, "database-host", "DATABASE_HOST"); err == nil && host != "" {
+	// Database secrets from Key Vault
+	// Host, User, Password come from vault; Port and Database name are environment-specific
+	if host, err := provider.GetSecretOrEnv(ctx, "POSTGRES-MAIN-HOST", "DATABASE_HOST"); err == nil && host != "" {
 		cfg.Database.Host = host
 	}
-	if portStr, err := provider.GetSecretOrEnv(ctx, "database-port", "DATABASE_PORT"); err == nil && portStr != "" {
-		if port, err := strconv.Atoi(portStr); err == nil {
-			cfg.Database.Port = port
-		}
+	// Database name from DEFAULT_DATABASE env var (not in vault - varies per environment)
+	if defaultDB := os.Getenv("DEFAULT_DATABASE"); defaultDB != "" {
+		cfg.Database.Name = defaultDB
+		logger.Info("Using DEFAULT_DATABASE environment variable for database name",
+			zap.String("database", defaultDB),
+		)
 	}
-	if name, err := provider.GetSecretOrEnv(ctx, "database-name", "DATABASE_NAME"); err == nil && name != "" {
-		cfg.Database.Name = name
-	}
-	if user, err := provider.GetSecretOrEnv(ctx, "database-user", "DATABASE_USER"); err == nil && user != "" {
+	if user, err := provider.GetSecretOrEnv(ctx, "POSTGRES-MAIN-USER", "DATABASE_USER"); err == nil && user != "" {
 		cfg.Database.User = user
 	}
-	if password, err := provider.GetSecretOrEnv(ctx, "database-password", "DATABASE_PASSWORD"); err == nil && password != "" {
+	if password, err := provider.GetSecretOrEnv(ctx, "POSTGRES-MAIN-PASSWORD", "DATABASE_PASSWORD"); err == nil && password != "" {
 		cfg.Database.Password = password
+	}
+	// SSL mode from env var (Azure PostgreSQL requires "require")
+	if sslMode := os.Getenv("DATABASE_SSLMODE"); sslMode != "" {
+		cfg.Database.SSLMode = sslMode
 	}
 
 	// Azure AD secrets
