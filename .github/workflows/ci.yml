@@ -68,6 +68,22 @@ jobs:
           DATABASE_PASSWORD: relation_password
         run: go run ./cmd/migrate up
 
+      - name: Seed test database with required data
+        env:
+          PGPASSWORD: relation_password
+        run: |
+          # Seed companies (required for foreign key constraints)
+          psql -h localhost -U relation_user -d relation_test -c "
+            INSERT INTO companies (id, name, short_name, org_number, color, is_active, created_at, updated_at) VALUES
+            ('gruppen', 'Straye Gruppen AS', 'Gruppen', '999000001', '#1a1a2e', true, NOW(), NOW()),
+            ('stalbygg', 'Straye Stalbygg AS', 'Stalbygg', '999000002', '#e94560', true, NOW(), NOW()),
+            ('hybridbygg', 'Straye Hybridbygg AS', 'Hybridbygg', '999000003', '#0f3460', true, NOW(), NOW()),
+            ('industri', 'Straye Industri AS', 'Industri', '999000004', '#16213e', true, NOW(), NOW()),
+            ('tak', 'Straye Tak AS', 'Tak', '999000005', '#533483', true, NOW(), NOW()),
+            ('montasje', 'Straye Montasje AS', 'Montasje', '999000006', '#e07c24', true, NOW(), NOW())
+            ON CONFLICT (id) DO NOTHING;
+          "
+
       - name: Run tests
         env:
           DATABASE_HOST: localhost
