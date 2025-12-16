@@ -1,7 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Note: gen_random_uuid() is built into PostgreSQL 14+, no extension needed
 -- Create customers table
 CREATE TABLE customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
