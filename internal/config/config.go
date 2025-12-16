@@ -213,13 +213,16 @@ func Load() (*Config, error) {
 
 	// Load Azure AD config from environment if not in config
 	if cfg.AzureAd.TenantId == "" {
-		cfg.AzureAd.TenantId = v.GetString("AZUREAD_TENANTID")
+		cfg.AzureAd.TenantId = v.GetString("AZURE_TENANT_ID")
 	}
 	if cfg.AzureAd.ClientId == "" {
-		cfg.AzureAd.ClientId = v.GetString("AZUREAD_CLIENTID")
+		cfg.AzureAd.ClientId = v.GetString("AZURE_CLIENT_ID")
 	}
 	if cfg.AzureAd.ClientSecret == "" {
-		cfg.AzureAd.ClientSecret = v.GetString("AZUREAD_CLIENTSECRET")
+		cfg.AzureAd.ClientSecret = v.GetString("AZURE_CLIENT_SECRET")
+	}
+	if cfg.AzureAd.RequiredScopes == "" {
+		cfg.AzureAd.RequiredScopes = v.GetString("AZURE_REQUIRED_SCOPES")
 	}
 
 	// Load Azure Key Vault name from environment if not in config
@@ -321,10 +324,10 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 	}
 
 	// Azure AD secrets
-	if tenantId, err := provider.GetSecretOrEnv(ctx, "azuread-tenant-id", "AZUREAD_TENANTID"); err == nil && tenantId != "" {
+	if tenantId, err := provider.GetSecretOrEnv(ctx, "azure-tenant-id", "AZURE_TENANT_ID"); err == nil && tenantId != "" {
 		cfg.AzureAd.TenantId = tenantId
 	}
-	if clientId, err := provider.GetSecretOrEnv(ctx, "azuread-client-id", "AZUREAD_CLIENTID"); err == nil && clientId != "" {
+	if clientId, err := provider.GetSecretOrEnv(ctx, "azure-client-id", "AZURE__CLIENT_ID"); err == nil && clientId != "" {
 		cfg.AzureAd.ClientId = clientId
 	}
 

@@ -103,9 +103,10 @@ DATABASE_USER=relation_user
 DATABASE_PASSWORD=relation_password
 
 # Authentication
-AZUREAD_TENANTID=your-tenant-id
-AZUREAD_CLIENTID=your-client-id
-AZUREAD_REQUIREDSCOPES=api://relation-api/access
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_ID=your-client-id
+AZURE_CLIENT_SECRET=your-client-secret
+AZURE_REQUIRED_SCOPES=api://relation-api/access
 ADMIN_API_KEY=your-secret-api-key
 
 # Storage
