@@ -126,7 +126,7 @@ HTTP Request → Handler → Service → Repository → Database
 
 Hierarchy: Default values in config.go → config.json → Environment variables (highest priority)
 
-Environment variables use underscore: `DATABASE_HOST`, `AZUREAD_TENANTID`, `ADMIN_API_KEY`
+Environment variables use underscore: `DATABASE_HOST`, `AZURE_TENANT_ID`, `ADMIN_API_KEY`
 
 ## Database Migrations
 
