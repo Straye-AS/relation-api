@@ -8,6 +8,7 @@
 #
 # Required GitHub Secrets:
 # - AZURE_CLIENT_ID: Azure service principal client ID
+# - AZURE_CLIENT_SECRET: Azure service principal client secret (for Container App)
 # - AZURE_TENANT_ID: Azure AD tenant ID
 # - AZURE_SUBSCRIPTION_ID: Azure subscription ID
 #
@@ -302,6 +303,15 @@ jobs:
           echo "=== Deploying to staging ==="
           echo "Image: ${{ steps.acr.outputs.host }}/relation-api:${{ github.sha }}"
 
+          # Update secrets first (for sensitive values)
+          az containerapp secret set \
+            --name straye-relation-api-staging \
+            --resource-group rg-straye-dev \
+            --secrets \
+              "azure-client-id=${{ secrets.AZURE_CLIENT_ID }}" \
+              "azure-client-secret=${{ secrets.AZURE_CLIENT_SECRET }}"
+
+          # Update container with image and env vars
           az containerapp update \
             --name straye-relation-api-staging \
             --resource-group rg-straye-dev \
@@ -313,7 +323,8 @@ jobs:
               "DEFAULT_DATABASE=relation" \
               "DATABASE_SSLMODE=require" \
               "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" \
-              "AZURE_CLIENT_ID=secretref:azure-client-id"
+              "AZURE_CLIENT_ID=secretref:azure-client-id" \
+              "AZURE_CLIENT_SECRET=secretref:azure-client-secret"
 
       - name: Verify deployment
         run: |
