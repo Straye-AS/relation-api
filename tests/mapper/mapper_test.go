@@ -31,7 +31,7 @@ func TestToCustomerDTO(t *testing.T) {
 		ContactPhone:  "+1234567890",
 	}
 
-	dto := mapper.ToCustomerDTO(customer, 0.0, 0)
+	dto := mapper.ToCustomerDTO(customer, 0.0, 0.0, 0)
 
 	assert.Equal(t, customer.ID, dto.ID)
 	assert.Equal(t, customer.Name, dto.Name)
@@ -79,34 +79,39 @@ func TestToContactDTO(t *testing.T) {
 	assert.True(t, dto.IsActive)
 }
 
+// TestToProjectBudgetDTO verifies that the deprecated ToProjectBudgetDTO function
+// returns zeros since Project no longer has economic fields (moved to Offer)
 func TestToProjectBudgetDTO(t *testing.T) {
 	project := &domain.Project{
-		Value:         100000,
-		Cost:          60000,
-		MarginPercent: 40.0,
-		Spent:         25000,
+		BaseModel: domain.BaseModel{
+			ID: uuid.New(),
+		},
+		Name: "Test Project",
 	}
 
 	dto := mapper.ToProjectBudgetDTO(project)
 
-	assert.Equal(t, 100000.0, dto.Value)
-	assert.Equal(t, 60000.0, dto.Cost)
-	assert.Equal(t, 40.0, dto.MarginPercent)
-	assert.Equal(t, 25000.0, dto.Spent)
-	assert.Equal(t, 75000.0, dto.Remaining)        // Value - Spent = 100000 - 25000
-	assert.InDelta(t, 25.0, dto.PercentUsed, 0.01) // Spent/Value * 100 = 25000/100000 * 100
+	// Project no longer has economic fields - function returns zeros
+	assert.Equal(t, 0.0, dto.Value)
+	assert.Equal(t, 0.0, dto.Cost)
+	assert.Equal(t, 0.0, dto.MarginPercent)
+	assert.Equal(t, 0.0, dto.Spent)
+	assert.Equal(t, 0.0, dto.Remaining)
+	assert.Equal(t, 0.0, dto.PercentUsed)
 }
 
-func TestToProjectBudgetDTO_ZeroBudget(t *testing.T) {
+// TestToProjectBudgetDTO_ReturnsZeros confirms the deprecated function always returns zeros
+func TestToProjectBudgetDTO_ReturnsZeros(t *testing.T) {
 	project := &domain.Project{
-		Value:         0,
-		Cost:          0,
-		MarginPercent: 0,
-		Spent:         0,
+		BaseModel: domain.BaseModel{
+			ID: uuid.New(),
+		},
+		Name: "Another Project",
 	}
 
 	dto := mapper.ToProjectBudgetDTO(project)
 
+	// All economic fields should be zero since they've moved to Offer
 	assert.Equal(t, 0.0, dto.Value)
 	assert.Equal(t, 0.0, dto.Cost)
 	assert.Equal(t, 0.0, dto.MarginPercent)
@@ -235,4 +240,188 @@ func TestToActivityDTO_EmptyAttendees(t *testing.T) {
 
 	assert.Empty(t, dto.Attendees)
 	assert.Nil(t, dto.ParentActivityID)
+}
+
+// ============================================================================
+// ToOfferDTO Tests with Order Phase Fields
+// ============================================================================
+
+func TestToOfferDTO_BasicFields(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:         "Test Offer",
+		OfferNumber:   "SB-2024-001",
+		CustomerID:    customerID,
+		CustomerName:  "Test Customer",
+		CompanyID:     domain.CompanyStalbygg,
+		Phase:         domain.OfferPhaseSent,
+		Probability:   75,
+		Value:         100000,
+		Cost:          80000,
+		MarginPercent: 20,
+		Status:        domain.OfferStatusActive,
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	assert.Equal(t, offer.ID, dto.ID)
+	assert.Equal(t, "Test Offer", dto.Title)
+	assert.Equal(t, "SB-2024-001", dto.OfferNumber)
+	assert.Equal(t, customerID, dto.CustomerID)
+	assert.Equal(t, "Test Customer", dto.CustomerName)
+	assert.Equal(t, domain.CompanyStalbygg, dto.CompanyID)
+	assert.Equal(t, domain.OfferPhaseSent, dto.Phase)
+	assert.Equal(t, 75, dto.Probability)
+	assert.Equal(t, 100000.0, dto.Value)
+	assert.Equal(t, 80000.0, dto.Cost)
+	assert.Equal(t, 20000.0, dto.Margin) // Value - Cost
+	assert.Equal(t, 20.0, dto.MarginPercent)
+}
+
+func TestToOfferDTO_WithOrderPhaseFields(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+	managerID := "manager-uuid-123"
+	startDate := now.AddDate(0, -1, 0) // 1 month ago
+	endDate := now.AddDate(0, 1, 0)    // 1 month from now
+	estimatedCompletion := now.AddDate(0, 0, 15)
+	health := domain.OfferHealthAtRisk
+	completionPct := 65.5
+
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:        "Order Phase Offer",
+		OfferNumber:  "SB-2024-002O",
+		CustomerID:   customerID,
+		CustomerName: "Test Customer",
+		CompanyID:    domain.CompanyStalbygg,
+		Phase:        domain.OfferPhaseOrder,
+		Value:        150000,
+		Cost:         120000,
+		Status:       domain.OfferStatusActive,
+		// Order phase execution fields
+		ManagerID:               &managerID,
+		ManagerName:             "John Manager",
+		TeamMembers:             []string{"user-1", "user-2", "user-3"},
+		Spent:                   50000,
+		Invoiced:                75000,
+		Health:                  &health,
+		CompletionPercent:       &completionPct,
+		StartDate:               &startDate,
+		EndDate:                 &endDate,
+		EstimatedCompletionDate: &estimatedCompletion,
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	// Basic fields
+	assert.Equal(t, offer.ID, dto.ID)
+	assert.Equal(t, domain.OfferPhaseOrder, dto.Phase)
+	assert.Equal(t, "SB-2024-002O", dto.OfferNumber)
+
+	// Order phase execution fields
+	assert.NotNil(t, dto.ManagerID)
+	assert.Equal(t, "manager-uuid-123", *dto.ManagerID)
+	assert.Equal(t, "John Manager", dto.ManagerName)
+	assert.Len(t, dto.TeamMembers, 3)
+	assert.Contains(t, dto.TeamMembers, "user-1")
+	assert.Contains(t, dto.TeamMembers, "user-2")
+	assert.Contains(t, dto.TeamMembers, "user-3")
+	assert.Equal(t, 50000.0, dto.Spent)
+	assert.Equal(t, 75000.0, dto.Invoiced)
+
+	// Health and completion
+	assert.NotNil(t, dto.Health)
+	assert.Equal(t, "at_risk", *dto.Health)
+	assert.NotNil(t, dto.CompletionPercent)
+	assert.Equal(t, 65.5, *dto.CompletionPercent)
+
+	// Dates
+	assert.NotNil(t, dto.StartDate)
+	assert.NotNil(t, dto.EndDate)
+	assert.NotNil(t, dto.EstimatedCompletionDate)
+}
+
+func TestToOfferDTO_WithNilOrderPhaseFields(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	// Draft offer without order phase fields
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:        "Draft Offer",
+		CustomerID:   customerID,
+		CustomerName: "Test Customer",
+		CompanyID:    domain.CompanyStalbygg,
+		Phase:        domain.OfferPhaseDraft,
+		Value:        50000,
+		Status:       domain.OfferStatusActive,
+		// All order phase fields are nil/zero
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	assert.Equal(t, domain.OfferPhaseDraft, dto.Phase)
+	assert.Nil(t, dto.ManagerID)
+	assert.Empty(t, dto.ManagerName)
+	assert.Empty(t, dto.TeamMembers)
+	assert.Equal(t, 0.0, dto.Spent)
+	assert.Equal(t, 0.0, dto.Invoiced)
+	assert.Nil(t, dto.Health)
+	assert.Nil(t, dto.CompletionPercent)
+	assert.Nil(t, dto.StartDate)
+	assert.Nil(t, dto.EndDate)
+	assert.Nil(t, dto.EstimatedCompletionDate)
+}
+
+func TestToOfferDTO_AllHealthStatuses(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name           string
+		health         domain.OfferHealth
+		expectedString string
+	}{
+		{"on_track", domain.OfferHealthOnTrack, "on_track"},
+		{"at_risk", domain.OfferHealthAtRisk, "at_risk"},
+		{"delayed", domain.OfferHealthDelayed, "delayed"},
+		{"over_budget", domain.OfferHealthOverBudget, "over_budget"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			offer := &domain.Offer{
+				BaseModel: domain.BaseModel{
+					ID:        uuid.New(),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				Title:     "Test Offer",
+				Phase:     domain.OfferPhaseOrder,
+				CompanyID: domain.CompanyStalbygg,
+				Health:    &tc.health,
+				Status:    domain.OfferStatusActive,
+			}
+
+			dto := mapper.ToOfferDTO(offer)
+
+			assert.NotNil(t, dto.Health)
+			assert.Equal(t, tc.expectedString, *dto.Health)
+		})
+	}
 }

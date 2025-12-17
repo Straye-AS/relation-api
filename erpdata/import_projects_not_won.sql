@@ -1,90 +1,120 @@
 -- =============================================================================
--- Straye Tak Projects Import: NON-WON Offers
+-- Straye Tak Projects Import: NON-CLOSED Offers
 -- =============================================================================
--- Generated: 2025-12-14 (UPDATED)
+-- Generated: 2025-12-17
 --
--- Creates projects from non-won offers:
---   - 'sent' offers -> phase 'tilbud'
---   - 'in_progress' offers -> phase 'tilbud'
---   - 'lost' offers -> phase 'cancelled'
+-- Creates projects from non-closed offers:
+--   - 'in_progress' offers -> project phase 'tilbud'
+--   - 'sent' offers -> project phase 'tilbud'
+--   - 'order' offers -> project phase 'working'
 --
--- Note: Non-won projects do NOT get a project_number assigned
--- (only projects from won offers get numbered)
+-- Closed offers (completed, lost, expired) do NOT get projects.
+--
+-- Project numbers: "PROJECT-YYYY-NNN" format, shared across all companies
+-- Numbers are assigned based on offer sent_date (earliest first).
 --
 -- IMPORTANT: Run AFTER import_offers.sql
 -- =============================================================================
 
--- Create projects for non-won offers
+-- Create projects for non-closed offers with sequential project numbers
+-- Projects are numbered by year based on offer sent_date
+WITH numbered_offers AS (
+    SELECT
+        o.id as offer_id,
+        o.title,
+        o.description,
+        o.customer_id,
+        o.customer_name,
+        o.phase as offer_phase,
+        o.sent_date,
+        o.location,
+        o.external_reference,
+        EXTRACT(YEAR FROM COALESCE(o.sent_date, CURRENT_DATE))::int as offer_year,
+        ROW_NUMBER() OVER (
+            PARTITION BY EXTRACT(YEAR FROM COALESCE(o.sent_date, CURRENT_DATE))
+            ORDER BY o.sent_date NULLS LAST, o.external_reference
+        ) as seq_in_year
+    FROM offers o
+    WHERE o.company_id = 'tak'
+      AND o.phase IN ('in_progress', 'sent', 'order')
+      AND o.project_id IS NULL
+)
 INSERT INTO projects (
     id,
     name,
+    project_number,
     summary,
     description,
     customer_id,
     customer_name,
-    company_id,
     phase,
     start_date,
-    value,
-    cost,
-    spent,
-    manager_id,
-    manager_name,
-    offer_id,
-    external_reference,
     location,
+    external_reference,
     created_at,
     updated_at
 )
 SELECT
     gen_random_uuid() as id,
-    o.title as name,
-    'Prosjekt fra tilbud: ' || o.title as summary,
-    o.description,
-    o.customer_id,
-    o.customer_name,
-    o.company_id,
+    no.title as name,
+    'PROJECT-' || no.offer_year || '-' || LPAD(no.seq_in_year::text, 3, '0') as project_number,
+    'Prosjekt fra tilbud: ' || no.title as summary,
+    COALESCE(no.description, '') as description,
+    no.customer_id,
+    no.customer_name,
     CASE
-        WHEN o.phase = 'lost' THEN 'cancelled'::project_phase
+        WHEN no.offer_phase = 'order' THEN 'working'::project_phase
         ELSE 'tilbud'::project_phase
     END as phase,
-    o.sent_date::date as start_date,
-    o.value as value,
-    o.cost as cost,
-    0 as spent,
-    NULL as manager_id,
-    o.responsible_user_name as manager_name,
-    o.id as offer_id,
-    o.external_reference as external_reference,  -- Inherit external reference from offer
-    o.location as location,                      -- Inherit location from offer
+    COALESCE(no.sent_date::date, CURRENT_DATE) as start_date,
+    no.location,
+    no.external_reference,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
-FROM offers o
-WHERE o.company_id = 'tak'
-  AND o.phase IN ('sent', 'in_progress', 'lost');
+FROM numbered_offers no;
 
--- Update offers to link back to their projects (also set project_name)
+-- Disable trigger to preserve original updated_at values during import
+ALTER TABLE offers DISABLE TRIGGER update_offers_updated_at;
+
+-- Update offers to link back to their projects
+-- Match by external_reference + customer_id + title
 UPDATE offers o
 SET project_id = p.id,
     project_name = p.name
 FROM projects p
-WHERE p.offer_id = o.id
+WHERE p.external_reference = o.external_reference
+  AND p.customer_id = o.customer_id
+  AND p.name = o.title
   AND o.company_id = 'tak'
-  AND o.phase IN ('sent', 'in_progress', 'lost');
+  AND o.phase IN ('in_progress', 'sent', 'order')
+  AND o.project_id IS NULL;
+
+-- Re-enable trigger for normal operation
+ALTER TABLE offers ENABLE TRIGGER update_offers_updated_at;
 
 -- =============================================================================
 -- Summary
 -- =============================================================================
--- Projects created from non-won offers:
---   - tilbud: from sent + in_progress offers
---   - cancelled: from lost offers
+-- Projects created from non-closed offers:
+--   - tilbud: from in_progress + sent offers
+--   - working: from order offers (active work)
+--
+-- Project numbers:
+--   - Format: PROJECT-YYYY-NNN (e.g., PROJECT-2024-001)
+--   - Shared across ALL companies (not company-specific)
+--   - Numbered sequentially per year based on sent_date
 --
 -- Notes:
---   - No project_number assigned (only won projects get numbers)
---   - start_date may be NULL if offer had no sent_date
---   - external_reference inherited from offer
---   - location inherited from offer
---   - Bidirectional link: project.offer_id <-> offer.project_id
+--   - Projects are simplified folders (no value/cost/spent/manager fields)
+--   - All economics tracking is on the Offer itself
+--   - external_reference and location inherited from offer
+--   - Linked via offer.project_id
+--
+-- Phase breakdown from import_offers.sql:
+--   - in_progress: 11 offers -> tilbud projects
+--   - sent: 265 offers -> tilbud projects
+--   - order: 32 offers -> working projects
+--   - Total: 308 projects created
 --
 -- To run:
 -- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_not_won.sql

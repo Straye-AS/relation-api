@@ -30,10 +30,11 @@ type CustomerDTO struct {
 	IsInternal    bool             `json:"isInternal"`
 	Municipality  string           `json:"municipality,omitempty"`
 	County        string           `json:"county,omitempty"`
-	CreatedAt     string           `json:"createdAt"` // ISO 8601
-	UpdatedAt     string           `json:"updatedAt"` // ISO 8601
-	TotalValue    float64          `json:"totalValue,omitempty"`
-	ActiveOffers  int              `json:"activeOffers,omitempty"`
+	CreatedAt        string           `json:"createdAt"` // ISO 8601
+	UpdatedAt        string           `json:"updatedAt"` // ISO 8601
+	TotalValueActive float64          `json:"totalValueActive,omitempty"` // Value of offers in in_progress or sent phases
+	TotalValueWon    float64          `json:"totalValueWon,omitempty"`    // Value of offers in order or completed phases
+	ActiveOffers     int              `json:"activeOffers,omitempty"`
 	// User tracking fields
 	CreatedByID   string `json:"createdById,omitempty"`
 	CreatedByName string `json:"createdByName,omitempty"`
@@ -52,11 +53,16 @@ type CustomerWithDetailsDTO struct {
 
 // CustomerStatsDTO holds aggregated statistics for a customer
 type CustomerStatsDTO struct {
-	TotalValue     float64 `json:"totalValue"`
-	ActiveOffers   int     `json:"activeOffers"`
-	ActiveDeals    int     `json:"activeDeals"`
-	ActiveProjects int     `json:"activeProjects"`
-	TotalContacts  int     `json:"totalContacts"`
+	TotalValueActive float64 `json:"totalValueActive"` // Value of offers in order phase (active orders)
+	TotalValueWon    float64 `json:"totalValueWon"`    // Value of offers in order or completed phases
+	WorkingOffers    int     `json:"workingOffers"`    // Count of offers in in_progress or sent phases
+	ActiveOffers     int     `json:"activeOffers"`     // Count of offers in order phase (active orders)
+	CompletedOffers  int     `json:"completedOffers"`  // Count of offers in completed phase
+	TotalOffers      int     `json:"totalOffers"`
+	ActiveDeals      int     `json:"activeDeals"`
+	ActiveProjects   int     `json:"activeProjects"`
+	TotalProjects    int     `json:"totalProjects"`
+	TotalContacts    int     `json:"totalContacts"`
 }
 
 // ErrorResponse represents an API error response
@@ -187,6 +193,18 @@ type OfferDTO struct {
 	SentDate              *string        `json:"sentDate,omitempty"`       // ISO 8601
 	ExpirationDate        *string        `json:"expirationDate,omitempty"` // ISO 8601 - When offer expires (default 60 days after sent)
 	CustomerHasWonProject bool           `json:"customerHasWonProject"`    // Whether customer has won their project
+	// Order phase execution fields (used when phase = "order" or "completed")
+	ManagerID               *string  `json:"managerId,omitempty"`
+	ManagerName             string   `json:"managerName,omitempty"`
+	TeamMembers             []string `json:"teamMembers,omitempty"`
+	Spent                   float64  `json:"spent"`                             // Actual costs incurred
+	Invoiced                float64  `json:"invoiced"`                          // Amount invoiced to customer
+	OrderReserve            float64  `json:"orderReserve"`                      // Generated column: value - invoiced (read-only)
+	Health                  *string  `json:"health,omitempty"`                  // Health status during execution
+	CompletionPercent       *float64 `json:"completionPercent,omitempty"`       // 0-100 progress indicator
+	StartDate               *string  `json:"startDate,omitempty"`               // ISO 8601 - When work started
+	EndDate                 *string  `json:"endDate,omitempty"`                 // ISO 8601 - Planned end date
+	EstimatedCompletionDate *string  `json:"estimatedCompletionDate,omitempty"` // ISO 8601 - Current estimate for completion
 	// User tracking fields
 	CreatedByID   string `json:"createdById,omitempty"`
 	CreatedByName string `json:"createdByName,omitempty"`
@@ -234,43 +252,25 @@ type BudgetSummaryDTO struct {
 	ItemCount     int              `json:"itemCount"`
 }
 
+// ProjectDTO represents a simplified project container for offers.
+// Economic tracking (value, cost, spent, invoiced) has moved to OfferDTO.
 type ProjectDTO struct {
-	ID                      uuid.UUID      `json:"id"`
-	Name                    string         `json:"name"`
-	ProjectNumber           string         `json:"projectNumber,omitempty"`
-	Summary                 string         `json:"summary,omitempty"`
-	Description             string         `json:"description,omitempty"`
-	CustomerID              uuid.UUID      `json:"customerId"`
-	CustomerName            string         `json:"customerName,omitempty"`
-	CompanyID               CompanyID      `json:"companyId"`
-	Phase                   ProjectPhase   `json:"phase"`
-	StartDate               string         `json:"startDate,omitempty"` // ISO 8601
-	EndDate                 string         `json:"endDate,omitempty"`   // ISO 8601
-	Value                   float64        `json:"value"`
-	Cost                    float64        `json:"cost"`
-	MarginPercent           float64        `json:"marginPercent"`
-	Spent                   float64        `json:"spent"`
-	Invoiced                float64        `json:"invoiced"` // Amount invoiced to customer (hittil fakturert)
-	OrderReserve            float64        `json:"orderReserve"` // Calculated: value - invoiced (remaining to invoice)
-	ManagerID               *string        `json:"managerId,omitempty"`
-	ManagerName             string         `json:"managerName,omitempty"`
-	Location                string         `json:"location,omitempty"`
-	TeamMembers             []string       `json:"teamMembers,omitempty"`
-	CreatedAt               string         `json:"createdAt"` // ISO 8601
-	UpdatedAt               string         `json:"updatedAt"` // ISO 8601
-	OfferID                 *uuid.UUID     `json:"offerId,omitempty"`
-	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
-	HasDetailedBudget       bool           `json:"hasDetailedBudget"`
-	Health                  *ProjectHealth `json:"health,omitempty"`
-	CompletionPercent       *float64       `json:"completionPercent,omitempty"`
-	EstimatedCompletionDate string         `json:"estimatedCompletionDate,omitempty"`
-	// Phase-related fields for offer folder functionality
-	WinningOfferID       *uuid.UUID `json:"winningOfferId,omitempty"`
-	InheritedOfferNumber string     `json:"inheritedOfferNumber,omitempty"`
-	ExternalReference    string     `json:"externalReference,omitempty"`
-	CalculatedOfferValue float64    `json:"calculatedOfferValue"`
-	WonAt                string     `json:"wonAt,omitempty"` // ISO 8601
-	IsEconomicsEditable  bool       `json:"isEconomicsEditable"`
+	ID                uuid.UUID    `json:"id"`
+	Name              string       `json:"name"`
+	ProjectNumber     string       `json:"projectNumber,omitempty"`
+	Summary           string       `json:"summary,omitempty"`
+	Description       string       `json:"description,omitempty"`
+	CustomerID        *uuid.UUID   `json:"customerId,omitempty"` // Optional - projects can be cross-company
+	CustomerName      string       `json:"customerName,omitempty"`
+	Phase             ProjectPhase `json:"phase"`
+	StartDate         string       `json:"startDate,omitempty"` // ISO 8601
+	EndDate           string       `json:"endDate,omitempty"`   // ISO 8601
+	Location          string       `json:"location,omitempty"`
+	DealID            *uuid.UUID   `json:"dealId,omitempty"`
+	ExternalReference string       `json:"externalReference,omitempty"`
+	OfferCount        int          `json:"offerCount"`  // Count of offers linked to this project
+	CreatedAt         string       `json:"createdAt"`   // ISO 8601
+	UpdatedAt         string       `json:"updatedAt"`   // ISO 8601
 	// User tracking fields
 	CreatedByID   string `json:"createdById,omitempty"`
 	CreatedByName string `json:"createdByName,omitempty"`
@@ -415,16 +415,24 @@ const (
 	TimeRangeRolling12Months TimeRange = "rolling12months"
 	// TimeRangeAllTime calculates metrics without any date filter
 	TimeRangeAllTime TimeRange = "allTime"
+	// TimeRangeCustom is used when fromDate/toDate are provided
+	TimeRangeCustom TimeRange = "custom"
 )
 
 // IsValid checks if the TimeRange value is valid
 func (t TimeRange) IsValid() bool {
 	switch t {
-	case TimeRangeRolling12Months, TimeRangeAllTime:
+	case TimeRangeRolling12Months, TimeRangeAllTime, TimeRangeCustom:
 		return true
 	default:
 		return false
 	}
+}
+
+// DateRangeFilter represents a custom date range for filtering dashboard metrics
+type DateRangeFilter struct {
+	FromDate *time.Time `json:"fromDate,omitempty"` // Start of date range (00:00:00)
+	ToDate   *time.Time `json:"toDate,omitempty"`   // End of date range (23:59:59)
 }
 
 type DisciplineStats struct {
@@ -465,18 +473,27 @@ type WinRateMetrics struct {
 	EconomicWinRate float64 `json:"economicWinRate"` // won_value / (won_value + lost_value), 0-1 scale
 }
 
-// TopCustomerDTO represents a customer with offer statistics for the dashboard
+// HealthDistribution holds count of offers by health status (for order phase offers)
+type HealthDistribution struct {
+	OnTrack    int `json:"onTrack"`    // Offers on track
+	AtRisk     int `json:"atRisk"`     // Offers at risk
+	Delayed    int `json:"delayed"`    // Delayed offers
+	OverBudget int `json:"overBudget"` // Over budget offers
+}
+
+// TopCustomerDTO represents a customer with won offer statistics for the dashboard
 type TopCustomerDTO struct {
 	ID            uuid.UUID `json:"id"`
 	Name          string    `json:"name"`
 	OrgNumber     string    `json:"orgNumber,omitempty"`
-	OfferCount    int       `json:"offerCount"`
-	EconomicValue float64   `json:"economicValue"` // Total value of their offers
+	WonOfferCount int       `json:"wonOfferCount"` // Count of offers in order or completed phases
+	WonOfferValue float64   `json:"wonOfferValue"` // Total value of won offers (order + completed)
 }
 
 // DashboardMetrics contains all metrics for the dashboard
 // By default, metrics use a rolling 12-month window from the current date.
 // When timeRange is "allTime", metrics are calculated without any date filter.
+// When timeRange is "custom", fromDate and toDate define the range.
 // Drafts and expired offers are excluded from all calculations.
 //
 // IMPORTANT: Pipeline metrics use aggregation to avoid double-counting.
@@ -484,7 +501,11 @@ type TopCustomerDTO struct {
 // Orphan offers (without project) are included at full value.
 type DashboardMetrics struct {
 	// TimeRange indicates the time range used for the metrics
-	TimeRange TimeRange `json:"timeRange"` // "rolling12months" (default) or "allTime"
+	TimeRange TimeRange `json:"timeRange"` // "rolling12months" (default), "allTime", or "custom"
+	// FromDate is set when using custom date range (start of range, 00:00:00)
+	FromDate *string `json:"fromDate,omitempty"` // ISO 8601 format
+	// ToDate is set when using custom date range (end of range, 23:59:59)
+	ToDate *string `json:"toDate,omitempty"` // ISO 8601 format
 
 	// Offer Metrics (excluding drafts and expired)
 	TotalOfferCount      int     `json:"totalOfferCount"`      // Count of offers excluding drafts and expired
@@ -500,20 +521,27 @@ type DashboardMetrics struct {
 	// Win Rate Metrics
 	WinRateMetrics WinRateMetrics `json:"winRateMetrics"`
 
-	// Order Reserve (from active projects)
-	OrderReserve float64 `json:"orderReserve"` // Sum of (budget - spent) on active projects
+	// Order Metrics (from offers in order and completed phases)
+	// Execution tracking has moved from projects to offers
+	ActiveOrderCount     int                `json:"activeOrderCount"`     // Count of offers in order phase
+	CompletedOrderCount  int                `json:"completedOrderCount"`  // Count of offers in completed phase
+	OrderValue           float64            `json:"orderValue"`           // Total value of offers in order phase
+	OrderReserve         float64            `json:"orderReserve"`         // Sum of (value - invoiced) for order phase offers
+	TotalInvoiced        float64            `json:"totalInvoiced"`        // Sum of invoiced for order phase offers
+	TotalSpent           float64            `json:"totalSpent"`           // Sum of spent for order phase offers
+	HealthDistribution   HealthDistribution `json:"healthDistribution"`   // Count of order phase offers by health status
+	AverageOrderProgress float64            `json:"averageOrderProgress"` // Average completion_percent for order phase offers
 
 	// Financial Summary
-	TotalInvoiced float64 `json:"totalInvoiced"` // Sum of "spent" on all projects in time range
-	TotalValue    float64 `json:"totalValue"`    // orderReserve + totalInvoiced
+	TotalValue float64 `json:"totalValue"` // orderReserve + totalInvoiced
 
 	// Recent Lists (limit 5 each)
-	RecentOffers     []OfferDTO    `json:"recentOffers"`     // Last created offers (excluding drafts)
-	RecentProjects   []ProjectDTO  `json:"recentProjects"`   // Last created projects
+	RecentOffers     []OfferDTO    `json:"recentOffers"`     // Offers in in_progress phase (Siste tilbud), sorted by updated_at DESC
+	RecentOrders     []OfferDTO    `json:"recentOrders"`     // Offers in order phase (Siste ordre), sorted by updated_at DESC
 	RecentActivities []ActivityDTO `json:"recentActivities"` // Last activities
 
 	// Top Customers (limit 5)
-	TopCustomers []TopCustomerDTO `json:"topCustomers"` // Ranked by offer count
+	TopCustomers []TopCustomerDTO `json:"topCustomers"` // Ranked by won offer count and value (order + completed phases)
 }
 
 // Search DTOs
@@ -680,47 +708,36 @@ type LoseDealRequest struct {
 	Notes  string             `json:"notes" validate:"required,min=10,max=500" example:"Lost to competitor XYZ who offered lower price"`
 }
 
+// CreateProjectRequest is simplified since projects are now containers for offers.
+// Economic tracking has moved to offers.
 type CreateProjectRequest struct {
-	Name                    string         `json:"name" validate:"required,max=200"`
-	ProjectNumber           string         `json:"projectNumber,omitempty" validate:"max=50"`
-	Summary                 string         `json:"summary,omitempty"`
-	Description             string         `json:"description,omitempty"`
-	CustomerID              uuid.UUID      `json:"customerId" validate:"required"`
-	CompanyID               CompanyID      `json:"companyId" validate:"required"`
-	Phase                   ProjectPhase   `json:"phase,omitempty" validate:"omitempty,oneof=tilbud working active completed cancelled"`
-	StartDate               *time.Time     `json:"startDate,omitempty"`
-	EndDate                 *time.Time     `json:"endDate,omitempty"`
-	Value                   float64        `json:"value" validate:"gte=0"`
-	Cost                    float64        `json:"cost" validate:"gte=0"`
-	Spent                   float64        `json:"spent" validate:"gte=0"`
-	ManagerID               *string        `json:"managerId,omitempty"`
-	TeamMembers             []string       `json:"teamMembers,omitempty"`
-	OfferID                 *uuid.UUID     `json:"offerId,omitempty"`
-	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
-	HasDetailedBudget       bool           `json:"hasDetailedBudget,omitempty"`
-	Health                  *ProjectHealth `json:"health,omitempty"`
-	CompletionPercent       *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
-	EstimatedCompletionDate *time.Time     `json:"estimatedCompletionDate,omitempty"`
+	Name              string       `json:"name" validate:"required,max=200"`
+	ProjectNumber     string       `json:"projectNumber,omitempty" validate:"max=50"`
+	Summary           string       `json:"summary,omitempty"`
+	Description       string       `json:"description,omitempty"`
+	CustomerID        *uuid.UUID   `json:"customerId,omitempty"`                                                                  // Optional - projects can be cross-company
+	Phase             ProjectPhase `json:"phase,omitempty" validate:"omitempty,oneof=tilbud working on_hold completed cancelled"` // Updated phases
+	StartDate         *time.Time   `json:"startDate,omitempty"`
+	EndDate           *time.Time   `json:"endDate,omitempty"`
+	Location          string       `json:"location,omitempty" validate:"max=200"`
+	DealID            *uuid.UUID   `json:"dealId,omitempty"`
+	ExternalReference string       `json:"externalReference,omitempty" validate:"max=100"`
 }
 
+// UpdateProjectRequest is simplified since projects are now containers for offers.
+// Economic tracking has moved to offers.
 type UpdateProjectRequest struct {
-	Name                    string         `json:"name" validate:"required,max=200"`
-	ProjectNumber           string         `json:"projectNumber,omitempty" validate:"max=50"`
-	Summary                 string         `json:"summary,omitempty"`
-	Description             string         `json:"description,omitempty"`
-	CompanyID               CompanyID      `json:"companyId" validate:"required"`
-	StartDate               *time.Time     `json:"startDate,omitempty"`
-	EndDate                 *time.Time     `json:"endDate,omitempty"`
-	Value                   float64        `json:"value" validate:"gte=0"`
-	Cost                    float64        `json:"cost" validate:"gte=0"`
-	Spent                   float64        `json:"spent" validate:"gte=0"`
-	ManagerID               *string        `json:"managerId,omitempty"`
-	TeamMembers             []string       `json:"teamMembers,omitempty"`
-	DealID                  *uuid.UUID     `json:"dealId,omitempty"`
-	HasDetailedBudget       *bool          `json:"hasDetailedBudget,omitempty"`
-	Health                  *ProjectHealth `json:"health,omitempty"`
-	CompletionPercent       *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
-	EstimatedCompletionDate *time.Time     `json:"estimatedCompletionDate,omitempty"`
+	Name              string       `json:"name" validate:"required,max=200"`
+	ProjectNumber     string       `json:"projectNumber,omitempty" validate:"max=50"`
+	Summary           string       `json:"summary,omitempty"`
+	Description       string       `json:"description,omitempty"`
+	CustomerID        *uuid.UUID   `json:"customerId,omitempty"` // Optional - can update customer assignment
+	Phase             ProjectPhase `json:"phase,omitempty" validate:"omitempty,oneof=tilbud working on_hold completed cancelled"`
+	StartDate         *time.Time   `json:"startDate,omitempty"`
+	EndDate           *time.Time   `json:"endDate,omitempty"`
+	Location          string       `json:"location,omitempty" validate:"max=200"`
+	DealID            *uuid.UUID   `json:"dealId,omitempty"`
+	ExternalReference string       `json:"externalReference,omitempty" validate:"max=100"`
 }
 
 type CreateOfferRequest struct {
@@ -731,7 +748,8 @@ type CreateOfferRequest struct {
 	Probability       *int                     `json:"probability,omitempty" validate:"omitempty,min=0,max=100"`
 	Status            OfferStatus              `json:"status,omitempty"`
 	ResponsibleUserID string                   `json:"responsibleUserId,omitempty"`
-	ProjectID         *uuid.UUID               `json:"projectId,omitempty"` // Link to existing project (auto-created if not provided and phase != draft)
+	ProjectID         *uuid.UUID               `json:"projectId,omitempty"` // Link to existing project
+	CreateProject     bool                     `json:"createProject"`       // If true and no ProjectID, auto-create a project
 	Items             []CreateOfferItemRequest `json:"items,omitempty"`
 	Description       string                   `json:"description,omitempty"`
 	Notes             string                   `json:"notes,omitempty"`
@@ -873,8 +891,9 @@ type OfferWithItemsDTO struct {
 }
 
 type AdvanceOfferRequest struct {
-	Phase     OfferPhase `json:"phase" validate:"required"`
-	ProjectID *uuid.UUID `json:"projectId,omitempty"` // Link to existing project (auto-created if not provided and advancing to in_progress)
+	Phase         OfferPhase `json:"phase" validate:"required"`
+	ProjectID     *uuid.UUID `json:"projectId,omitempty"` // Link to existing project
+	CreateProject bool       `json:"createProject"`       // If true and no ProjectID, auto-create a project when advancing from draft
 }
 
 // Offer Lifecycle DTOs
@@ -920,11 +939,39 @@ type WinOfferRequest struct {
 }
 
 // WinOfferResponse contains the result of winning an offer
+// Deprecated: Use AcceptOrderResponse instead. WinOffer is being replaced by AcceptOrder.
 type WinOfferResponse struct {
 	Offer         *OfferDTO   `json:"offer"`
 	Project       *ProjectDTO `json:"project,omitempty"`
 	ExpiredOffers []OfferDTO  `json:"expiredOffers,omitempty"` // Sibling offers that were expired
 	ExpiredCount  int         `json:"expiredCount"`            // Count of sibling offers that were expired
+}
+
+// AcceptOrderRequest contains options when transitioning an offer to order phase
+type AcceptOrderRequest struct {
+	// Notes is an optional note about why this order was accepted
+	Notes string `json:"notes,omitempty" validate:"max=500"`
+}
+
+// AcceptOrderResponse contains the result of accepting an order
+type AcceptOrderResponse struct {
+	Offer *OfferDTO `json:"offer"`
+}
+
+// UpdateOfferHealthRequest contains the health status update for an offer in order phase
+type UpdateOfferHealthRequest struct {
+	Health            OfferHealth `json:"health" validate:"required,oneof=on_track at_risk delayed over_budget"` // Health status enum
+	CompletionPercent *float64    `json:"completionPercent,omitempty" validate:"omitempty,min=0,max=100"`        // Optional completion percentage (0-100)
+}
+
+// UpdateOfferSpentRequest contains the spent amount update for an offer in order phase
+type UpdateOfferSpentRequest struct {
+	Spent float64 `json:"spent" validate:"min=0"` // Amount spent on this order
+}
+
+// UpdateOfferInvoicedRequest contains the invoiced amount update for an offer in order phase
+type UpdateOfferInvoicedRequest struct {
+	Invoiced float64 `json:"invoiced" validate:"min=0"` // Amount invoiced to customer
 }
 
 // ProjectOffersDTO contains a project with its associated offers
@@ -954,6 +1001,7 @@ type ActivityDTO struct {
 	ID               uuid.UUID          `json:"id"`
 	TargetType       ActivityTargetType `json:"targetType"`
 	TargetID         uuid.UUID          `json:"targetId"`
+	TargetName       string             `json:"targetName,omitempty"`
 	Title            string             `json:"title"`
 	Body             string             `json:"body,omitempty"`
 	OccurredAt       string             `json:"occurredAt"`
@@ -1057,6 +1105,8 @@ type ActivityFilters struct {
 	TargetID      *uuid.UUID          `json:"targetId,omitempty"`
 	AssignedToID  *string             `json:"assignedToId,omitempty"`
 	CreatorID     *string             `json:"creatorId,omitempty"`
+	OccurredFrom  *time.Time          `json:"from,omitempty"`  // Filter by occurred_at >= from (start of day)
+	OccurredTo    *time.Time          `json:"to,omitempty"`    // Filter by occurred_at <= to (end of day)
 	DueDateFrom   *time.Time          `json:"dueDateFrom,omitempty"`
 	DueDateTo     *time.Time          `json:"dueDateTo,omitempty"`
 	ScheduledFrom *time.Time          `json:"scheduledFrom,omitempty"`
@@ -1132,12 +1182,6 @@ type CreateFollowUpRequest struct {
 }
 
 // Project Request DTOs
-
-// UpdateProjectHealthRequest contains data for updating project health and completion
-type UpdateProjectHealthRequest struct {
-	Health            *ProjectHealth `json:"health,omitempty"`
-	CompletionPercent *float64       `json:"completionPercent,omitempty" validate:"omitempty,gte=0,lte=100"`
-}
 
 // InheritBudgetRequest for POST /projects/{id}/inherit-budget
 type InheritBudgetRequest struct {

@@ -92,14 +92,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by due date from (YYYY-MM-DD)",
-                        "name": "dueDateFrom",
+                        "description": "Filter activities from this date (YYYY-MM-DD), inclusive from 00:00:00",
+                        "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Filter by due date to (YYYY-MM-DD)",
-                        "name": "dueDateTo",
+                        "description": "Filter activities to this date (YYYY-MM-DD), inclusive until 23:59:59",
+                        "name": "to",
                         "in": "query"
                     }
                 ],
@@ -3762,7 +3762,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.\n\n**IMPORTANT: Aggregation Logic (Avoids Double-Counting)**\nWhen a project has multiple offers, only the highest value offer per phase is counted.\nOrphan offers (without project) are included at full value.\nExample: Project A has offers 23M and 25M in \"sent\" phase - totalValue shows 25M, not 48M.\n\n**Time Range Options:**\n- ` + "`" + `rolling12months` + "`" + ` (default): Uses a rolling 12-month window from the current date\n- ` + "`" + `allTime` + "`" + `: Calculates metrics without any date filter\n\n**Offer Metrics:**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `totalProjectCount` + "`" + `: Count of unique projects with offers (excludes orphan offers)\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers - best per project (avoids double-counting)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, won, lost with counts and values\n- ` + "`" + `count` + "`" + `: Total offer count in phase\n- ` + "`" + `projectCount` + "`" + `: Unique projects in phase (excludes orphan offers)\n- ` + "`" + `totalValue` + "`" + `: Sum of best offer value per project (avoids double-counting)\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Reserve:** Sum of (budget - spent) on active projects\n\n**Financial Summary:**\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of spent on all projects in the time range\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists:** Limit 5 each\n**Top Customers:** Ranked by offer count (excluding drafts/expired), includes economicValue",
+                "description": "Returns dashboard metrics with configurable time range. All metrics exclude draft and expired offers.\n\n**IMPORTANT: Aggregation Logic (Avoids Double-Counting)**\nWhen a project has multiple offers, only the highest value offer per phase is counted.\nOrphan offers (without project) are included at full value.\nExample: Project A has offers 23M and 25M in \"sent\" phase - totalValue shows 25M, not 48M.\n\n**Time Range Options:**\n- ` + "`" + `rolling12months` + "`" + ` (default): Uses a rolling 12-month window from the current date\n- ` + "`" + `allTime` + "`" + `: Calculates metrics without any date filter\n- Custom range: Use ` + "`" + `fromDate` + "`" + ` and ` + "`" + `toDate` + "`" + ` parameters (YYYY-MM-DD format)\n\n**Custom Date Range:**\nWhen ` + "`" + `fromDate` + "`" + ` and/or ` + "`" + `toDate` + "`" + ` are provided, they override the ` + "`" + `timeRange` + "`" + ` parameter.\n- ` + "`" + `fromDate` + "`" + `: Start of range at 00:00:00 local time\n- ` + "`" + `toDate` + "`" + `: End of range at 23:59:59 local time\n- Both parameters are optional; can be used together or individually\n\n**Offer Metrics (Pipeline Phase):**\n- ` + "`" + `totalOfferCount` + "`" + `: Count of offers excluding drafts and expired\n- ` + "`" + `totalProjectCount` + "`" + `: Count of unique projects with offers (excludes orphan offers)\n- ` + "`" + `offerReserve` + "`" + `: Total value of active offers - best per project (avoids double-counting)\n- ` + "`" + `weightedOfferReserve` + "`" + `: Sum of (value * probability/100) for active offers\n- ` + "`" + `averageProbability` + "`" + `: Average probability of active offers\n\n**Pipeline Data:**\n- Returns phases: in_progress, sent, order, completed, lost with counts and values\n- ` + "`" + `count` + "`" + `: Total offer count in phase\n- ` + "`" + `projectCount` + "`" + `: Unique projects in phase (excludes orphan offers)\n- ` + "`" + `totalValue` + "`" + `: Sum of best offer value per project (avoids double-counting)\n- Excludes draft and expired offers\n\n**Win Rate Metrics:**\n- ` + "`" + `winRate` + "`" + `: won_count / (won_count + lost_count) - returns 0-1 scale (e.g., 0.5 = 50%)\n- ` + "`" + `economicWinRate` + "`" + `: won_value / (won_value + lost_value) - value-based win rate\n- Also includes ` + "`" + `wonCount` + "`" + `, ` + "`" + `lostCount` + "`" + `, ` + "`" + `wonValue` + "`" + `, ` + "`" + `lostValue` + "`" + ` for transparency\n\n**Order Metrics (Execution Phase - from offers):**\n- ` + "`" + `activeOrderCount` + "`" + `: Count of offers in order phase (active execution)\n- ` + "`" + `completedOrderCount` + "`" + `: Count of offers in completed phase\n- ` + "`" + `orderValue` + "`" + `: Total value of offers in order phase\n- ` + "`" + `orderReserve` + "`" + `: Sum of (value - invoiced) for order phase offers\n- ` + "`" + `totalInvoiced` + "`" + `: Sum of invoiced for order phase offers\n- ` + "`" + `totalSpent` + "`" + `: Sum of spent for order phase offers\n- ` + "`" + `averageOrderProgress` + "`" + `: Average completion percentage for order phase offers\n- ` + "`" + `healthDistribution` + "`" + `: Count of order phase offers by health status (onTrack, atRisk, delayed, overBudget)\n\n**Financial Summary:**\n- ` + "`" + `totalValue` + "`" + `: orderReserve + totalInvoiced\n\n**Recent Lists (limit 5 each):**\n- ` + "`" + `recentOffers` + "`" + `: Offers in in_progress phase (Siste tilbud), sorted by update recency\n- ` + "`" + `recentOrders` + "`" + `: Offers in order phase (Siste ordre), sorted by update recency\n\n**Top Customers:** Ranked by won offer count (order + completed phases) with total won value",
                 "produces": [
                     "application/json"
                 ],
@@ -3778,8 +3778,20 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "default": "rolling12months",
-                        "description": "Time range for metrics",
+                        "description": "Time range for metrics (ignored if fromDate/toDate provided)",
                         "name": "timeRange",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date for custom range (YYYY-MM-DD format, 00:00:00)",
+                        "name": "fromDate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date for custom range (YYYY-MM-DD format, 23:59:59)",
+                        "name": "toDate",
                         "in": "query"
                     }
                 ],
@@ -3791,7 +3803,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid timeRange value",
+                        "description": "Invalid timeRange value or date format",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -5674,6 +5686,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/accept-order": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions a won offer to order phase, indicating work is beginning. This is used when a customer accepts a sent offer and work should start.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Accept order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Accept order options",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AcceptOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Offer transitioned to order phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AcceptOrderResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, or offer not in valid phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/activities": {
             "get": {
                 "security": [
@@ -6193,6 +6272,61 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Source offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer from order phase to completed phase. Indicates work is finished.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Complete an offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Completed offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID or offer not in order phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -6770,6 +6904,140 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/domain.FileDTO"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/health": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the health status (on_track, at_risk, delayed, over_budget) and optionally the completion percentage of an offer in order phase. Used to track execution progress.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer health status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Health data: health (enum: on_track|at_risk|delayed|over_budget), completionPercent (optional: 0-100)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferHealthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, or offer not in order phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/invoiced": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the invoiced amount of an offer in order phase. Used to track how much has been invoiced to the customer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer invoiced amount",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Invoiced amount data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferInvoicedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, or offer not in order phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -7364,6 +7632,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/spent": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the spent amount of an offer in order phase. Used to track actual costs incurred during execution.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer spent amount",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Spent amount data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferSpentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID, request body, or offer not in order phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/title": {
             "put": {
                 "security": [
@@ -7612,7 +7947,7 @@ const docTemplate = `{
                         "enum": [
                             "tilbud",
                             "working",
-                            "active",
+                            "on_hold",
                             "completed",
                             "cancelled"
                         ],
@@ -7623,34 +7958,13 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "on_track",
-                            "at_risk",
-                            "over_budget"
-                        ],
-                        "type": "string",
-                        "description": "Filter by health",
-                        "name": "health",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by manager ID",
-                        "name": "managerId",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
                             "createdAt",
                             "updatedAt",
                             "name",
                             "phase",
-                            "health",
-                            "budget",
-                            "spent",
                             "startDate",
                             "endDate",
-                            "customerName",
-                            "wonAt"
+                            "customerName"
                         ],
                         "type": "string",
                         "description": "Sort field",
@@ -7720,7 +8034,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new project. Requires manager or admin permissions.",
+                "description": "Create a new project (simplified container for offers)",
                 "consumes": [
                     "application/json"
                 ],
@@ -7786,7 +8100,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a project with full details including budget summary and recent activities",
+                "description": "Get a project with details including recent activities",
                 "consumes": [
                     "application/json"
                 ],
@@ -7849,7 +8163,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an existing project. Requires manager or admin permissions.",
+                "description": "Update an existing project",
                 "consumes": [
                     "application/json"
                 ],
@@ -7899,7 +8213,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "User is not the project manager",
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -7927,7 +8241,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a project. Requires manager or admin permissions.",
+                "description": "Delete a project",
                 "consumes": [
                     "application/json"
                 ],
@@ -7960,12 +8274,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "User is not the project manager",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -8061,309 +8369,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/projects/{id}/budget": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get budget information for a project including spent amount and remaining budget",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Get project budget",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectBudgetDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update only the budget of a project (only allowed in active phase)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project budget",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Budget data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectBudgetRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Cannot edit budget in tilbud phase",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/company": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update the company assignment of a project",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project company",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Company data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectCompanyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/completion": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update the completion percentage of a project",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project completion percentage",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Completion percent data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectCompletionPercentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
         "/projects/{id}/dates": {
             "put": {
                 "security": [
@@ -8419,12 +8424,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -8503,332 +8502,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/domain.APIError"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/estimated-completion-date": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update the estimated completion date of a project",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project estimated completion date",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Estimated completion date data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectEstimatedCompletionDateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/health": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update project health and completion percent. Requires manager or admin permissions.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project health",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Health update data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectHealthRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "User is not the project manager",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/inherit-budget": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Inherit budget dimensions from a won offer to the project. The offer must be in 'won' phase.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Inherit budget from offer",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Offer ID to inherit budget from",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.InheritBudgetRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.InheritBudgetResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request or offer not in won phase",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "User is not the project manager",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Project or offer not found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/manager": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update only the manager of a project",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project manager",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Manager data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectManagerRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -8899,12 +8572,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -9045,12 +8712,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/domain.APIError"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -9125,12 +8786,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/domain.APIError"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -9156,7 +8811,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Reopens a project that was completed or cancelled. Can reopen to tilbud or working phase.\nWhen reopening a project with a winning offer, that offer is reverted to sent phase.",
+                "description": "Reopens a project that was completed or cancelled. Can reopen to tilbud or working phase.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9205,229 +8860,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/domain.APIError"
                         }
                     },
-                    "403": {
-                        "description": "User is not the project manager",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
                     "404": {
                         "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/resync-from-offer": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Syncs project economics (value, cost, margin) from the best connected offer",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Resync project from best offer",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated project with synced values",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ResyncFromOfferResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid ID or no offers found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/spent": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update only the spent amount of a project (only allowed in active phase)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project spent amount",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Spent data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectSpentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Cannot edit spent in tilbud phase",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/team-members": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update the team members of a project",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Projects"
-                ],
-                "summary": "Update project team members",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Team members data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/domain.UpdateProjectTeamMembersRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ProjectDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/domain.APIError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -9632,6 +9066,24 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.AcceptOrderRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "description": "Notes is an optional note about why this order was accepted",
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "domain.AcceptOrderResponse": {
+            "type": "object",
+            "properties": {
+                "offer": {
+                    "$ref": "#/definitions/domain.OfferDTO"
+                }
+            }
+        },
         "domain.ActivityDTO": {
             "type": "object",
             "properties": {
@@ -9693,6 +9145,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/domain.ActivityStatus"
                 },
                 "targetId": {
+                    "type": "string"
+                },
+                "targetName": {
                     "type": "string"
                 },
                 "targetType": {
@@ -9851,11 +9306,15 @@ const docTemplate = `{
                 "phase"
             ],
             "properties": {
+                "createProject": {
+                    "description": "If true and no ProjectID, auto-create a project when advancing from draft",
+                    "type": "boolean"
+                },
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
                 },
                 "projectId": {
-                    "description": "Link to existing project (auto-created if not provided and advancing to in_progress)",
+                    "description": "Link to existing project",
                     "type": "string"
                 }
             }
@@ -10781,6 +10240,10 @@ const docTemplate = `{
                     "type": "number",
                     "minimum": 0
                 },
+                "createProject": {
+                    "description": "If true and no ProjectID, auto-create a project",
+                    "type": "boolean"
+                },
                 "customerId": {
                     "description": "Optional if projectId is provided (inherits from project)",
                     "type": "string"
@@ -10817,7 +10280,7 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "projectId": {
-                    "description": "Link to existing project (auto-created if not provided and phase != draft)",
+                    "description": "Link to existing project",
                     "type": "string"
                 },
                 "responsibleUserId": {
@@ -10838,24 +10301,11 @@ const docTemplate = `{
         "domain.CreateProjectRequest": {
             "type": "object",
             "required": [
-                "companyId",
-                "customerId",
                 "name"
             ],
             "properties": {
-                "companyId": {
-                    "$ref": "#/definitions/domain.CompanyID"
-                },
-                "completionPercent": {
-                    "type": "number",
-                    "maximum": 100,
-                    "minimum": 0
-                },
-                "cost": {
-                    "type": "number",
-                    "minimum": 0
-                },
                 "customerId": {
+                    "description": "Optional - projects can be cross-company",
                     "type": "string"
                 },
                 "dealId": {
@@ -10867,30 +10317,24 @@ const docTemplate = `{
                 "endDate": {
                     "type": "string"
                 },
-                "estimatedCompletionDate": {
-                    "type": "string"
+                "externalReference": {
+                    "type": "string",
+                    "maxLength": 100
                 },
-                "hasDetailedBudget": {
-                    "type": "boolean"
-                },
-                "health": {
-                    "$ref": "#/definitions/domain.ProjectHealth"
-                },
-                "managerId": {
-                    "type": "string"
+                "location": {
+                    "type": "string",
+                    "maxLength": 200
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 200
                 },
-                "offerId": {
-                    "type": "string"
-                },
                 "phase": {
+                    "description": "Updated phases",
                     "enum": [
                         "tilbud",
                         "working",
-                        "active",
+                        "on_hold",
                         "completed",
                         "cancelled"
                     ],
@@ -10904,25 +10348,11 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 50
                 },
-                "spent": {
-                    "type": "number",
-                    "minimum": 0
-                },
                 "startDate": {
                     "type": "string"
                 },
                 "summary": {
                     "type": "string"
-                },
-                "teamMembers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "value": {
-                    "type": "number",
-                    "minimum": 0
                 }
             }
         },
@@ -11006,7 +10436,12 @@ const docTemplate = `{
                 "tier": {
                     "$ref": "#/definitions/domain.CustomerTier"
                 },
-                "totalValue": {
+                "totalValueActive": {
+                    "description": "Value of offers in in_progress or sent phases",
+                    "type": "number"
+                },
+                "totalValueWon": {
+                    "description": "Value of offers in order or completed phases",
                     "type": "number"
                 },
                 "updatedAt": {
@@ -11064,16 +10499,36 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "activeOffers": {
+                    "description": "Count of offers in order phase (active orders)",
                     "type": "integer"
                 },
                 "activeProjects": {
                     "type": "integer"
                 },
+                "completedOffers": {
+                    "description": "Count of offers in completed phase",
+                    "type": "integer"
+                },
                 "totalContacts": {
                     "type": "integer"
                 },
-                "totalValue": {
+                "totalOffers": {
+                    "type": "integer"
+                },
+                "totalProjects": {
+                    "type": "integer"
+                },
+                "totalValueActive": {
+                    "description": "Value of offers in order phase (active orders)",
                     "type": "number"
+                },
+                "totalValueWon": {
+                    "description": "Value of offers in order or completed phases",
+                    "type": "number"
+                },
+                "workingOffers": {
+                    "description": "Count of offers in in_progress or sent phases",
+                    "type": "integer"
                 }
             }
         },
@@ -11208,7 +10663,12 @@ const docTemplate = `{
                 "tier": {
                     "$ref": "#/definitions/domain.CustomerTier"
                 },
-                "totalValue": {
+                "totalValueActive": {
+                    "description": "Value of offers in in_progress or sent phases",
+                    "type": "number"
+                },
+                "totalValueWon": {
+                    "description": "Value of offers in order or completed phases",
                     "type": "number"
                 },
                 "updatedAt": {
@@ -11226,16 +10686,44 @@ const docTemplate = `{
         "domain.DashboardMetrics": {
             "type": "object",
             "properties": {
+                "activeOrderCount": {
+                    "description": "Order Metrics (from offers in order and completed phases)\nExecution tracking has moved from projects to offers",
+                    "type": "integer"
+                },
+                "averageOrderProgress": {
+                    "description": "Average completion_percent for order phase offers",
+                    "type": "number"
+                },
                 "averageProbability": {
                     "description": "Average probability of active offers",
                     "type": "number"
+                },
+                "completedOrderCount": {
+                    "description": "Count of offers in completed phase",
+                    "type": "integer"
+                },
+                "fromDate": {
+                    "description": "FromDate is set when using custom date range (start of range, 00:00:00)",
+                    "type": "string"
+                },
+                "healthDistribution": {
+                    "description": "Count of order phase offers by health status",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.HealthDistribution"
+                        }
+                    ]
                 },
                 "offerReserve": {
                     "description": "Total value of active offers - best per project (avoids double-counting)",
                     "type": "number"
                 },
                 "orderReserve": {
-                    "description": "Order Reserve (from active projects)",
+                    "description": "Sum of (value - invoiced) for order phase offers",
+                    "type": "number"
+                },
+                "orderValue": {
+                    "description": "Total value of offers in order phase",
                     "type": "number"
                 },
                 "pipeline": {
@@ -11259,11 +10747,11 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.OfferDTO"
                     }
                 },
-                "recentProjects": {
-                    "description": "Last created projects",
+                "recentOrders": {
+                    "description": "Offers in order phase (Siste ordre), sorted by updated_at DESC",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.ProjectDTO"
+                        "$ref": "#/definitions/domain.OfferDTO"
                     }
                 },
                 "timeRange": {
@@ -11274,6 +10762,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "toDate": {
+                    "description": "ToDate is set when using custom date range (end of range, 23:59:59)",
+                    "type": "string"
+                },
                 "topCustomers": {
                     "description": "Top Customers (limit 5)",
                     "type": "array",
@@ -11282,7 +10774,7 @@ const docTemplate = `{
                     }
                 },
                 "totalInvoiced": {
-                    "description": "Financial Summary",
+                    "description": "Sum of invoiced for order phase offers",
                     "type": "number"
                 },
                 "totalOfferCount": {
@@ -11293,8 +10785,12 @@ const docTemplate = `{
                     "description": "Count of unique projects with offers (excludes orphan offers)",
                     "type": "integer"
                 },
+                "totalSpent": {
+                    "description": "Sum of spent for order phase offers",
+                    "type": "number"
+                },
                 "totalValue": {
-                    "description": "orderReserve + totalInvoiced",
+                    "description": "Financial Summary",
                     "type": "number"
                 },
                 "weightedOfferReserve": {
@@ -11494,27 +10990,24 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.InheritBudgetRequest": {
-            "type": "object",
-            "required": [
-                "offerId"
-            ],
-            "properties": {
-                "offerId": {
-                    "type": "string",
-                    "format": "uuid",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "domain.InheritBudgetResponse": {
+        "domain.HealthDistribution": {
             "type": "object",
             "properties": {
-                "itemsCount": {
+                "atRisk": {
+                    "description": "Offers at risk",
                     "type": "integer"
                 },
-                "project": {
-                    "$ref": "#/definitions/domain.ProjectDTO"
+                "delayed": {
+                    "description": "Delayed offers",
+                    "type": "integer"
+                },
+                "onTrack": {
+                    "description": "Offers on track",
+                    "type": "integer"
+                },
+                "overBudget": {
+                    "description": "Over budget offers",
+                    "type": "integer"
                 }
             }
         },
@@ -11622,6 +11115,10 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "completionPercent": {
+                    "description": "0-100 progress indicator",
+                    "type": "number"
+                },
                 "cost": {
                     "description": "Internal cost",
                     "type": "number"
@@ -11654,6 +11151,14 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "endDate": {
+                    "description": "ISO 8601 - Planned end date",
+                    "type": "string"
+                },
+                "estimatedCompletionDate": {
+                    "description": "ISO 8601 - Current estimate for completion",
+                    "type": "string"
+                },
                 "expirationDate": {
                     "description": "ISO 8601 - When offer expires (default 60 days after sent)",
                     "type": "string"
@@ -11662,8 +11167,16 @@ const docTemplate = `{
                     "description": "External/customer reference number",
                     "type": "string"
                 },
+                "health": {
+                    "description": "Health status during execution",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
+                },
+                "invoiced": {
+                    "description": "Amount invoiced to customer",
+                    "type": "number"
                 },
                 "items": {
                     "type": "array",
@@ -11672,6 +11185,13 @@ const docTemplate = `{
                     }
                 },
                 "location": {
+                    "type": "string"
+                },
+                "managerId": {
+                    "description": "Order phase execution fields (used when phase = \"order\" or \"completed\")",
+                    "type": "string"
+                },
+                "managerName": {
                     "type": "string"
                 },
                 "margin": {
@@ -11688,6 +11208,10 @@ const docTemplate = `{
                 "offerNumber": {
                     "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
+                },
+                "orderReserve": {
+                    "description": "Generated column: value - invoiced (read-only)",
+                    "type": "number"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
@@ -11712,8 +11236,22 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "spent": {
+                    "description": "Actual costs incurred",
+                    "type": "number"
+                },
+                "startDate": {
+                    "description": "ISO 8601 - When work started",
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "title": {
                     "type": "string"
@@ -11748,6 +11286,10 @@ const docTemplate = `{
                 "companyId": {
                     "$ref": "#/definitions/domain.CompanyID"
                 },
+                "completionPercent": {
+                    "description": "0-100 progress indicator",
+                    "type": "number"
+                },
                 "cost": {
                     "description": "Internal cost",
                     "type": "number"
@@ -11780,6 +11322,14 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "endDate": {
+                    "description": "ISO 8601 - Planned end date",
+                    "type": "string"
+                },
+                "estimatedCompletionDate": {
+                    "description": "ISO 8601 - Current estimate for completion",
+                    "type": "string"
+                },
                 "expirationDate": {
                     "description": "ISO 8601 - When offer expires (default 60 days after sent)",
                     "type": "string"
@@ -11791,8 +11341,16 @@ const docTemplate = `{
                 "filesCount": {
                     "type": "integer"
                 },
+                "health": {
+                    "description": "Health status during execution",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
+                },
+                "invoiced": {
+                    "description": "Amount invoiced to customer",
+                    "type": "number"
                 },
                 "items": {
                     "type": "array",
@@ -11801,6 +11359,13 @@ const docTemplate = `{
                     }
                 },
                 "location": {
+                    "type": "string"
+                },
+                "managerId": {
+                    "description": "Order phase execution fields (used when phase = \"order\" or \"completed\")",
+                    "type": "string"
+                },
+                "managerName": {
                     "type": "string"
                 },
                 "margin": {
@@ -11817,6 +11382,10 @@ const docTemplate = `{
                 "offerNumber": {
                     "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
+                },
+                "orderReserve": {
+                    "description": "Generated column: value - invoiced (read-only)",
+                    "type": "number"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.OfferPhase"
@@ -11841,8 +11410,22 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
+                "spent": {
+                    "description": "Actual costs incurred",
+                    "type": "number"
+                },
+                "startDate": {
+                    "description": "ISO 8601 - When work started",
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/domain.OfferStatus"
+                },
+                "teamMembers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "title": {
                     "type": "string"
@@ -11861,6 +11444,21 @@ const docTemplate = `{
                     "type": "number"
                 }
             }
+        },
+        "domain.OfferHealth": {
+            "type": "string",
+            "enum": [
+                "on_track",
+                "at_risk",
+                "delayed",
+                "over_budget"
+            ],
+            "x-enum-varnames": [
+                "OfferHealthOnTrack",
+                "OfferHealthAtRisk",
+                "OfferHealthDelayed",
+                "OfferHealthOverBudget"
+            ]
         },
         "domain.OfferItemDTO": {
             "type": "object",
@@ -11897,15 +11495,30 @@ const docTemplate = `{
                 "draft",
                 "in_progress",
                 "sent",
-                "won",
+                "order",
+                "completed",
                 "lost",
                 "expired"
+            ],
+            "x-enum-comments": {
+                "OfferPhaseCompleted": "Work finished",
+                "OfferPhaseOrder": "Customer accepted, work in progress"
+            },
+            "x-enum-descriptions": [
+                "",
+                "",
+                "",
+                "Customer accepted, work in progress",
+                "Work finished",
+                "",
+                ""
             ],
             "x-enum-varnames": [
                 "OfferPhaseDraft",
                 "OfferPhaseInProgress",
                 "OfferPhaseSent",
-                "OfferPhaseWon",
+                "OfferPhaseOrder",
+                "OfferPhaseCompleted",
                 "OfferPhaseLost",
                 "OfferPhaseExpired"
             ]
@@ -12090,44 +11703,9 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.ProjectBudgetDTO": {
-            "type": "object",
-            "properties": {
-                "cost": {
-                    "type": "number"
-                },
-                "marginPercent": {
-                    "type": "number"
-                },
-                "percentUsed": {
-                    "type": "number"
-                },
-                "remaining": {
-                    "type": "number"
-                },
-                "spent": {
-                    "type": "number"
-                },
-                "value": {
-                    "type": "number"
-                }
-            }
-        },
         "domain.ProjectDTO": {
             "type": "object",
             "properties": {
-                "calculatedOfferValue": {
-                    "type": "number"
-                },
-                "companyId": {
-                    "$ref": "#/definitions/domain.CompanyID"
-                },
-                "completionPercent": {
-                    "type": "number"
-                },
-                "cost": {
-                    "type": "number"
-                },
                 "createdAt": {
                     "description": "ISO 8601",
                     "type": "string"
@@ -12140,6 +11718,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "customerId": {
+                    "description": "Optional - projects can be cross-company",
                     "type": "string"
                 },
                 "customerName": {
@@ -12155,52 +11734,21 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
-                "estimatedCompletionDate": {
-                    "type": "string"
-                },
                 "externalReference": {
                     "type": "string"
-                },
-                "hasDetailedBudget": {
-                    "type": "boolean"
-                },
-                "health": {
-                    "$ref": "#/definitions/domain.ProjectHealth"
                 },
                 "id": {
                     "type": "string"
                 },
-                "inheritedOfferNumber": {
-                    "type": "string"
-                },
-                "invoiced": {
-                    "description": "Amount invoiced to customer (hittil fakturert)",
-                    "type": "number"
-                },
-                "isEconomicsEditable": {
-                    "type": "boolean"
-                },
                 "location": {
                     "type": "string"
-                },
-                "managerId": {
-                    "type": "string"
-                },
-                "managerName": {
-                    "type": "string"
-                },
-                "marginPercent": {
-                    "type": "number"
                 },
                 "name": {
                     "type": "string"
                 },
-                "offerId": {
-                    "type": "string"
-                },
-                "orderReserve": {
-                    "description": "Calculated: value - invoiced (remaining to invoice)",
-                    "type": "number"
+                "offerCount": {
+                    "description": "Count of offers linked to this project",
+                    "type": "integer"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.ProjectPhase"
@@ -12208,21 +11756,12 @@ const docTemplate = `{
                 "projectNumber": {
                     "type": "string"
                 },
-                "spent": {
-                    "type": "number"
-                },
                 "startDate": {
                     "description": "ISO 8601",
                     "type": "string"
                 },
                 "summary": {
                     "type": "string"
-                },
-                "teamMembers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
@@ -12233,48 +11772,22 @@ const docTemplate = `{
                 },
                 "updatedByName": {
                     "type": "string"
-                },
-                "value": {
-                    "type": "number"
-                },
-                "winningOfferId": {
-                    "description": "Phase-related fields for offer folder functionality",
-                    "type": "string"
-                },
-                "wonAt": {
-                    "description": "ISO 8601",
-                    "type": "string"
                 }
             }
-        },
-        "domain.ProjectHealth": {
-            "type": "string",
-            "enum": [
-                "on_track",
-                "at_risk",
-                "delayed",
-                "over_budget"
-            ],
-            "x-enum-varnames": [
-                "ProjectHealthOnTrack",
-                "ProjectHealthAtRisk",
-                "ProjectHealthDelayed",
-                "ProjectHealthOverBudget"
-            ]
         },
         "domain.ProjectPhase": {
             "type": "string",
             "enum": [
                 "tilbud",
                 "working",
-                "active",
+                "on_hold",
                 "completed",
                 "cancelled"
             ],
             "x-enum-varnames": [
                 "ProjectPhaseTilbud",
                 "ProjectPhaseWorking",
-                "ProjectPhaseActive",
+                "ProjectPhaseOnHold",
                 "ProjectPhaseCompleted",
                 "ProjectPhaseCancelled"
             ]
@@ -12284,18 +11797,6 @@ const docTemplate = `{
             "properties": {
                 "budgetSummary": {
                     "$ref": "#/definitions/domain.BudgetSummaryDTO"
-                },
-                "calculatedOfferValue": {
-                    "type": "number"
-                },
-                "companyId": {
-                    "$ref": "#/definitions/domain.CompanyID"
-                },
-                "completionPercent": {
-                    "type": "number"
-                },
-                "cost": {
-                    "type": "number"
                 },
                 "createdAt": {
                     "description": "ISO 8601",
@@ -12309,6 +11810,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "customerId": {
+                    "description": "Optional - projects can be cross-company",
                     "type": "string"
                 },
                 "customerName": {
@@ -12327,42 +11829,14 @@ const docTemplate = `{
                     "description": "ISO 8601",
                     "type": "string"
                 },
-                "estimatedCompletionDate": {
-                    "type": "string"
-                },
                 "externalReference": {
                     "type": "string"
-                },
-                "hasDetailedBudget": {
-                    "type": "boolean"
-                },
-                "health": {
-                    "$ref": "#/definitions/domain.ProjectHealth"
                 },
                 "id": {
                     "type": "string"
                 },
-                "inheritedOfferNumber": {
-                    "type": "string"
-                },
-                "invoiced": {
-                    "description": "Amount invoiced to customer (hittil fakturert)",
-                    "type": "number"
-                },
-                "isEconomicsEditable": {
-                    "type": "boolean"
-                },
                 "location": {
                     "type": "string"
-                },
-                "managerId": {
-                    "type": "string"
-                },
-                "managerName": {
-                    "type": "string"
-                },
-                "marginPercent": {
-                    "type": "number"
                 },
                 "name": {
                     "type": "string"
@@ -12370,12 +11844,9 @@ const docTemplate = `{
                 "offer": {
                     "$ref": "#/definitions/domain.OfferDTO"
                 },
-                "offerId": {
-                    "type": "string"
-                },
-                "orderReserve": {
-                    "description": "Calculated: value - invoiced (remaining to invoice)",
-                    "type": "number"
+                "offerCount": {
+                    "description": "Count of offers linked to this project",
+                    "type": "integer"
                 },
                 "phase": {
                     "$ref": "#/definitions/domain.ProjectPhase"
@@ -12389,21 +11860,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/domain.ActivityDTO"
                     }
                 },
-                "spent": {
-                    "type": "number"
-                },
                 "startDate": {
                     "description": "ISO 8601",
                     "type": "string"
                 },
                 "summary": {
                     "type": "string"
-                },
-                "teamMembers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "updatedAt": {
                     "description": "ISO 8601",
@@ -12413,17 +11875,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updatedByName": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "number"
-                },
-                "winningOfferId": {
-                    "description": "Phase-related fields for offer folder functionality",
-                    "type": "string"
-                },
-                "wonAt": {
-                    "description": "ISO 8601",
                     "type": "string"
                 }
             }
@@ -12502,29 +11953,6 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.ResyncFromOfferResponse": {
-            "type": "object",
-            "properties": {
-                "offerId": {
-                    "type": "string"
-                },
-                "offerPhase": {
-                    "type": "string"
-                },
-                "offerTitle": {
-                    "type": "string"
-                },
-                "project": {
-                    "$ref": "#/definitions/domain.ProjectDTO"
-                },
-                "syncedCost": {
-                    "type": "number"
-                },
-                "syncedValue": {
-                    "type": "number"
-                }
-            }
-        },
         "domain.RevenueForecastDTO": {
             "type": "object",
             "properties": {
@@ -12593,31 +12021,34 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "rolling12months",
-                "allTime"
+                "allTime",
+                "custom"
             ],
             "x-enum-varnames": [
                 "TimeRangeRolling12Months",
-                "TimeRangeAllTime"
+                "TimeRangeAllTime",
+                "TimeRangeCustom"
             ]
         },
         "domain.TopCustomerDTO": {
             "type": "object",
             "properties": {
-                "economicValue": {
-                    "description": "Total value of their offers",
-                    "type": "number"
-                },
                 "id": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
-                "offerCount": {
-                    "type": "integer"
-                },
                 "orgNumber": {
                     "type": "string"
+                },
+                "wonOfferCount": {
+                    "description": "Count of offers in order or completed phases",
+                    "type": "integer"
+                },
+                "wonOfferValue": {
+                    "description": "Total value of won offers (order + completed)",
+                    "type": "number"
                 }
             }
         },
@@ -13179,6 +12610,44 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferHealthRequest": {
+            "type": "object",
+            "required": [
+                "health"
+            ],
+            "properties": {
+                "completionPercent": {
+                    "description": "Optional completion percentage (0-100)",
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "health": {
+                    "description": "Health status enum",
+                    "enum": [
+                        "on_track",
+                        "at_risk",
+                        "delayed",
+                        "over_budget"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.OfferHealth"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.UpdateOfferInvoicedRequest": {
+            "type": "object",
+            "properties": {
+                "invoiced": {
+                    "description": "Amount invoiced to customer",
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
         "domain.UpdateOfferNumberRequest": {
             "type": "object",
             "required": [
@@ -13280,6 +12749,16 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferSpentRequest": {
+            "type": "object",
+            "properties": {
+                "spent": {
+                    "description": "Amount spent on this order",
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
         "domain.UpdateOfferTitleRequest": {
             "type": "object",
             "required": [
@@ -13304,45 +12783,6 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.UpdateProjectBudgetRequest": {
-            "type": "object",
-            "properties": {
-                "budget": {
-                    "type": "number",
-                    "minimum": 0
-                }
-            }
-        },
-        "domain.UpdateProjectCompanyRequest": {
-            "type": "object",
-            "properties": {
-                "companyId": {
-                    "enum": [
-                        "gruppen",
-                        "stalbygg",
-                        "hybridbygg",
-                        "industri",
-                        "tak",
-                        "montasje"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/domain.CompanyID"
-                        }
-                    ]
-                }
-            }
-        },
-        "domain.UpdateProjectCompletionPercentRequest": {
-            "type": "object",
-            "properties": {
-                "completionPercent": {
-                    "type": "number",
-                    "maximum": 100,
-                    "minimum": 0
-                }
-            }
-        },
         "domain.UpdateProjectDatesRequest": {
             "type": "object",
             "properties": {
@@ -13363,40 +12803,6 @@ const docTemplate = `{
                 "summary": {
                     "type": "string",
                     "maxLength": 500
-                }
-            }
-        },
-        "domain.UpdateProjectEstimatedCompletionDateRequest": {
-            "type": "object",
-            "properties": {
-                "estimatedCompletionDate": {
-                    "type": "string"
-                }
-            }
-        },
-        "domain.UpdateProjectHealthRequest": {
-            "type": "object",
-            "properties": {
-                "completionPercent": {
-                    "type": "number",
-                    "maximum": 100,
-                    "minimum": 0
-                },
-                "health": {
-                    "$ref": "#/definitions/domain.ProjectHealth"
-                }
-            }
-        },
-        "domain.UpdateProjectManagerRequest": {
-            "type": "object",
-            "properties": {
-                "managerId": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "managerName": {
-                    "type": "string",
-                    "maxLength": 200
                 }
             }
         },
@@ -13447,21 +12853,12 @@ const docTemplate = `{
         "domain.UpdateProjectRequest": {
             "type": "object",
             "required": [
-                "companyId",
                 "name"
             ],
             "properties": {
-                "companyId": {
-                    "$ref": "#/definitions/domain.CompanyID"
-                },
-                "completionPercent": {
-                    "type": "number",
-                    "maximum": 100,
-                    "minimum": 0
-                },
-                "cost": {
-                    "type": "number",
-                    "minimum": 0
+                "customerId": {
+                    "description": "Optional - can update customer assignment",
+                    "type": "string"
                 },
                 "dealId": {
                     "type": "string"
@@ -13472,65 +12869,41 @@ const docTemplate = `{
                 "endDate": {
                     "type": "string"
                 },
-                "estimatedCompletionDate": {
-                    "type": "string"
+                "externalReference": {
+                    "type": "string",
+                    "maxLength": 100
                 },
-                "hasDetailedBudget": {
-                    "type": "boolean"
-                },
-                "health": {
-                    "$ref": "#/definitions/domain.ProjectHealth"
-                },
-                "managerId": {
-                    "type": "string"
+                "location": {
+                    "type": "string",
+                    "maxLength": 200
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 200
                 },
+                "phase": {
+                    "enum": [
+                        "tilbud",
+                        "working",
+                        "on_hold",
+                        "completed",
+                        "cancelled"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ProjectPhase"
+                        }
+                    ]
+                },
                 "projectNumber": {
                     "type": "string",
                     "maxLength": 50
-                },
-                "spent": {
-                    "type": "number",
-                    "minimum": 0
                 },
                 "startDate": {
                     "type": "string"
                 },
                 "summary": {
                     "type": "string"
-                },
-                "teamMembers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "value": {
-                    "type": "number",
-                    "minimum": 0
-                }
-            }
-        },
-        "domain.UpdateProjectSpentRequest": {
-            "type": "object",
-            "properties": {
-                "spent": {
-                    "type": "number",
-                    "minimum": 0
-                }
-            }
-        },
-        "domain.UpdateProjectTeamMembersRequest": {
-            "type": "object",
-            "properties": {
-                "teamMembers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 }
             }
         },

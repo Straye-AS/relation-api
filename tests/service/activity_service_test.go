@@ -1063,4 +1063,3 @@ func TestActivityService_UpdateMeetingAttendees(t *testing.T) {
 		assert.Empty(t, updated.Attendees)
 	})
 }
-

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
@@ -31,7 +32,8 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
-	err := r.db.WithContext(ctx).First(&user, "email = ?", email).Error
+	// Use case-insensitive lookup since Azure AD may return different casing
+	err := r.db.WithContext(ctx).First(&user, "LOWER(email) = LOWER(?)", email).Error
 	if err != nil {
 		return nil, err
 	}
@@ -50,9 +52,16 @@ func (r *UserRepository) GetByStringID(ctx context.Context, id string) (*domain.
 
 func (r *UserRepository) Upsert(ctx context.Context, user *domain.User) error {
 	var existing domain.User
-	err := r.db.WithContext(ctx).Where("email = ?", user.Email).First(&existing).Error
+	// Use case-insensitive email lookup since Azure AD may return different casing
+	err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", user.Email).First(&existing).Error
 
 	if err == gorm.ErrRecordNotFound {
+		// New user - set azure_ad_oid to match ID (the Azure AD OID from JWT)
+		if user.AzureADOID == "" {
+			user.AzureADOID = user.ID
+		}
+		// Normalize email to lowercase to prevent case-sensitivity issues
+		user.Email = strings.ToLower(user.Email)
 		return r.db.WithContext(ctx).Create(user).Error
 	}
 
@@ -66,6 +75,11 @@ func (r *UserRepository) Upsert(ctx context.Context, user *domain.User) error {
 		"last_login_at":   user.LastLoginAt,
 		"last_ip_address": user.LastIPAddress,
 		"azure_ad_roles":  user.AzureADRoles,
+	}
+
+	// Set azure_ad_oid if not already set (the user.ID contains the Azure AD OID from JWT)
+	if existing.AzureADOID == "" && user.ID != "" {
+		updates["azure_ad_oid"] = user.ID
 	}
 
 	// Only update these fields if they have values (don't overwrite with empty)

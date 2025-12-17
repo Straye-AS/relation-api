@@ -39,25 +39,34 @@ func NewDashboardService(
 }
 
 // GetMetrics returns dashboard metrics with configurable time range
-// timeRange can be "rolling12months" (default) or "allTime"
+// timeRange can be "rolling12months" (default), "allTime", or "custom" (when dateRange is provided)
 // All metrics exclude draft and expired offers from calculations
 //
 // IMPORTANT: Pipeline and offer metrics use aggregation to avoid double-counting.
 // When a project has multiple offers, only the highest value offer per phase is counted.
 // Orphan offers (without project) are included at full value.
-func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.TimeRange) (*domain.DashboardMetrics, error) {
+func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.TimeRange, dateRange *domain.DateRangeFilter) (*domain.DashboardMetrics, error) {
 	// Default to rolling 12 months if not specified or invalid
 	if timeRange == "" {
 		timeRange = domain.TimeRangeRolling12Months
 	}
 
-	// Calculate date filter based on time range
+	// Calculate date filter based on time range or custom date range
 	var since *time.Time
-	if timeRange == domain.TimeRangeRolling12Months {
+	var fromDate, toDate *time.Time
+
+	if timeRange == domain.TimeRangeCustom && dateRange != nil {
+		// Use custom date range
+		fromDate = dateRange.FromDate
+		toDate = dateRange.ToDate
+		// For backward compatibility with existing pipeline stats, use fromDate as "since"
+		since = fromDate
+	} else if timeRange == domain.TimeRangeRolling12Months {
 		t := time.Now().AddDate(-1, 0, 0)
 		since = &t
+		fromDate = &t
 	}
-	// For allTime, since remains nil (no date filter)
+	// For allTime, since/fromDate/toDate remain nil (no date filter)
 
 	const recentLimit = 5
 
@@ -65,9 +74,21 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 		TimeRange:        timeRange,
 		Pipeline:         []domain.PipelinePhaseData{},
 		RecentOffers:     []domain.OfferDTO{},
-		RecentProjects:   []domain.ProjectDTO{},
+		RecentOrders:     []domain.OfferDTO{},
 		RecentActivities: []domain.ActivityDTO{},
 		TopCustomers:     []domain.TopCustomerDTO{},
+	}
+
+	// Set date range in response for custom ranges
+	if timeRange == domain.TimeRangeCustom && dateRange != nil {
+		if dateRange.FromDate != nil {
+			fromStr := dateRange.FromDate.Format("2006-01-02T15:04:05Z")
+			metrics.FromDate = &fromStr
+		}
+		if dateRange.ToDate != nil {
+			toStr := dateRange.ToDate.Format("2006-01-02T15:04:05Z")
+			metrics.ToDate = &toStr
+		}
 	}
 
 	// Get aggregated offer statistics (using aggregation to avoid double-counting)
@@ -115,18 +136,33 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 		}
 	}
 
-	// Get project statistics (order reserve and total invoiced)
-	projectStats, err := s.projectRepo.GetDashboardProjectStats(ctx, since)
+	// Order Metrics (from offers in order/completed phases)
+	// Economic tracking has moved from projects to offers
+	orderStats, err := s.offerRepo.GetOrderStats(ctx, nil)
 	if err != nil {
-		s.logger.Warn("failed to get dashboard project stats", zap.Error(err))
+		s.logger.Warn("failed to get order stats", zap.Error(err))
 	} else {
-		metrics.OrderReserve = projectStats.OrderReserve
-		metrics.TotalInvoiced = projectStats.TotalInvoiced
-		metrics.TotalValue = projectStats.OrderReserve + projectStats.TotalInvoiced
+		metrics.ActiveOrderCount = int(orderStats.TotalOrders)
+		metrics.CompletedOrderCount = int(orderStats.CompletedOrders)
+		metrics.OrderValue = orderStats.TotalValue
+		metrics.OrderReserve = orderStats.OrderReserve
+		metrics.TotalInvoiced = orderStats.TotalInvoiced
+		metrics.TotalSpent = orderStats.TotalSpent
+		metrics.AverageOrderProgress = orderStats.AvgCompletion
+		metrics.TotalValue = orderStats.OrderReserve + orderStats.TotalInvoiced
+
+		// Map health distribution from offer repository stats
+		metrics.HealthDistribution = domain.HealthDistribution{
+			OnTrack:    orderStats.ByHealth[domain.OfferHealthOnTrack],
+			AtRisk:     orderStats.ByHealth[domain.OfferHealthAtRisk],
+			Delayed:    orderStats.ByHealth[domain.OfferHealthDelayed],
+			OverBudget: orderStats.ByHealth[domain.OfferHealthOverBudget],
+		}
 	}
 
-	// Get recent offers (excluding drafts)
-	recentOffers, err := s.offerRepo.GetRecentOffersInWindow(ctx, since, recentLimit)
+	// Get recent offers (in_progress phase only - "Siste tilbud")
+	// Uses the new GetRecentOffersByPhase method with date range support
+	recentOffers, err := s.offerRepo.GetRecentOffersByPhase(ctx, domain.OfferPhaseInProgress, fromDate, toDate, recentLimit)
 	if err != nil {
 		s.logger.Warn("failed to get recent offers", zap.Error(err))
 	} else {
@@ -135,13 +171,14 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 		}
 	}
 
-	// Get recent projects
-	recentProjects, err := s.projectRepo.GetRecentProjectsInWindow(ctx, since, recentLimit)
+	// Get recent orders (order phase - "Siste ordre")
+	// Uses the new GetRecentOffersByPhase method with date range support
+	recentOrders, err := s.offerRepo.GetRecentOffersByPhase(ctx, domain.OfferPhaseOrder, fromDate, toDate, recentLimit)
 	if err != nil {
-		s.logger.Warn("failed to get recent projects", zap.Error(err))
+		s.logger.Warn("failed to get recent orders", zap.Error(err))
 	} else {
-		for _, p := range recentProjects {
-			metrics.RecentProjects = append(metrics.RecentProjects, mapper.ToProjectDTO(&p))
+		for _, o := range recentOrders {
+			metrics.RecentOrders = append(metrics.RecentOrders, mapper.ToOfferDTO(&o))
 		}
 	}
 
@@ -155,18 +192,19 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 		}
 	}
 
-	// Get top customers (ranked by offer count)
-	topCustomers, err := s.customerRepo.GetTopCustomersWithOfferStats(ctx, since, recentLimit)
+	// Get top customers (ranked by won offer count and value - order + completed phases)
+	// Uses the same date filter as other metrics
+	topCustomers, err := s.customerRepo.GetTopCustomersWithWonStats(ctx, fromDate, toDate, recentLimit)
 	if err != nil {
-		s.logger.Warn("failed to get top customers with offer stats", zap.Error(err))
+		s.logger.Warn("failed to get top customers with won stats", zap.Error(err))
 	} else {
 		for _, c := range topCustomers {
 			metrics.TopCustomers = append(metrics.TopCustomers, domain.TopCustomerDTO{
 				ID:            c.CustomerID,
 				Name:          c.CustomerName,
 				OrgNumber:     c.OrgNumber,
-				OfferCount:    c.OfferCount,
-				EconomicValue: c.EconomicValue,
+				WonOfferCount: c.WonOfferCount,
+				WonOfferValue: c.WonOfferValue,
 			})
 		}
 	}
@@ -196,9 +234,10 @@ func (s *DashboardService) Search(ctx context.Context, query string) (*domain.Se
 	customerDTOs := make([]domain.CustomerDTO, len(customers))
 	for i, c := range customers {
 		// TODO: Calculate actual values
-		totalValue := 0.0
+		totalValueActive := 0.0
+		totalValueWon := 0.0
 		activeOffers := 0
-		customerDTOs[i] = mapper.ToCustomerDTO(&c, totalValue, activeOffers)
+		customerDTOs[i] = mapper.ToCustomerDTO(&c, totalValueActive, totalValueWon, activeOffers)
 	}
 
 	projectDTOs := make([]domain.ProjectDTO, len(projects))

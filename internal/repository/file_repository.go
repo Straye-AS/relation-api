@@ -33,7 +33,7 @@ func (r *FileRepository) ListByOffer(ctx context.Context, offerID uuid.UUID) ([]
 	var files []domain.File
 	err := r.db.WithContext(ctx).
 		Where("offer_id = ?", offerID).
-		Order("created_at DESC").
+		Order("updated_at DESC").
 		Find(&files).Error
 	return files, err
 }

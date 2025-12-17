@@ -163,4 +163,16 @@ var (
 
 	// ErrProjectHasNoCustomer is returned when trying to inherit customer from a project that has no customer
 	ErrProjectHasNoCustomer = errors.New("project has no customer to inherit from")
+
+	// ErrOfferNotInSentPhase is returned when an offer must be in sent phase for the operation
+	ErrOfferNotInSentPhase = errors.New("offer must be in sent phase")
+
+	// ErrOfferNotInOrderPhase is returned when an offer must be in order phase for the operation
+	ErrOfferNotInOrderPhase = errors.New("offer must be in order phase")
+
+	// ErrOfferAlreadyInOrder is returned when trying to accept an order that is already in order phase
+	ErrOfferAlreadyInOrder = errors.New("offer is already in order phase")
+
+	// ErrOfferAlreadyCompleted is returned when trying to complete an offer that is already completed
+	ErrOfferAlreadyCompleted = errors.New("offer is already completed")
 )

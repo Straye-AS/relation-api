@@ -215,7 +215,7 @@ func TestOfferService_SendOffer(t *testing.T) {
 	})
 
 	t.Run("cannot send won offer", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Won Offer Send", domain.OfferPhaseWon)
+		offer := fixtures.createTestOffer(t, ctx, "Test Won Offer Send", domain.OfferPhaseOrder)
 
 		result, err := svc.SendOffer(ctx, offer.ID)
 		assert.Error(t, err)
@@ -250,7 +250,7 @@ func TestOfferService_AcceptOffer(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.NotNil(t, result.Offer)
 		assert.Nil(t, result.Project)
-		assert.Equal(t, domain.OfferPhaseWon, result.Offer.Phase)
+		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
 	})
 
 	t.Run("accept offer with project creation", func(t *testing.T) {
@@ -268,9 +268,9 @@ func TestOfferService_AcceptOffer(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.NotNil(t, result.Offer)
 		assert.NotNil(t, result.Project)
-		assert.Equal(t, domain.OfferPhaseWon, result.Offer.Phase)
+		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
 		assert.Equal(t, "New Project from Offer", result.Project.Name)
-		assert.Equal(t, offer.Value, result.Project.Value)
+		// Project no longer has Value field - economic tracking is on Offer
 	})
 
 	t.Run("accept offer with project creation clones budget items", func(t *testing.T) {
@@ -300,18 +300,18 @@ func TestOfferService_AcceptOffer(t *testing.T) {
 		result, err := svc.AcceptOffer(ctx, offer.ID, req)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrOfferNotSent)
+		assert.ErrorIs(t, err, service.ErrOfferNotInSentPhase)
 	})
 
 	t.Run("cannot accept already won offer", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Accept Won", domain.OfferPhaseWon)
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Won", domain.OfferPhaseOrder)
 
 		req := &domain.AcceptOfferRequest{CreateProject: false}
 
 		result, err := svc.AcceptOffer(ctx, offer.ID, req)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrOfferNotSent)
+		assert.ErrorIs(t, err, service.ErrOfferNotInSentPhase)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -403,7 +403,7 @@ func TestOfferService_ExpireOffer(t *testing.T) {
 	})
 
 	t.Run("cannot expire won offer", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Expire Won", domain.OfferPhaseWon)
+		offer := fixtures.createTestOffer(t, ctx, "Test Expire Won", domain.OfferPhaseOrder)
 
 		result, err := svc.ExpireOffer(ctx, offer.ID)
 		assert.Error(t, err)
@@ -505,7 +505,7 @@ func TestOfferService_CloneOffer(t *testing.T) {
 	})
 
 	t.Run("clone won offer starts as draft", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Clone Won", domain.OfferPhaseWon)
+		offer := fixtures.createTestOffer(t, ctx, "Test Clone Won", domain.OfferPhaseOrder)
 
 		req := &domain.CloneOfferRequest{
 			IncludeBudget: boolPtr(true),
@@ -655,11 +655,11 @@ func TestOfferService_Update_ClosedPhaseCheck(t *testing.T) {
 	ctx := createOfferTestContext()
 
 	t.Run("cannot update won offer", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Update Won", domain.OfferPhaseWon)
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Won", domain.OfferPhaseOrder)
 
 		req := &domain.UpdateOfferRequest{
 			Title: "Updated Title",
-			Phase: domain.OfferPhaseWon,
+			Phase: domain.OfferPhaseOrder,
 		}
 
 		result, err := svc.Update(ctx, offer.ID, req)
@@ -1056,7 +1056,7 @@ func TestOfferService_PhaseTransitions(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Cannot Advance Terminal", domain.OfferPhaseSent)
 
 		// Cannot advance to won
-		req := &domain.AdvanceOfferRequest{Phase: domain.OfferPhaseWon}
+		req := &domain.AdvanceOfferRequest{Phase: domain.OfferPhaseOrder}
 		_, err := svc.Advance(ctx, offer.ID, req)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, service.ErrOfferCannotAdvanceToTerminalPhase)
@@ -1072,5 +1072,295 @@ func TestOfferService_PhaseTransitions(t *testing.T) {
 		_, err = svc.Advance(ctx, offer.ID, req)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, service.ErrOfferCannotAdvanceToTerminalPhase)
+	})
+}
+
+// ============================================================================
+// Order Phase Method Tests
+// ============================================================================
+
+func TestOfferService_AcceptOrder(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("accept order from sent phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Order Sent", domain.OfferPhaseSent)
+
+		req := &domain.AcceptOrderRequest{
+			Notes: "Customer confirmed",
+		}
+
+		result, err := svc.AcceptOrder(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.NotNil(t, result.Offer)
+		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
+	})
+
+	t.Run("accept order adds O suffix to offer number", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Order Number", domain.OfferPhaseSent)
+		originalNumber := offer.OfferNumber
+
+		req := &domain.AcceptOrderRequest{}
+
+		result, err := svc.AcceptOrder(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		// Offer number should have "O" suffix
+		assert.Equal(t, originalNumber+"O", result.Offer.OfferNumber)
+	})
+
+	t.Run("cannot accept order from draft phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Order Draft", domain.OfferPhaseDraft)
+
+		req := &domain.AcceptOrderRequest{}
+
+		result, err := svc.AcceptOrder(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInSentPhase)
+	})
+
+	t.Run("cannot accept order from in_progress phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Order InProgress", domain.OfferPhaseInProgress)
+
+		req := &domain.AcceptOrderRequest{}
+
+		result, err := svc.AcceptOrder(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInSentPhase)
+	})
+
+	t.Run("cannot accept order from already order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Accept Order Already", domain.OfferPhaseOrder)
+
+		req := &domain.AcceptOrderRequest{}
+
+		result, err := svc.AcceptOrder(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInSentPhase)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		req := &domain.AcceptOrderRequest{}
+
+		result, err := svc.AcceptOrder(ctx, uuid.New(), req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+	})
+}
+
+func TestOfferService_UpdateOfferHealth(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("update health in order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Health Order", domain.OfferPhaseOrder)
+
+		req := &domain.UpdateOfferHealthRequest{
+			Health: domain.OfferHealthAtRisk,
+		}
+
+		result, err := svc.UpdateOfferHealth(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.NotNil(t, result.Health)
+		assert.Equal(t, "at_risk", *result.Health)
+	})
+
+	t.Run("update health with completion percent", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Health Complete", domain.OfferPhaseOrder)
+
+		completionPct := 75.5
+		req := &domain.UpdateOfferHealthRequest{
+			Health:            domain.OfferHealthOnTrack,
+			CompletionPercent: &completionPct,
+		}
+
+		result, err := svc.UpdateOfferHealth(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.NotNil(t, result.Health)
+		assert.Equal(t, "on_track", *result.Health)
+		assert.NotNil(t, result.CompletionPercent)
+		assert.Equal(t, 75.5, *result.CompletionPercent)
+	})
+
+	t.Run("cannot update health in non-order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Health Sent", domain.OfferPhaseSent)
+
+		req := &domain.UpdateOfferHealthRequest{
+			Health: domain.OfferHealthOnTrack,
+		}
+
+		result, err := svc.UpdateOfferHealth(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
+	})
+
+	t.Run("cannot update health in draft phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Health Draft", domain.OfferPhaseDraft)
+
+		req := &domain.UpdateOfferHealthRequest{
+			Health: domain.OfferHealthDelayed,
+		}
+
+		result, err := svc.UpdateOfferHealth(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		req := &domain.UpdateOfferHealthRequest{
+			Health: domain.OfferHealthOnTrack,
+		}
+
+		result, err := svc.UpdateOfferHealth(ctx, uuid.New(), req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+	})
+}
+
+func TestOfferService_UpdateOfferSpent(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("update spent in order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Spent Order", domain.OfferPhaseOrder)
+
+		req := &domain.UpdateOfferSpentRequest{
+			Spent: 25000.50,
+		}
+
+		result, err := svc.UpdateOfferSpent(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 25000.50, result.Spent)
+	})
+
+	t.Run("cannot update spent in non-order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Spent Sent", domain.OfferPhaseSent)
+
+		req := &domain.UpdateOfferSpentRequest{
+			Spent: 5000,
+		}
+
+		result, err := svc.UpdateOfferSpent(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		req := &domain.UpdateOfferSpentRequest{
+			Spent: 1000,
+		}
+
+		result, err := svc.UpdateOfferSpent(ctx, uuid.New(), req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+	})
+}
+
+func TestOfferService_UpdateOfferInvoiced(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("update invoiced in order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Invoiced Order", domain.OfferPhaseOrder)
+
+		req := &domain.UpdateOfferInvoicedRequest{
+			Invoiced: 50000,
+		}
+
+		result, err := svc.UpdateOfferInvoiced(ctx, offer.ID, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 50000.0, result.Invoiced)
+	})
+
+	t.Run("cannot update invoiced in non-order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Update Invoiced Draft", domain.OfferPhaseDraft)
+
+		req := &domain.UpdateOfferInvoicedRequest{
+			Invoiced: 10000,
+		}
+
+		result, err := svc.UpdateOfferInvoiced(ctx, offer.ID, req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		req := &domain.UpdateOfferInvoicedRequest{
+			Invoiced: 1000,
+		}
+
+		result, err := svc.UpdateOfferInvoiced(ctx, uuid.New(), req)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+	})
+}
+
+func TestOfferService_CompleteOffer(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	t.Run("complete offer from order phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Complete Order", domain.OfferPhaseOrder)
+
+		result, err := svc.CompleteOffer(ctx, offer.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, domain.OfferPhaseCompleted, result.Phase)
+	})
+
+	t.Run("cannot complete offer from sent phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Complete Sent", domain.OfferPhaseSent)
+
+		result, err := svc.CompleteOffer(ctx, offer.ID)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
+	})
+
+	t.Run("cannot complete offer from draft phase", func(t *testing.T) {
+		offer := fixtures.createTestOffer(t, ctx, "Test Complete Draft", domain.OfferPhaseDraft)
+
+		result, err := svc.CompleteOffer(ctx, offer.ID)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		result, err := svc.CompleteOffer(ctx, uuid.New())
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, service.ErrOfferNotFound)
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/domain"
 	"gorm.io/gorm"
@@ -180,7 +181,7 @@ func (r *OfferRepository) ListWithFilters(ctx context.Context, page, pageSize in
 	}
 
 	// Build order clause from sort config
-	orderClause := BuildOrderClause(sort, offerSortableFields, "created_at")
+	orderClause := BuildOrderClause(sort, offerSortableFields, "updated_at")
 
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&offers).Error
@@ -244,7 +245,7 @@ func (r *OfferRepository) Search(ctx context.Context, searchQuery string, limit 
 			LOWER(location) LIKE ?`,
 			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Order("created_at DESC").Limit(limit).Find(&offers).Error
+	err := query.Order("updated_at DESC").Limit(limit).Find(&offers).Error
 	return offers, err
 }
 
@@ -428,8 +429,11 @@ func (r *OfferRepository) GetOfferStats(ctx context.Context) (*OfferStats, error
 		return nil, fmt.Errorf("failed to count active offers: %w", err)
 	}
 
-	// Won offers
-	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase = ?", domain.OfferPhaseWon)
+	// Won offers (order + completed phases)
+	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase IN ?", []domain.OfferPhase{
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
+	})
 	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
 	if err := wonQuery.Count(&stats.WonOffers).Error; err != nil {
 		return nil, fmt.Errorf("failed to count won offers: %w", err)
@@ -510,7 +514,7 @@ func (r *OfferRepository) GetRecentOffers(ctx context.Context, limit int) ([]dom
 	var offers []domain.Offer
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
-		Order("created_at DESC").
+		Order("updated_at DESC").
 		Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&offers).Error
@@ -518,10 +522,14 @@ func (r *OfferRepository) GetRecentOffers(ctx context.Context, limit int) ([]dom
 }
 
 // GetWinRate calculates the win rate (won / (won + lost) * 100)
+// Won includes both order and completed phases
 func (r *OfferRepository) GetWinRate(ctx context.Context) (float64, error) {
 	var won, lost int64
 
-	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase = ?", domain.OfferPhaseWon)
+	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("phase IN ?", []domain.OfferPhase{
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
+	})
 	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
 	if err := wonQuery.Count(&won).Error; err != nil {
 		return 0, err
@@ -577,7 +585,8 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since *tim
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
 		domain.OfferPhaseSent,
-		domain.OfferPhaseWon,
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
 		domain.OfferPhaseLost,
 	}
 
@@ -638,13 +647,14 @@ func (r *OfferRepository) GetDashboardOfferStats(ctx context.Context, since *tim
 
 // GetDashboardPipelineStats returns pipeline statistics by phase for the dashboard
 // If since is nil, no date filter is applied (all time)
-// Includes only: in_progress, sent, won, lost (excludes draft and expired)
+// Includes only: in_progress, sent, order, completed, lost (excludes draft and expired)
 func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since *time.Time) ([]DashboardPipelineStats, error) {
 	// Valid phases for pipeline (excludes draft and expired)
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
 		domain.OfferPhaseSent,
-		domain.OfferPhaseWon,
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
 		domain.OfferPhaseLost,
 	}
 
@@ -685,12 +695,16 @@ func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since *
 
 // GetDashboardWinRateStats returns win rate statistics for the dashboard
 // If since is nil, no date filter is applied (all time)
+// Won includes both order and completed phases
 func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since *time.Time) (*DashboardWinRateStats, error) {
 	stats := &DashboardWinRateStats{}
 
-	// Get won count and value
+	// Get won count and value (order + completed phases)
 	wonQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Where("phase = ?", domain.OfferPhaseWon)
+		Where("phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseOrder,
+			domain.OfferPhaseCompleted,
+		})
 	if since != nil {
 		wonQuery = wonQuery.Where("created_at >= ?", *since)
 	}
@@ -750,7 +764,27 @@ func (r *OfferRepository) GetRecentOffersInWindow(ctx context.Context, since *ti
 	if since != nil {
 		query = query.Where("created_at >= ?", *since)
 	}
-	query = query.Order("created_at DESC").Limit(limit)
+	query = query.Order("updated_at DESC").Limit(limit)
+	query = ApplyCompanyFilter(ctx, query)
+	err := query.Find(&offers).Error
+	return offers, err
+}
+
+// GetRecentOffersByPhase returns the most recent offers in a specific phase within the time window
+// fromDate and toDate filter by updated_at for recency
+// Sorted by updated_at DESC for recency
+func (r *OfferRepository) GetRecentOffersByPhase(ctx context.Context, phase domain.OfferPhase, fromDate, toDate *time.Time, limit int) ([]domain.Offer, error) {
+	var offers []domain.Offer
+	query := r.db.WithContext(ctx).
+		Preload("Customer").
+		Where("phase = ?", phase)
+	if fromDate != nil {
+		query = query.Where("updated_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		query = query.Where("updated_at <= ?", *toDate)
+	}
+	query = query.Order("updated_at DESC").Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&offers).Error
 	return offers, err
@@ -791,7 +825,7 @@ func (r *OfferRepository) ListInquiries(ctx context.Context, page, pageSize int,
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&offers).Error
+	err := query.Offset(offset).Limit(pageSize).Order("updated_at DESC").Find(&offers).Error
 
 	return offers, total, err
 }
@@ -961,12 +995,12 @@ func (r *OfferRepository) ListByProject(ctx context.Context, projectID uuid.UUID
 		Preload("Items").
 		Where("project_id = ?", projectID)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Order("created_at DESC").Find(&offers).Error
+	err := query.Order("updated_at DESC").Find(&offers).Error
 	return offers, err
 }
 
 // GetHighestOfferValueForProject returns the highest offer value among all offers in a project
-// Only considers offers that are not in terminal states (won, lost, expired)
+// Only considers offers that are not in terminal states (order, completed, lost, expired)
 func (r *OfferRepository) GetHighestOfferValueForProject(ctx context.Context, projectID uuid.UUID) (float64, error) {
 	var maxValue float64
 	query := r.db.WithContext(ctx).
@@ -974,7 +1008,8 @@ func (r *OfferRepository) GetHighestOfferValueForProject(ctx context.Context, pr
 		Select("COALESCE(MAX(value), 0)").
 		Where("project_id = ?", projectID).
 		Where("phase NOT IN ?", []domain.OfferPhase{
-			domain.OfferPhaseWon,
+			domain.OfferPhaseOrder,
+			domain.OfferPhaseCompleted,
 			domain.OfferPhaseLost,
 			domain.OfferPhaseExpired,
 		})
@@ -984,7 +1019,7 @@ func (r *OfferRepository) GetHighestOfferValueForProject(ctx context.Context, pr
 }
 
 // ExpireSiblingOffers marks all other offers in the same project as expired
-// This is called when one offer is won - the others become expired (NOT lost)
+// This is called when one offer becomes an order - the others become expired (NOT lost)
 // Returns the IDs of the expired offers
 func (r *OfferRepository) ExpireSiblingOffers(ctx context.Context, projectID uuid.UUID, winningOfferID uuid.UUID) ([]uuid.UUID, error) {
 	// First get the IDs of offers that will be expired
@@ -995,7 +1030,8 @@ func (r *OfferRepository) ExpireSiblingOffers(ctx context.Context, projectID uui
 		Where("project_id = ?", projectID).
 		Where("id != ?", winningOfferID).
 		Where("phase NOT IN ?", []domain.OfferPhase{
-			domain.OfferPhaseWon,
+			domain.OfferPhaseOrder,
+			domain.OfferPhaseCompleted,
 			domain.OfferPhaseLost,
 			domain.OfferPhaseExpired,
 		}).
@@ -1054,14 +1090,15 @@ func (r *OfferRepository) CountOffersByProject(ctx context.Context, projectID uu
 	return count, err
 }
 
-// CountActiveOffersByProject returns the count of active offers (not won/lost/expired) for a project
+// CountActiveOffersByProject returns the count of active offers (not order/completed/lost/expired) for a project
 func (r *OfferRepository) CountActiveOffersByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
 	var count int64
 	query := r.db.WithContext(ctx).
 		Model(&domain.Offer{}).
 		Where("project_id = ?", projectID).
 		Where("phase NOT IN ?", []domain.OfferPhase{
-			domain.OfferPhaseWon,
+			domain.OfferPhaseOrder,
+			domain.OfferPhaseCompleted,
 			domain.OfferPhaseLost,
 			domain.OfferPhaseExpired,
 		})
@@ -1070,14 +1107,15 @@ func (r *OfferRepository) CountActiveOffersByProject(ctx context.Context, projec
 	return count, err
 }
 
-// GetActiveOffersByProject returns all active offers (not won/lost/expired) for a project
+// GetActiveOffersByProject returns all active offers (not order/completed/lost/expired) for a project
 func (r *OfferRepository) GetActiveOffersByProject(ctx context.Context, projectID uuid.UUID) ([]domain.Offer, error) {
 	var offers []domain.Offer
 	query := r.db.WithContext(ctx).
 		Preload("Customer").
 		Where("project_id = ?", projectID).
 		Where("phase NOT IN ?", []domain.OfferPhase{
-			domain.OfferPhaseWon,
+			domain.OfferPhaseOrder,
+			domain.OfferPhaseCompleted,
 			domain.OfferPhaseLost,
 			domain.OfferPhaseExpired,
 		})
@@ -1094,7 +1132,8 @@ func (r *OfferRepository) GetBestActiveOfferForProject(ctx context.Context, proj
 		Preload("Customer").
 		Where("project_id = ?", projectID).
 		Where("phase NOT IN ?", []domain.OfferPhase{
-			domain.OfferPhaseWon,
+			domain.OfferPhaseOrder,
+			domain.OfferPhaseCompleted,
 			domain.OfferPhaseLost,
 			domain.OfferPhaseExpired,
 		}).
@@ -1145,28 +1184,42 @@ func (r *OfferRepository) UpdateProjectNameByProjectID(ctx context.Context, proj
 }
 
 // GetBestOfferForProject returns the "best" offer for a project based on priority:
-// 1. Won offer (if any exists)
-// 2. Sent offer with highest value
-// 3. In_progress offer with highest value
-// 4. Draft offer with highest value
+// 1. Completed offer (if any exists)
+// 2. Order offer (if any exists)
+// 3. Sent offer with highest value
+// 4. In_progress offer with highest value
+// 5. Draft offer with highest value
 // Returns nil if no offers exist for the project.
 func (r *OfferRepository) GetBestOfferForProject(ctx context.Context, projectID uuid.UUID) (*domain.Offer, error) {
 	var offer domain.Offer
 
-	// Priority 1: Won offer
+	// Priority 1: Completed offer
 	err := r.db.WithContext(ctx).
 		Where("project_id = ?", projectID).
-		Where("phase = ?", domain.OfferPhaseWon).
+		Where("phase = ?", domain.OfferPhaseCompleted).
 		Order("value DESC").
 		First(&offer).Error
 	if err == nil {
 		return &offer, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("failed to query won offers: %w", err)
+		return nil, fmt.Errorf("failed to query completed offers: %w", err)
 	}
 
-	// Priority 2: Sent offer with highest value
+	// Priority 2: Order offer (in execution)
+	err = r.db.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Where("phase = ?", domain.OfferPhaseOrder).
+		Order("value DESC").
+		First(&offer).Error
+	if err == nil {
+		return &offer, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to query order offers: %w", err)
+	}
+
+	// Priority 3: Sent offer with highest value
 	err = r.db.WithContext(ctx).
 		Where("project_id = ?", projectID).
 		Where("phase = ?", domain.OfferPhaseSent).
@@ -1179,7 +1232,7 @@ func (r *OfferRepository) GetBestOfferForProject(ctx context.Context, projectID 
 		return nil, fmt.Errorf("failed to query sent offers: %w", err)
 	}
 
-	// Priority 3: In_progress offer with highest value
+	// Priority 4: In_progress offer with highest value
 	err = r.db.WithContext(ctx).
 		Where("project_id = ?", projectID).
 		Where("phase = ?", domain.OfferPhaseInProgress).
@@ -1192,7 +1245,7 @@ func (r *OfferRepository) GetBestOfferForProject(ctx context.Context, projectID 
 		return nil, fmt.Errorf("failed to query in_progress offers: %w", err)
 	}
 
-	// Priority 4: Draft offer with highest value
+	// Priority 5: Draft offer with highest value
 	err = r.db.WithContext(ctx).
 		Where("project_id = ?", projectID).
 		Where("phase = ?", domain.OfferPhaseDraft).
@@ -1275,7 +1328,8 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
 		domain.OfferPhaseSent,
-		domain.OfferPhaseWon,
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
 		domain.OfferPhaseLost,
 	}
 
@@ -1315,9 +1369,9 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 					COUNT(*) AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NOT NULL
-				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.phase IN ($2, $3, $4, $5, $6)
 				  AND o.created_at >= $1
-				  AND o.company_id = $6
+				  AND o.company_id = $7
 				GROUP BY o.company_id, o.phase, o.project_id
 			),
 			orphan_offers AS (
@@ -1329,9 +1383,9 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 					1 AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NULL
-				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.phase IN ($2, $3, $4, $5, $6)
 				  AND o.created_at >= $1
-				  AND o.company_id = $6
+				  AND o.company_id = $7
 			),
 			combined_metrics AS (
 				SELECT
@@ -1364,7 +1418,7 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 				COALESCE(SUM(value * COALESCE(probability, 0) / 100.0), 0) AS weighted_value
 			FROM combined_metrics
 			GROUP BY phase
-		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3], *companyID)
+		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3], validPhases[4], *companyID)
 	} else {
 		query = r.db.WithContext(ctx).Raw(`
 			WITH
@@ -1387,7 +1441,7 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 					COUNT(*) AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NOT NULL
-				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.phase IN ($2, $3, $4, $5, $6)
 				  AND o.created_at >= $1
 				GROUP BY o.company_id, o.phase, o.project_id
 			),
@@ -1400,7 +1454,7 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 					1 AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NULL
-				  AND o.phase IN ($2, $3, $4, $5)
+				  AND o.phase IN ($2, $3, $4, $5, $6)
 				  AND o.created_at >= $1
 			),
 			combined_metrics AS (
@@ -1434,7 +1488,7 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 				COALESCE(SUM(value * COALESCE(probability, 0) / 100.0), 0) AS weighted_value
 			FROM combined_metrics
 			GROUP BY phase
-		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3])
+		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3], validPhases[4])
 	}
 
 	if err := query.Scan(&results).Error; err != nil {
@@ -1505,4 +1559,406 @@ func (r *OfferRepository) GetAggregatedOfferStats(ctx context.Context, since *ti
 	}
 
 	return stats, nil
+}
+
+// ============================================================================
+// Order Phase Execution Methods
+// ============================================================================
+
+// UpdateOfferHealth updates the health status and optional completion percent for offers in order phase
+func (r *OfferRepository) UpdateOfferHealth(ctx context.Context, tx *gorm.DB, id uuid.UUID, health domain.OfferHealth, completionPercent *float64) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	updates := map[string]interface{}{
+		"health": health,
+	}
+	if completionPercent != nil {
+		updates["completion_percent"] = *completionPercent
+	}
+
+	query := db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer health: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateOfferSpent updates the spent amount for offers in order phase
+func (r *OfferRepository) UpdateOfferSpent(ctx context.Context, tx *gorm.DB, id uuid.UUID, spent float64) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	query := db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Update("spent", spent)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer spent: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateOfferInvoiced updates the invoiced amount for offers in order phase
+func (r *OfferRepository) UpdateOfferInvoiced(ctx context.Context, tx *gorm.DB, id uuid.UUID, invoiced float64) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	query := db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Update("invoiced", invoiced)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer invoiced: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateOfferManager updates the manager for offers
+func (r *OfferRepository) UpdateOfferManager(ctx context.Context, tx *gorm.DB, id uuid.UUID, managerID *string, managerName string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	query := db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Updates(map[string]interface{}{
+		"manager_id":   managerID,
+		"manager_name": managerName,
+	})
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer manager: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateOfferTeamMembers updates team members for offers
+func (r *OfferRepository) UpdateOfferTeamMembers(ctx context.Context, tx *gorm.DB, id uuid.UUID, teamMembers []string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	query := db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Update("team_members", pq.StringArray(teamMembers))
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer team members: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateOfferDates updates start/end dates for offers in order phase
+func (r *OfferRepository) UpdateOfferDates(ctx context.Context, tx *gorm.DB, id uuid.UUID, startDate, endDate, estimatedCompletionDate *time.Time) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	updates := map[string]interface{}{}
+	if startDate != nil {
+		updates["start_date"] = *startDate
+	}
+	if endDate != nil {
+		updates["end_date"] = *endDate
+	}
+	if estimatedCompletionDate != nil {
+		updates["estimated_completion_date"] = *estimatedCompletionDate
+	}
+
+	if len(updates) == 0 {
+		return nil // No updates needed
+	}
+
+	query := db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id)
+	query = ApplyCompanyFilter(ctx, query)
+
+	result := query.Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update offer dates: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// ============================================================================
+// Order Dashboard Statistics Methods
+// ============================================================================
+
+// OrderStats holds statistics for offers in order/completed phases
+type OrderStats struct {
+	TotalOrders     int64                      // Count of offers in order phase
+	CompletedOrders int64                      // Count of offers in completed phase
+	TotalValue      float64                    // Sum of value for order phase offers
+	TotalSpent      float64                    // Sum of spent for order phase offers
+	TotalInvoiced   float64                    // Sum of invoiced for order phase offers
+	OrderReserve    float64                    // Sum of (value - invoiced) for order phase offers
+	AvgCompletion   float64                    // Average completion_percent for order phase offers
+	ByHealth        map[domain.OfferHealth]int // Count by health status
+}
+
+// GetOrderStats returns statistics for offers in order/completed phases
+func (r *OfferRepository) GetOrderStats(ctx context.Context, companyID *domain.CompanyID) (*OrderStats, error) {
+	stats := &OrderStats{
+		ByHealth: make(map[domain.OfferHealth]int),
+	}
+
+	// Build base query
+	baseQuery := r.db.WithContext(ctx).Model(&domain.Offer{})
+	if companyID != nil {
+		baseQuery = baseQuery.Where("company_id = ?", *companyID)
+	} else {
+		baseQuery = ApplyCompanyFilter(ctx, baseQuery)
+	}
+
+	// Count offers in order phase
+	orderQuery := baseQuery.Session(&gorm.Session{}).Where("phase = ?", domain.OfferPhaseOrder)
+	if err := orderQuery.Count(&stats.TotalOrders).Error; err != nil {
+		return nil, fmt.Errorf("failed to count order phase offers: %w", err)
+	}
+
+	// Count completed offers
+	completedQuery := baseQuery.Session(&gorm.Session{}).Where("phase = ?", domain.OfferPhaseCompleted)
+	if err := completedQuery.Count(&stats.CompletedOrders).Error; err != nil {
+		return nil, fmt.Errorf("failed to count completed offers: %w", err)
+	}
+
+	// Aggregate values for order phase offers
+	var aggregates struct {
+		TotalValue    float64
+		TotalSpent    float64
+		TotalInvoiced float64
+		OrderReserve  float64
+		AvgCompletion float64
+	}
+	aggregateQuery := baseQuery.Session(&gorm.Session{}).
+		Where("phase = ?", domain.OfferPhaseOrder).
+		Select(`
+			COALESCE(SUM(value), 0) as total_value,
+			COALESCE(SUM(spent), 0) as total_spent,
+			COALESCE(SUM(invoiced), 0) as total_invoiced,
+			COALESCE(SUM(value - invoiced), 0) as order_reserve,
+			COALESCE(AVG(completion_percent), 0) as avg_completion
+		`)
+	if err := aggregateQuery.Scan(&aggregates).Error; err != nil {
+		return nil, fmt.Errorf("failed to aggregate order stats: %w", err)
+	}
+
+	stats.TotalValue = aggregates.TotalValue
+	stats.TotalSpent = aggregates.TotalSpent
+	stats.TotalInvoiced = aggregates.TotalInvoiced
+	stats.OrderReserve = aggregates.OrderReserve
+	stats.AvgCompletion = aggregates.AvgCompletion
+
+	// Count by health status
+	healthCounts, err := r.CountByHealthStatus(ctx, companyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count by health: %w", err)
+	}
+	stats.ByHealth = healthCounts
+
+	return stats, nil
+}
+
+// CountByHealthStatus returns count of offers grouped by health status
+// Only counts offers in order phase (active execution)
+func (r *OfferRepository) CountByHealthStatus(ctx context.Context, companyID *domain.CompanyID) (map[domain.OfferHealth]int, error) {
+	type healthCount struct {
+		Health domain.OfferHealth
+		Count  int
+	}
+
+	var results []healthCount
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Select("health, COUNT(*) as count").
+		Where("phase = ?", domain.OfferPhaseOrder).
+		Where("health IS NOT NULL").
+		Group("health")
+
+	if companyID != nil {
+		query = query.Where("company_id = ?", *companyID)
+	} else {
+		query = ApplyCompanyFilter(ctx, query)
+	}
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to count by health status: %w", err)
+	}
+
+	counts := make(map[domain.OfferHealth]int)
+	for _, r := range results {
+		counts[r.Health] = r.Count
+	}
+
+	return counts, nil
+}
+
+// ListOrderPhaseOffers returns offers in order phase with pagination
+func (r *OfferRepository) ListOrderPhaseOffers(ctx context.Context, page, pageSize int, companyID *domain.CompanyID, health *domain.OfferHealth) ([]domain.Offer, int64, error) {
+	var offers []domain.Offer
+	var total int64
+
+	// Validate pagination
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Preload("Customer").
+		Where("phase = ?", domain.OfferPhaseOrder)
+
+	if companyID != nil {
+		query = query.Where("company_id = ?", *companyID)
+	} else {
+		query = ApplyCompanyFilter(ctx, query)
+	}
+
+	if health != nil {
+		query = query.Where("health = ?", *health)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count order phase offers: %w", err)
+	}
+
+	// Get paginated results
+	offset := (page - 1) * pageSize
+	err := query.
+		Order("updated_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&offers).Error
+
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list order phase offers: %w", err)
+	}
+
+	return offers, total, nil
+}
+
+// ============================================================================
+// Project Offer Count Methods
+// ============================================================================
+
+// CountOffersByProjectIDs returns the count of offers for each project ID
+// Returns a map where key is project ID and value is offer count
+func (r *OfferRepository) CountOffersByProjectIDs(ctx context.Context, projectIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	if len(projectIDs) == 0 {
+		return make(map[uuid.UUID]int), nil
+	}
+
+	type projectCount struct {
+		ProjectID uuid.UUID `gorm:"column:project_id"`
+		Count     int       `gorm:"column:count"`
+	}
+
+	var results []projectCount
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Select("project_id, COUNT(*) as count").
+		Where("project_id IN ?", projectIDs).
+		Group("project_id")
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to count offers by project IDs: %w", err)
+	}
+
+	// Convert to map
+	counts := make(map[uuid.UUID]int)
+	for _, r := range results {
+		counts[r.ProjectID] = r.Count
+	}
+
+	return counts, nil
+}
+
+// ProjectCustomerInfo holds customer information for offers in a project
+type ProjectCustomerInfo struct {
+	CustomerID   uuid.UUID
+	CustomerName string
+}
+
+// GetUniqueCustomersForProject returns the unique customer IDs and names for all offers in a project
+// If all offers have the same customer, returns a single entry
+// If offers have different customers, returns multiple entries
+// Returns empty slice if project has no offers
+func (r *OfferRepository) GetUniqueCustomersForProject(ctx context.Context, projectID uuid.UUID) ([]ProjectCustomerInfo, error) {
+	type customerResult struct {
+		CustomerID   uuid.UUID `gorm:"column:customer_id"`
+		CustomerName string    `gorm:"column:customer_name"`
+	}
+
+	var results []customerResult
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Select("DISTINCT customer_id, customer_name").
+		Where("project_id = ?", projectID)
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get unique customers for project: %w", err)
+	}
+
+	// Convert to return type
+	customers := make([]ProjectCustomerInfo, len(results))
+	for i, r := range results {
+		customers[i] = ProjectCustomerInfo{
+			CustomerID:   r.CustomerID,
+			CustomerName: r.CustomerName,
+		}
+	}
+
+	return customers, nil
 }

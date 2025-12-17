@@ -49,7 +49,7 @@ func (r *NotificationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&notifications).Error
+	err := query.Offset(offset).Limit(pageSize).Order("updated_at DESC").Find(&notifications).Error
 
 	return notifications, total, err
 }

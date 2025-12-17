@@ -229,6 +229,15 @@ func (r *ActivityRepository) applyFilters(query *gorm.DB, filters *domain.Activi
 		query = query.Where("creator_id = ?", *filters.CreatorID)
 	}
 
+	// Filter by occurred_at date range (from/to parameters)
+	if filters.OccurredFrom != nil {
+		query = query.Where("occurred_at >= ?", *filters.OccurredFrom)
+	}
+
+	if filters.OccurredTo != nil {
+		query = query.Where("occurred_at <= ?", *filters.OccurredTo)
+	}
+
 	if filters.DueDateFrom != nil {
 		query = query.Where("due_date >= ?", *filters.DueDateFrom)
 	}
@@ -298,7 +307,7 @@ func (r *ActivityRepository) CountByStatus(ctx context.Context, userID string) (
 func (r *ActivityRepository) GetRecentActivities(ctx context.Context, limit int) ([]domain.Activity, error) {
 	var activities []domain.Activity
 	query := r.db.WithContext(ctx).
-		Order("created_at DESC").
+		Order("updated_at DESC").
 		Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&activities).Error
@@ -313,7 +322,7 @@ func (r *ActivityRepository) GetRecentActivitiesInWindow(ctx context.Context, si
 	if since != nil {
 		query = query.Where("created_at >= ?", *since)
 	}
-	query = query.Order("created_at DESC").Limit(limit)
+	query = query.Order("updated_at DESC").Limit(limit)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Find(&activities).Error
 	return activities, err

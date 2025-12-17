@@ -286,7 +286,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	createOfferTestOffer(t, db, "Test Offer Filter 1", domain.OfferPhaseDraft, domain.OfferStatusActive)
 	createOfferTestOffer(t, db, "Test Offer Filter 2", domain.OfferPhaseSent, domain.OfferStatusActive)
 	createOfferTestOffer(t, db, "Test Offer Filter 3", domain.OfferPhaseDraft, domain.OfferStatusInactive)
-	createOfferTestOffer(t, db, "Test Offer Filter 4", domain.OfferPhaseWon, domain.OfferStatusArchived)
+	createOfferTestOffer(t, db, "Test Offer Filter 4", domain.OfferPhaseOrder, domain.OfferStatusArchived)
 
 	t.Run("filter by status active", func(t *testing.T) {
 		status := domain.OfferStatusActive
@@ -376,7 +376,7 @@ func TestOfferRepository_UpdateStatus(t *testing.T) {
 	})
 
 	t.Run("update status to archived", func(t *testing.T) {
-		offer := createOfferTestOffer(t, db, "Test Offer Status Update 2", domain.OfferPhaseWon, domain.OfferStatusActive)
+		offer := createOfferTestOffer(t, db, "Test Offer Status Update 2", domain.OfferPhaseOrder, domain.OfferStatusActive)
 
 		err := repo.UpdateStatus(context.Background(), offer.ID, domain.OfferStatusArchived)
 		assert.NoError(t, err)
@@ -424,12 +424,12 @@ func TestOfferRepository_UpdatePhase(t *testing.T) {
 	t.Run("update phase to won", func(t *testing.T) {
 		offer := createOfferTestOffer(t, db, "Test Offer Phase Update 3", domain.OfferPhaseSent, domain.OfferStatusActive)
 
-		err := repo.UpdatePhase(context.Background(), offer.ID, domain.OfferPhaseWon)
+		err := repo.UpdatePhase(context.Background(), offer.ID, domain.OfferPhaseOrder)
 		assert.NoError(t, err)
 
 		found, err := repo.GetByID(context.Background(), offer.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, domain.OfferPhaseWon, found.Phase)
+		assert.Equal(t, domain.OfferPhaseOrder, found.Phase)
 	})
 
 	t.Run("update phase to lost", func(t *testing.T) {
@@ -635,7 +635,7 @@ func TestOfferRepository_GetTotalPipelineValue(t *testing.T) {
 	err = db.Save(offer3).Error
 	require.NoError(t, err)
 
-	offer4 := createOfferTestOffer(t, db, "Test Pipeline 4", domain.OfferPhaseWon, domain.OfferStatusActive)
+	offer4 := createOfferTestOffer(t, db, "Test Pipeline 4", domain.OfferPhaseOrder, domain.OfferStatusActive)
 	offer4.Value = 15000
 	err = db.Save(offer4).Error
 	require.NoError(t, err)
@@ -684,14 +684,12 @@ func TestOfferRepository_Search(t *testing.T) {
 
 // createOfferTestProject creates a test project and returns it
 func createOfferTestProject(t *testing.T, db *gorm.DB, name string, customerID uuid.UUID, customerName string) *domain.Project {
-	managerID := "test-manager"
+	custID := customerID
 	project := &domain.Project{
 		Name:         name,
-		CustomerID:   customerID,
+		CustomerID:   &custID,
 		CustomerName: customerName,
-		CompanyID:    domain.CompanyStalbygg,
 		Phase:        domain.ProjectPhaseTilbud,
-		ManagerID:    &managerID,
 	}
 	err := db.Create(project).Error
 	require.NoError(t, err)

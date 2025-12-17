@@ -324,7 +324,8 @@ jobs:
               "DATABASE_SSLMODE=require" \
               "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" \
               "AZURE_CLIENT_ID=secretref:azure-client-id" \
-              "AZURE_CLIENT_SECRET=secretref:azure-client-secret"
+              "AZURE_CLIENT_SECRET=secretref:azure-client-secret" \
+              "CORS_ALLOWEDORIGINS=https://straye-relation-portal-staging.proudsmoke-10281cc0.norwayeast.azurecontainerapps.io"
 
       - name: Verify deployment
         run: |

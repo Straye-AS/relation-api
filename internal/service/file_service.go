@@ -72,8 +72,9 @@ func (s *FileService) Upload(ctx context.Context, filename, contentType string, 
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetFile,
 			TargetID:    file.ID,
-			Title:       "File uploaded",
-			Body:        fmt.Sprintf("File '%s' was uploaded", filename),
+			TargetName:  filename,
+			Title:       "Fil lastet opp",
+			Body:        fmt.Sprintf("Filen '%s' ble lastet opp", filename),
 			CreatorName: userCtx.DisplayName,
 		}
 		s.activityRepo.Create(ctx, activity)
