@@ -716,7 +716,6 @@ func TestOfferService_Update_ClosedPhaseCheck(t *testing.T) {
 // ============================================================================
 
 func TestOfferService_ActivityLogging(t *testing.T) {
-	t.Skip("Skipping until activity logging is properly tested - activities not being created in test context")
 	db := setupOfferTestDB(t)
 	svc, fixtures := setupOfferTestService(t, db)
 	t.Cleanup(func() { fixtures.cleanup(t) })
@@ -734,15 +733,15 @@ func TestOfferService_ActivityLogging(t *testing.T) {
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(activities), 1)
 
-		// Find the send activity
+		// Find the send activity (Norwegian: "Tilbud sendt")
 		var found bool
 		for _, a := range activities {
-			if a.Title == "Offer sent" {
+			if a.Title == "Tilbud sendt" {
 				found = true
 				break
 			}
 		}
-		assert.True(t, found, "expected 'Offer sent' activity")
+		assert.True(t, found, "expected 'Tilbud sendt' activity")
 	})
 
 	t.Run("accept offer logs activity", func(t *testing.T) {
@@ -756,14 +755,15 @@ func TestOfferService_ActivityLogging(t *testing.T) {
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(activities), 1)
 
+		// Find the accept activity (Norwegian: "Ordre akseptert")
 		var found bool
 		for _, a := range activities {
-			if a.Title == "Offer accepted" {
+			if a.Title == "Ordre akseptert" {
 				found = true
 				break
 			}
 		}
-		assert.True(t, found, "expected 'Offer accepted' activity")
+		assert.True(t, found, "expected 'Ordre akseptert' activity")
 	})
 
 	t.Run("clone offer logs activities on both offers", func(t *testing.T) {
@@ -773,29 +773,29 @@ func TestOfferService_ActivityLogging(t *testing.T) {
 		cloned, err := svc.CloneOffer(ctx, offer.ID, req)
 		require.NoError(t, err)
 
-		// Check source offer has clone activity
+		// Check source offer has clone activity (Norwegian: "Tilbud klonet")
 		sourceActivities, err := svc.GetActivities(ctx, offer.ID, 10)
 		require.NoError(t, err)
 		var foundSource bool
 		for _, a := range sourceActivities {
-			if a.Title == "Offer cloned" {
+			if a.Title == "Tilbud klonet" {
 				foundSource = true
 				break
 			}
 		}
-		assert.True(t, foundSource, "expected 'Offer cloned' activity on source")
+		assert.True(t, foundSource, "expected 'Tilbud klonet' activity on source")
 
-		// Check cloned offer has creation activity
+		// Check cloned offer has creation activity (Norwegian: "Tilbud opprettet fra klone")
 		clonedActivities, err := svc.GetActivities(ctx, cloned.ID, 10)
 		require.NoError(t, err)
 		var foundClone bool
 		for _, a := range clonedActivities {
-			if a.Title == "Offer created from clone" {
+			if a.Title == "Tilbud opprettet fra klone" {
 				foundClone = true
 				break
 			}
 		}
-		assert.True(t, foundClone, "expected 'Offer created from clone' activity on clone")
+		assert.True(t, foundClone, "expected 'Tilbud opprettet fra klone' activity on clone")
 	})
 }
 
@@ -845,8 +845,6 @@ func TestOfferService_EdgeCases(t *testing.T) {
 // ============================================================================
 
 func TestOfferService_OfferNumberRules(t *testing.T) {
-	t.Skip("Skipping until test properly sets CompanyID in CreateOfferRequest - causes nil pointer panic at offer_service.go:301")
-
 	db := setupOfferTestDB(t)
 	svc, fixtures := setupOfferTestService(t, db)
 	t.Cleanup(func() { fixtures.cleanup(t) })
@@ -859,6 +857,7 @@ func TestOfferService_OfferNumberRules(t *testing.T) {
 		req := &domain.CreateOfferRequest{
 			Title:      "Test Draft No Number",
 			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
 			Phase:      domain.OfferPhaseDraft,
 		}
 
@@ -875,6 +874,7 @@ func TestOfferService_OfferNumberRules(t *testing.T) {
 		req := &domain.CreateOfferRequest{
 			Title:             "Test InProgress With Number",
 			CustomerID:        &customer.ID,
+			CompanyID:         domain.CompanyStalbygg,
 			Phase:             domain.OfferPhaseInProgress,
 			ResponsibleUserID: testUserID,
 		}

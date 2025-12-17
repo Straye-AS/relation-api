@@ -9,29 +9,29 @@ import (
 // DTOs for API responses matching Norwegian spec
 
 type CustomerDTO struct {
-	ID            uuid.UUID        `json:"id"`
-	Name          string           `json:"name"`
-	OrgNumber     string           `json:"orgNumber"`
-	Email         string           `json:"email"`
-	Phone         string           `json:"phone"`
-	Address       string           `json:"address,omitempty"`
-	City          string           `json:"city,omitempty"`
-	PostalCode    string           `json:"postalCode,omitempty"`
-	Country       string           `json:"country"`
-	ContactPerson string           `json:"contactPerson,omitempty"`
-	ContactEmail  string           `json:"contactEmail,omitempty"`
-	ContactPhone  string           `json:"contactPhone,omitempty"`
-	Status        CustomerStatus   `json:"status"`
-	Tier          CustomerTier     `json:"tier"`
-	Industry      CustomerIndustry `json:"industry,omitempty"`
-	Notes         string           `json:"notes,omitempty"`
-	CustomerClass string           `json:"customerClass,omitempty"`
-	CreditLimit   *float64         `json:"creditLimit,omitempty"`
-	IsInternal    bool             `json:"isInternal"`
-	Municipality  string           `json:"municipality,omitempty"`
-	County        string           `json:"county,omitempty"`
-	CreatedAt        string           `json:"createdAt"` // ISO 8601
-	UpdatedAt        string           `json:"updatedAt"` // ISO 8601
+	ID               uuid.UUID        `json:"id"`
+	Name             string           `json:"name"`
+	OrgNumber        string           `json:"orgNumber"`
+	Email            string           `json:"email"`
+	Phone            string           `json:"phone"`
+	Address          string           `json:"address,omitempty"`
+	City             string           `json:"city,omitempty"`
+	PostalCode       string           `json:"postalCode,omitempty"`
+	Country          string           `json:"country"`
+	ContactPerson    string           `json:"contactPerson,omitempty"`
+	ContactEmail     string           `json:"contactEmail,omitempty"`
+	ContactPhone     string           `json:"contactPhone,omitempty"`
+	Status           CustomerStatus   `json:"status"`
+	Tier             CustomerTier     `json:"tier"`
+	Industry         CustomerIndustry `json:"industry,omitempty"`
+	Notes            string           `json:"notes,omitempty"`
+	CustomerClass    string           `json:"customerClass,omitempty"`
+	CreditLimit      *float64         `json:"creditLimit,omitempty"`
+	IsInternal       bool             `json:"isInternal"`
+	Municipality     string           `json:"municipality,omitempty"`
+	County           string           `json:"county,omitempty"`
+	CreatedAt        string           `json:"createdAt"`                  // ISO 8601
+	UpdatedAt        string           `json:"updatedAt"`                  // ISO 8601
 	TotalValueActive float64          `json:"totalValueActive,omitempty"` // Value of offers in in_progress or sent phases
 	TotalValueWon    float64          `json:"totalValueWon,omitempty"`    // Value of offers in order or completed phases
 	ActiveOffers     int              `json:"activeOffers,omitempty"`
@@ -268,9 +268,9 @@ type ProjectDTO struct {
 	Location          string       `json:"location,omitempty"`
 	DealID            *uuid.UUID   `json:"dealId,omitempty"`
 	ExternalReference string       `json:"externalReference,omitempty"`
-	OfferCount        int          `json:"offerCount"`  // Count of offers linked to this project
-	CreatedAt         string       `json:"createdAt"`   // ISO 8601
-	UpdatedAt         string       `json:"updatedAt"`   // ISO 8601
+	OfferCount        int          `json:"offerCount"` // Count of offers linked to this project
+	CreatedAt         string       `json:"createdAt"`  // ISO 8601
+	UpdatedAt         string       `json:"updatedAt"`  // ISO 8601
 	// User tracking fields
 	CreatedByID   string `json:"createdById,omitempty"`
 	CreatedByName string `json:"createdByName,omitempty"`
@@ -514,7 +514,7 @@ type DashboardMetrics struct {
 	WeightedOfferReserve float64 `json:"weightedOfferReserve"` // Sum of (value * probability/100) for active offers
 	AverageProbability   float64 `json:"averageProbability"`   // Average probability of active offers
 
-	// Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
+	// Pipeline Data (phases: in_progress, sent, order, lost - excludes draft and expired)
 	// Uses aggregation: for projects with multiple offers, only the highest value per phase is counted
 	Pipeline []PipelinePhaseData `json:"pipeline"`
 
@@ -1105,8 +1105,8 @@ type ActivityFilters struct {
 	TargetID      *uuid.UUID          `json:"targetId,omitempty"`
 	AssignedToID  *string             `json:"assignedToId,omitempty"`
 	CreatorID     *string             `json:"creatorId,omitempty"`
-	OccurredFrom  *time.Time          `json:"from,omitempty"`  // Filter by occurred_at >= from (start of day)
-	OccurredTo    *time.Time          `json:"to,omitempty"`    // Filter by occurred_at <= to (end of day)
+	OccurredFrom  *time.Time          `json:"from,omitempty"` // Filter by occurred_at >= from (start of day)
+	OccurredTo    *time.Time          `json:"to,omitempty"`   // Filter by occurred_at <= to (end of day)
 	DueDateFrom   *time.Time          `json:"dueDateFrom,omitempty"`
 	DueDateTo     *time.Time          `json:"dueDateTo,omitempty"`
 	ScheduledFrom *time.Time          `json:"scheduledFrom,omitempty"`
@@ -1477,7 +1477,7 @@ type UpdateProjectDescriptionRequest struct {
 
 // UpdateProjectPhaseRequest for updating project phase
 type UpdateProjectPhaseRequest struct {
-	Phase ProjectPhase `json:"phase" validate:"required,oneof=tilbud working active completed cancelled"`
+	Phase ProjectPhase `json:"phase" validate:"required,oneof=tilbud working on_hold completed cancelled"`
 }
 
 // UpdateProjectManagerRequest for updating project manager

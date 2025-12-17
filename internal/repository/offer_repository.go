@@ -682,12 +682,7 @@ func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since *
 	// Convert to DashboardPipelineStats
 	pipelineStats := make([]DashboardPipelineStats, len(results))
 	for i, r := range results {
-		pipelineStats[i] = DashboardPipelineStats{
-			Phase:         r.Phase,
-			Count:         r.Count,
-			TotalValue:    r.TotalValue,
-			WeightedValue: r.WeightedValue,
-		}
+		pipelineStats[i] = DashboardPipelineStats(r)
 	}
 
 	return pipelineStats, nil
@@ -1954,10 +1949,7 @@ func (r *OfferRepository) GetUniqueCustomersForProject(ctx context.Context, proj
 	// Convert to return type
 	customers := make([]ProjectCustomerInfo, len(results))
 	for i, r := range results {
-		customers[i] = ProjectCustomerInfo{
-			CustomerID:   r.CustomerID,
-			CustomerName: r.CustomerName,
-		}
+		customers[i] = ProjectCustomerInfo(r)
 	}
 
 	return customers, nil

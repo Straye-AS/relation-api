@@ -121,7 +121,7 @@ func (s *ContactService) Create(ctx context.Context, req *domain.CreateContactRe
 			Body:        fmt.Sprintf("Kontakten '%s' ble opprettet", contact.FullName()),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToContactDTO(contact)
@@ -228,7 +228,7 @@ func (s *ContactService) Update(ctx context.Context, id uuid.UUID, req *domain.U
 			Body:        fmt.Sprintf("Kontakten '%s' ble oppdatert", contact.FullName()),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToContactDTO(contact)
@@ -256,7 +256,7 @@ func (s *ContactService) Delete(ctx context.Context, id uuid.UUID) error {
 			Body:        fmt.Sprintf("Kontakten '%s' ble slettet", contact.FullName()),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	return nil
@@ -355,7 +355,7 @@ func (s *ContactService) AddRelationship(ctx context.Context, contactID uuid.UUI
 			Body:        fmt.Sprintf("Kontakten '%s' ble koblet til %s", contact.FullName(), req.EntityType),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToContactRelationshipDTO(rel)
@@ -391,7 +391,7 @@ func (s *ContactService) RemoveRelationship(ctx context.Context, contactID, rela
 			Body:        fmt.Sprintf("Kontakten '%s' ble frakoblet fra %s", contact.FullName(), rel.EntityType),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	return nil

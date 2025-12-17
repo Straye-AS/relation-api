@@ -62,8 +62,8 @@ func (s *FileService) Upload(ctx context.Context, filename, contentType string, 
 	}
 
 	if err := s.fileRepo.Create(ctx, file); err != nil {
-		// Try to delete from storage
-		s.storage.Delete(ctx, storagePath)
+		// Try to delete from storage (best effort cleanup)
+		_ = s.storage.Delete(ctx, storagePath)
 		return nil, fmt.Errorf("failed to create file record: %w", err)
 	}
 
@@ -77,7 +77,7 @@ func (s *FileService) Upload(ctx context.Context, filename, contentType string, 
 			Body:        fmt.Sprintf("Filen '%s' ble lastet opp", filename),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToFileDTO(file)

@@ -146,7 +146,7 @@ func TestAuditLogService_List(t *testing.T) {
 	assert.Len(t, logs, 5)
 
 	// List with user filter
-	logs, total, err = svc.List(ctx, service.AuditLogQueryParams{
+	_, total, err = svc.List(ctx, service.AuditLogQueryParams{
 		UserID:   userID,
 		Page:     1,
 		PageSize: 10,
@@ -205,7 +205,7 @@ func TestAuditLogService_ListWithPagination(t *testing.T) {
 	assert.Len(t, logs, 5)
 
 	// Get third page
-	logs, total, err = svc.List(ctx, service.AuditLogQueryParams{
+	logs, _, err = svc.List(ctx, service.AuditLogQueryParams{
 		Page:     3,
 		PageSize: 5,
 	})

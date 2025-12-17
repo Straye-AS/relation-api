@@ -3,7 +3,6 @@ package testutil
 import (
 	"fmt"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,12 +12,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
-)
-
-var (
-	cleanupOnce sync.Once
-	sharedDB    *gorm.DB
-	dbMutex     sync.Mutex
 )
 
 // SetupTestDB creates a connection to the test PostgreSQL database

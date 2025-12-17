@@ -208,7 +208,7 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 			Body:        fmt.Sprintf("Kunden '%s' ble opprettet", customer.Name),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToCustomerDTO(customer, 0.0, 0.0, 0)
@@ -431,7 +431,7 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 			Body:        fmt.Sprintf("Kunden '%s' ble oppdatert", customer.Name),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	// Get customer stats
@@ -478,7 +478,7 @@ func (s *CustomerService) Delete(ctx context.Context, id uuid.UUID) error {
 			Body:        fmt.Sprintf("Kunden '%s' ble slettet", customer.Name),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	return nil
@@ -1047,6 +1047,6 @@ func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID,
 			Body:        body,
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 }

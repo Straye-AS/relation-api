@@ -102,7 +102,7 @@ func (rt *Router) Setup() http.Handler {
 	// Health check (basic liveness probe)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Database health check (readiness probe with detailed stats)
@@ -112,7 +112,7 @@ func (rt *Router) Setup() http.Handler {
 			rt.logger.Error("Database health check failed", zap.Error(err))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "unhealthy",
 				"error":   err.Error(),
 				"service": "database",
@@ -122,7 +122,7 @@ func (rt *Router) Setup() http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "healthy",
 			"service": "database",
 			"stats": map[string]interface{}{
@@ -160,13 +160,13 @@ func (rt *Router) Setup() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		if allHealthy {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "healthy",
 				"checks": checks,
 			})
 		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "unhealthy",
 				"checks": checks,
 			})

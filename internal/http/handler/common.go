@@ -16,7 +16,7 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if data != nil {
-		json.NewEncoder(w).Encode(data)
+		_ = json.NewEncoder(w).Encode(data)
 	}
 }
 
@@ -32,7 +32,7 @@ func respondValidationError(w http.ResponseWriter, err error) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(domain.APIError{
+	_ = json.NewEncoder(w).Encode(domain.APIError{
 		Type:   domain.ErrorTypeValidation,
 		Title:  "Validation Error",
 		Status: http.StatusBadRequest,
@@ -89,7 +89,7 @@ func parseJSON(data string, target interface{}) error {
 func respondWithError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(domain.APIError{
+	_ = json.NewEncoder(w).Encode(domain.APIError{
 		Type:   getErrorType(status),
 		Title:  http.StatusText(status),
 		Status: status,

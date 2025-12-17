@@ -411,7 +411,7 @@ func (s *AuditLogService) toMap(v interface{}) map[string]interface{} {
 		return result
 	}
 
-	json.Unmarshal(data, &result)
+	_ = json.Unmarshal(data, &result)
 	return result
 }
 
