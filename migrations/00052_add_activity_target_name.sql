@@ -38,7 +38,7 @@ WHERE a.target_type = 'Deal' AND a.target_id = d.id AND a.target_name IS NULL;
 
 -- Update activities for files
 UPDATE activities a
-SET target_name = f.original_filename
+SET target_name = f.filename
 FROM files f
 WHERE a.target_type = 'File' AND a.target_id = f.id AND a.target_name IS NULL;
 

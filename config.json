@@ -5,7 +5,7 @@
     "port": 8080
   },
   "cors": {
-    "allowedOrigins": ["http://localhost:3000"],
+    "allowedOrigins": ["http://localhost:3000", "https://strayerelation.no", "https://www.strayerelation.no"],
     "allowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     "allowedHeaders": ["Accept", "Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "X-Company-ID"],
     "exposedHeaders": ["Location", "X-Request-ID"],

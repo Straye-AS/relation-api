@@ -148,7 +148,7 @@ func TestProjectHandler_List(t *testing.T) {
 	})
 
 	t.Run("list with phase filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/projects?phase=active", nil)
+		req := httptest.NewRequest(http.MethodGet, "/projects?phase=working", nil)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
@@ -159,7 +159,7 @@ func TestProjectHandler_List(t *testing.T) {
 		var result domain.PaginatedResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(2), result.Total)
+		assert.Equal(t, int64(3), result.Total) // Alpha, Delta, Epsilon are "working"
 	})
 
 	t.Run("list with customer filter", func(t *testing.T) {
@@ -177,20 +177,8 @@ func TestProjectHandler_List(t *testing.T) {
 		assert.Equal(t, int64(3), result.Total)
 	})
 
-	t.Run("list with manager filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/projects?managerId="+userCtx.UserID.String(), nil)
-		req = req.WithContext(ctx)
-
-		rr := httptest.NewRecorder()
-		h.List(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		var result domain.PaginatedResponse
-		err := json.Unmarshal(rr.Body.Bytes(), &result)
-		assert.NoError(t, err)
-		assert.Equal(t, int64(3), result.Total)
-	})
+	// Note: managerId filter was removed as projects no longer have managers
+	// Manager information is now tracked at the offer level
 
 	t.Run("list respects max page size", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/projects?pageSize=500", nil)
@@ -236,7 +224,7 @@ func TestProjectHandler_GetByID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, project.ID, result.ID)
 		assert.Equal(t, "Test Project", result.Name)
-		assert.NotNil(t, result.BudgetSummary)
+		// Note: BudgetSummary may be nil for projects without linked offers with budget items
 	})
 
 	t.Run("get non-existent project", func(t *testing.T) {
@@ -302,7 +290,8 @@ func TestProjectHandler_Create(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.Equal(t, "New Project", result.Name)
-		assert.Equal(t, customer.ID, result.CustomerID)
+		assert.NotNil(t, result.CustomerID)
+		assert.Equal(t, customer.ID, *result.CustomerID)
 		assert.NotEqual(t, uuid.Nil, result.ID)
 	})
 
@@ -318,9 +307,9 @@ func TestProjectHandler_Create(t *testing.T) {
 	})
 
 	t.Run("create with missing required fields", func(t *testing.T) {
+		// Only Name is required for project creation now
 		reqBody := domain.CreateProjectRequest{
-			Name: "Incomplete Project",
-			// Missing required fields
+			// Name is required but missing
 		}
 		body, _ := json.Marshal(reqBody)
 

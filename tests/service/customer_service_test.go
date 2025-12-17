@@ -745,16 +745,16 @@ func TestCustomerService_ActivityLogging(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, activities)
 
-		// Find the create activity
+		// Find the create activity (Norwegian: "Kunde opprettet")
 		var found bool
 		for _, a := range activities {
-			if a.Title == "Customer created" {
+			if a.Title == "Kunde opprettet" {
 				found = true
 				assert.Contains(t, a.Body, created.Name)
 				break
 			}
 		}
-		assert.True(t, found, "Should have a 'Customer created' activity")
+		assert.True(t, found, "Should have a 'Kunde opprettet' activity")
 	})
 
 	t.Run("logs activity on update", func(t *testing.T) {
@@ -784,16 +784,16 @@ func TestCustomerService_ActivityLogging(t *testing.T) {
 		activities, err := activityRepo.ListByTarget(ctx, domain.ActivityTargetCustomer, created.ID, 10)
 		require.NoError(t, err)
 
-		// Find the update activity
+		// Find the update activity (Norwegian: "Kunde oppdatert")
 		var found bool
 		for _, a := range activities {
-			if a.Title == "Customer updated" {
+			if a.Title == "Kunde oppdatert" {
 				found = true
 				assert.Contains(t, a.Body, "Activity Update Test - Updated")
 				break
 			}
 		}
-		assert.True(t, found, "Should have a 'Customer updated' activity")
+		assert.True(t, found, "Should have a 'Kunde oppdatert' activity")
 	})
 
 	t.Run("logs activity on delete", func(t *testing.T) {
@@ -817,15 +817,15 @@ func TestCustomerService_ActivityLogging(t *testing.T) {
 		activities, err := activityRepo.ListByTarget(ctx, domain.ActivityTargetCustomer, customerID, 10)
 		require.NoError(t, err)
 
-		// Find the delete activity
+		// Find the delete activity (Norwegian: "Kunde slettet")
 		var found bool
 		for _, a := range activities {
-			if a.Title == "Customer deleted" {
+			if a.Title == "Kunde slettet" {
 				found = true
 				assert.Contains(t, a.Body, "Activity Delete Test")
 				break
 			}
 		}
-		assert.True(t, found, "Should have a 'Customer deleted' activity")
+		assert.True(t, found, "Should have a 'Kunde slettet' activity")
 	})
 }

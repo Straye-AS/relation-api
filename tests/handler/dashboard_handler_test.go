@@ -200,7 +200,7 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 		"totalInvoiced",
 		"totalValue",
 		"recentOffers",
-		"recentProjects",
+		"recentOrders",
 		"recentActivities",
 		"topCustomers",
 	}
