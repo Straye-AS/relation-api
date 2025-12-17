@@ -717,6 +717,7 @@ func (s *ProjectService) logActivityOnTarget(ctx context.Context, targetType dom
 		OccurredAt:  time.Now(),
 		CreatorName: userCtx.DisplayName,
 		CreatorID:   userCtx.UserID.String(),
+		CompanyID:   &userCtx.CompanyID,
 	}
 
 	if err := s.activityRepo.Create(ctx, activity); err != nil {
