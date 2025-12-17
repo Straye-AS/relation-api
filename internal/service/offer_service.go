@@ -1757,6 +1757,8 @@ func (s *OfferService) logActivityOnTarget(ctx context.Context, targetType domai
 		Title:       title,
 		Body:        body,
 		CreatorName: userCtx.DisplayName,
+		CreatorID:   userCtx.UserID.String(),
+		CompanyID:   &userCtx.CompanyID,
 	}
 
 	if err := s.activityRepo.Create(ctx, activity); err != nil {
