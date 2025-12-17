@@ -226,8 +226,8 @@ func TestCustomerService_GetByID(t *testing.T) {
 		assert.Equal(t, created.ID, customer.ID)
 		assert.Equal(t, created.Name, customer.Name)
 		assert.Equal(t, created.OrgNumber, customer.OrgNumber)
-		// TotalValue and ActiveOffers should be 0 for a new customer
-		assert.Equal(t, float64(0), customer.TotalValue)
+		// TotalValueWon and ActiveOffers should be 0 for a new customer
+		assert.Equal(t, float64(0), customer.TotalValueWon)
 		assert.Equal(t, 0, customer.ActiveOffers)
 	})
 

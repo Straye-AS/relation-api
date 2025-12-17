@@ -77,7 +77,7 @@ func TestDashboardMetrics_TimeRangeField(t *testing.T) {
 		OfferReserve:      100000,
 		Pipeline:          []domain.PipelinePhaseData{},
 		RecentOffers:      []domain.OfferDTO{},
-		RecentProjects:    []domain.ProjectDTO{},
+		RecentOrders:      []domain.OfferDTO{},
 		RecentActivities:  []domain.ActivityDTO{},
 		TopCustomers:      []domain.TopCustomerDTO{},
 	}
@@ -174,7 +174,7 @@ func TestDashboardMetrics_JSONSerialization(t *testing.T) {
 		TotalInvoiced:    200000,
 		TotalValue:       275000,
 		RecentOffers:     []domain.OfferDTO{},
-		RecentProjects:   []domain.ProjectDTO{},
+		RecentOrders:     []domain.OfferDTO{},
 		RecentActivities: []domain.ActivityDTO{},
 		TopCustomers:     []domain.TopCustomerDTO{},
 	}
@@ -268,7 +268,7 @@ func TestDashboardMetrics_AggregationExample(t *testing.T) {
 			},
 		},
 		RecentOffers:     []domain.OfferDTO{},
-		RecentProjects:   []domain.ProjectDTO{},
+		RecentOrders:     []domain.OfferDTO{},
 		RecentActivities: []domain.ActivityDTO{},
 		TopCustomers:     []domain.TopCustomerDTO{},
 	}
