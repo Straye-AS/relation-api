@@ -141,7 +141,7 @@ func (r *CustomerRepository) ListWithSortConfig(ctx context.Context, page, pageS
 	}
 
 	// Build order clause from sort config
-	orderClause := BuildOrderClause(sort, customerSortableFields, "created_at")
+	orderClause := BuildOrderClause(sort, customerSortableFields, "updated_at")
 
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order(orderClause).Find(&customers).Error
@@ -220,57 +220,125 @@ func (r *CustomerRepository) GetByOrgNumber(ctx context.Context, orgNumber strin
 
 // CustomerStats holds aggregated statistics for a customer
 type CustomerStats struct {
-	TotalValue     float64 `json:"totalValue"`
-	ActiveOffers   int     `json:"activeOffers"`
-	ActiveDeals    int     `json:"activeDeals"`
-	ActiveProjects int     `json:"activeProjects"`
-	TotalContacts  int     `json:"totalContacts"`
+	TotalValueActive float64 `json:"totalValueActive"` // Value of offers in order phase (active orders)
+	TotalValueWon    float64 `json:"totalValueWon"`    // Value of offers in order or completed phases
+	WorkingOffers    int     `json:"workingOffers"`    // Count of offers in in_progress or sent phases
+	ActiveOffers     int     `json:"activeOffers"`     // Count of offers in order phase (active orders)
+	CompletedOffers  int     `json:"completedOffers"`  // Count of offers in completed phase
+	TotalOffers      int     `json:"totalOffers"`
+	ActiveDeals      int     `json:"activeDeals"`
+	ActiveProjects   int     `json:"activeProjects"`
+	TotalProjects    int     `json:"totalProjects"`
+	TotalContacts    int     `json:"totalContacts"`
 }
 
 // GetCustomerStats returns aggregated statistics for a customer
+// Respects the X-Company-Id header for filtering offers, projects, and deals
 func (r *CustomerRepository) GetCustomerStats(ctx context.Context, customerID uuid.UUID) (*CustomerStats, error) {
 	stats := &CustomerStats{}
 
-	// Get active offers count and total value
-	var offerStats struct {
-		Count      int64
-		TotalValue float64
-	}
-	err := r.db.WithContext(ctx).Model(&domain.Offer{}).
-		Select("COUNT(*) as count, COALESCE(SUM(value), 0) as total_value").
-		Where("customer_id = ? AND status = ?", customerID, domain.OfferStatusActive).
-		Scan(&offerStats).Error
+	// Get working offers count (in_progress or sent phases)
+	var workingOffersCount int64
+	workingOfferQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("customer_id = ? AND phase IN ?", customerID, []domain.OfferPhase{domain.OfferPhaseInProgress, domain.OfferPhaseSent})
+	workingOfferQuery = ApplyCompanyFilter(ctx, workingOfferQuery)
+	err := workingOfferQuery.Count(&workingOffersCount).Error
 	if err != nil {
 		return nil, err
 	}
-	stats.ActiveOffers = int(offerStats.Count)
-	stats.TotalValue = offerStats.TotalValue
+	stats.WorkingOffers = int(workingOffersCount)
+
+	// Get active offers count and value (order phase only - active orders)
+	var activeOfferStats struct {
+		Count      int64
+		TotalValue float64
+	}
+	activeOfferQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Select("COUNT(*) as count, COALESCE(SUM(value), 0) as total_value").
+		Where("customer_id = ? AND phase = ?", customerID, domain.OfferPhaseOrder)
+	activeOfferQuery = ApplyCompanyFilter(ctx, activeOfferQuery)
+	err = activeOfferQuery.Scan(&activeOfferStats).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.ActiveOffers = int(activeOfferStats.Count)
+	stats.TotalValueActive = activeOfferStats.TotalValue
+
+	// Get completed offers count (completed phase)
+	var completedOffersCount int64
+	completedOfferQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("customer_id = ? AND phase = ?", customerID, domain.OfferPhaseCompleted)
+	completedOfferQuery = ApplyCompanyFilter(ctx, completedOfferQuery)
+	err = completedOfferQuery.Count(&completedOffersCount).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.CompletedOffers = int(completedOffersCount)
+
+	// Get won offers total value (order or completed phases)
+	var wonValue float64
+	wonOfferQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Select("COALESCE(SUM(value), 0)").
+		Where("customer_id = ? AND phase IN ?", customerID, []domain.OfferPhase{domain.OfferPhaseOrder, domain.OfferPhaseCompleted})
+	wonOfferQuery = ApplyCompanyFilter(ctx, wonOfferQuery)
+	err = wonOfferQuery.Scan(&wonValue).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.TotalValueWon = wonValue
+
+	// Get total offers count (all offers for this customer)
+	var totalOffersCount int64
+	totalOffersQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
+		Where("customer_id = ?", customerID)
+	totalOffersQuery = ApplyCompanyFilter(ctx, totalOffersQuery)
+	err = totalOffersQuery.Count(&totalOffersCount).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.TotalOffers = int(totalOffersCount)
 
 	// Get active deals count
 	var dealsCount int64
-	err = r.db.WithContext(ctx).Model(&domain.Deal{}).
-		Where("customer_id = ? AND stage NOT IN (?, ?)", customerID, domain.DealStageWon, domain.DealStageLost).
-		Count(&dealsCount).Error
+	dealsQuery := r.db.WithContext(ctx).Model(&domain.Deal{}).
+		Where("customer_id = ? AND stage NOT IN (?, ?)", customerID, domain.DealStageWon, domain.DealStageLost)
+	dealsQuery = ApplyCompanyFilter(ctx, dealsQuery)
+	err = dealsQuery.Count(&dealsCount).Error
 	if err != nil {
 		return nil, err
 	}
 	stats.ActiveDeals = int(dealsCount)
 
-	// Get active projects count (tilbud, working, or active phases)
-	var projectsCount int64
-	err = r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseActive}).
-		Count(&projectsCount).Error
+	// Get active projects count (tilbud, working, or on_hold phases)
+	var activeProjectsCount int64
+	activeProjectsQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseOnHold})
+	activeProjectsQuery = ApplyCompanyFilter(ctx, activeProjectsQuery)
+	err = activeProjectsQuery.Count(&activeProjectsCount).Error
 	if err != nil {
 		return nil, err
 	}
-	stats.ActiveProjects = int(projectsCount)
+	stats.ActiveProjects = int(activeProjectsCount)
+
+	// Get total projects count (all projects for this customer)
+	var totalProjectsCount int64
+	totalProjectsQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ?", customerID)
+	totalProjectsQuery = ApplyCompanyFilter(ctx, totalProjectsQuery)
+	err = totalProjectsQuery.Count(&totalProjectsCount).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.TotalProjects = int(totalProjectsCount)
 
 	// Get total contacts count
+	// Note: Contacts are linked to customers which are global entities,
+	// but we filter by company_id if the contact has one
 	var contactsCount int64
-	err = r.db.WithContext(ctx).Model(&domain.Contact{}).
-		Where("primary_customer_id = ?", customerID).
-		Count(&contactsCount).Error
+	contactsQuery := r.db.WithContext(ctx).Model(&domain.Contact{}).
+		Where("primary_customer_id = ?", customerID)
+	contactsQuery = ApplyCompanyFilter(ctx, contactsQuery)
+	err = contactsQuery.Count(&contactsCount).Error
 	if err != nil {
 		return nil, err
 	}
@@ -296,10 +364,10 @@ func (r *CustomerRepository) GetCustomerWithRelations(ctx context.Context, id uu
 
 // HasActiveRelations checks if a customer has active projects, offers, or deals
 func (r *CustomerRepository) HasActiveRelations(ctx context.Context, customerID uuid.UUID) (bool, string, error) {
-	// Check for active projects (tilbud, working, or active phases)
+	// Check for active projects (tilbud, working, or on_hold phases)
 	var projectCount int64
 	err := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseActive}).
+		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseOnHold}).
 		Count(&projectCount).Error
 	if err != nil {
 		return false, "", err
@@ -548,7 +616,8 @@ func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, 
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
 		domain.OfferPhaseSent,
-		domain.OfferPhaseWon,
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
 		domain.OfferPhaseLost,
 	}
 
@@ -574,6 +643,56 @@ func (r *CustomerRepository) GetTopCustomersWithOfferStats(ctx context.Context, 
 
 	if err := query.Scan(&results).Error; err != nil {
 		return nil, fmt.Errorf("failed to get top customers with offer stats: %w", err)
+	}
+
+	return results, nil
+}
+
+// TopCustomerWithWonStats holds customer data with won offer statistics
+type TopCustomerWithWonStats struct {
+	CustomerID    uuid.UUID
+	CustomerName  string
+	OrgNumber     string
+	WonOfferCount int
+	WonOfferValue float64
+}
+
+// GetTopCustomersWithWonStats returns top customers ranked by won offer count and value within a time window
+// Won offers are those in order or completed phases
+// fromDate and toDate filter by offer created_at (consistent with other pipeline metrics)
+func (r *CustomerRepository) GetTopCustomersWithWonStats(ctx context.Context, fromDate, toDate *time.Time, limit int) ([]TopCustomerWithWonStats, error) {
+	// Won phases (order + completed)
+	wonPhases := []domain.OfferPhase{
+		domain.OfferPhaseOrder,
+		domain.OfferPhaseCompleted,
+	}
+
+	var results []TopCustomerWithWonStats
+
+	// Build query to get won offer stats per customer
+	query := r.db.WithContext(ctx).
+		Table("offers").
+		Select("customers.id as customer_id, customers.name as customer_name, customers.org_number, COUNT(offers.id) as won_offer_count, COALESCE(SUM(offers.value), 0) as won_offer_value").
+		Joins("JOIN customers ON customers.id = offers.customer_id").
+		Where("offers.phase IN ?", wonPhases).
+		Where("customers.status != ?", domain.CustomerStatusInactive)
+
+	if fromDate != nil {
+		query = query.Where("offers.created_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		query = query.Where("offers.created_at <= ?", *toDate)
+	}
+
+	query = query.Group("customers.id, customers.name, customers.org_number").
+		Order("won_offer_count DESC, won_offer_value DESC").
+		Limit(limit)
+
+	// Apply company filter on offers table
+	query = ApplyCompanyFilterWithAlias(ctx, query, "offers")
+
+	if err := query.Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get top customers with won stats: %w", err)
 	}
 
 	return results, nil

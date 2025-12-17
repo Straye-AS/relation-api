@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -45,7 +46,7 @@ func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, logger)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, companyService, numberSequenceService, logger, db)
-	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, budgetItemRepo, activityRepo, userRepo, companyService, numberSequenceService, logger, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, logger, db)
 
 	return handler.NewCustomerHandler(customerService, contactService, offerService, projectService, logger)
 }
@@ -529,17 +530,13 @@ func TestCustomerHandler_Delete(t *testing.T) {
 		customer := testutil.CreateTestCustomer(t, db, "Customer With Project")
 
 		// Create an active project for this customer
-		userCtx, _ := auth.FromContext(ctx)
-		managerID := userCtx.UserID.String()
+		customerID := customer.ID
 		project := &domain.Project{
 			Name:         "Active Project",
-			CustomerID:   customer.ID,
+			CustomerID:   &customerID,
 			CustomerName: customer.Name,
-			CompanyID:    domain.CompanyStalbygg,
-			Phase:        domain.ProjectPhaseActive,
-			ManagerID:    &managerID,
-			Value:        100000,
-			Cost:         80000,
+			Phase:        domain.ProjectPhaseWorking,
+			StartDate:    time.Now(),
 		}
 		err := db.Create(project).Error
 		require.NoError(t, err)

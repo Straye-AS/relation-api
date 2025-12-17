@@ -203,14 +203,15 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetCustomer,
 			TargetID:    customer.ID,
-			Title:       "Customer created",
-			Body:        fmt.Sprintf("Customer '%s' was created", customer.Name),
+			TargetName:  customer.Name,
+			Title:       "Kunde opprettet",
+			Body:        fmt.Sprintf("Kunden '%s' ble opprettet", customer.Name),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
-	dto := mapper.ToCustomerDTO(customer, 0.0, 0)
+	dto := mapper.ToCustomerDTO(customer, 0.0, 0.0, 0)
 	return &dto, nil
 }
 
@@ -231,9 +232,9 @@ func (s *CustomerService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Cu
 	}
 
 	// Auto-update tier based on total value
-	s.updateTierIfNeeded(ctx, customer, stats.TotalValue)
+	s.updateTierIfNeeded(ctx, customer, stats.TotalValueWon)
 
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -284,19 +285,24 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 	}
 
 	// Auto-update tier based on total value
-	s.updateTierIfNeeded(ctx, customer, stats.TotalValue)
+	s.updateTierIfNeeded(ctx, customer, stats.TotalValueWon)
 
 	// Build base customer DTO
-	customerDTO := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	customerDTO := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 
 	result := &domain.CustomerWithDetailsDTO{
 		CustomerDTO: customerDTO,
 		Stats: &domain.CustomerStatsDTO{
-			TotalValue:     stats.TotalValue,
-			ActiveOffers:   stats.ActiveOffers,
-			ActiveDeals:    stats.ActiveDeals,
-			ActiveProjects: stats.ActiveProjects,
-			TotalContacts:  stats.TotalContacts,
+			TotalValueActive: stats.TotalValueActive,
+			TotalValueWon:    stats.TotalValueWon,
+			WorkingOffers:    stats.WorkingOffers,
+			ActiveOffers:     stats.ActiveOffers,
+			CompletedOffers:  stats.CompletedOffers,
+			TotalOffers:      stats.TotalOffers,
+			ActiveDeals:      stats.ActiveDeals,
+			ActiveProjects:   stats.ActiveProjects,
+			TotalProjects:    stats.TotalProjects,
+			TotalContacts:    stats.TotalContacts,
 		},
 	}
 
@@ -323,8 +329,8 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 
 	// Get active projects if projectRepo is available
 	if s.projectRepo != nil {
-		activePhase := domain.ProjectPhaseActive
-		projects, _, err := s.projectRepo.List(ctx, 1, 5, &id, &activePhase)
+		workingPhase := domain.ProjectPhaseWorking
+		projects, _, err := s.projectRepo.List(ctx, 1, 5, &id, &workingPhase)
 		if err == nil {
 			result.ActiveProjects = make([]domain.ProjectDTO, len(projects))
 			for i, project := range projects {
@@ -420,11 +426,12 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetCustomer,
 			TargetID:    customer.ID,
-			Title:       "Customer updated",
-			Body:        fmt.Sprintf("Customer '%s' was updated", customer.Name),
+			TargetName:  customer.Name,
+			Title:       "Kunde oppdatert",
+			Body:        fmt.Sprintf("Kunden '%s' ble oppdatert", customer.Name),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	// Get customer stats
@@ -434,7 +441,7 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 		stats = &repository.CustomerStats{}
 	}
 
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -466,11 +473,12 @@ func (s *CustomerService) Delete(ctx context.Context, id uuid.UUID) error {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetCustomer,
 			TargetID:    id,
-			Title:       "Customer deleted",
-			Body:        fmt.Sprintf("Customer '%s' was deleted", customer.Name),
+			TargetName:  customer.Name,
+			Title:       "Kunde slettet",
+			Body:        fmt.Sprintf("Kunden '%s' ble slettet", customer.Name),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	return nil
@@ -508,7 +516,7 @@ func (s *CustomerService) ListWithFilters(ctx context.Context, page, pageSize in
 			s.logger.Warn("failed to get customer stats", zap.String("customerID", customer.ID.String()), zap.Error(err))
 			stats = &repository.CustomerStats{}
 		}
-		dtos[i] = mapper.ToCustomerDTO(&customer, stats.TotalValue, stats.ActiveOffers)
+		dtos[i] = mapper.ToCustomerDTO(&customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	}
 
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
@@ -602,7 +610,7 @@ func (s *CustomerService) ListWithSort(ctx context.Context, page, pageSize int, 
 			s.logger.Warn("failed to get customer stats", zap.String("customerID", customer.ID.String()), zap.Error(err))
 			stats = &repository.CustomerStats{}
 		}
-		dtos[i] = mapper.ToCustomerDTO(&customer, stats.TotalValue, stats.ActiveOffers)
+		dtos[i] = mapper.ToCustomerDTO(&customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	}
 
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
@@ -637,13 +645,13 @@ func (s *CustomerService) UpdateStatus(ctx context.Context, id uuid.UUID, status
 		return nil, fmt.Errorf("failed to update customer status: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Status updated", fmt.Sprintf("Customer status changed to '%s'", status))
+	s.logActivity(ctx, customer.ID, customer.Name, "Status oppdatert", fmt.Sprintf("Kundestatus endret til '%s'", status))
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -669,13 +677,13 @@ func (s *CustomerService) UpdateTier(ctx context.Context, id uuid.UUID, tier dom
 		return nil, fmt.Errorf("failed to update customer tier: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Tier updated", fmt.Sprintf("Customer tier changed to '%s'", tier))
+	s.logActivity(ctx, customer.ID, customer.Name, "Nivå oppdatert", fmt.Sprintf("Kundenivå endret til '%s'", tier))
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -701,13 +709,13 @@ func (s *CustomerService) UpdateIndustry(ctx context.Context, id uuid.UUID, indu
 		return nil, fmt.Errorf("failed to update customer industry: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Industry updated", fmt.Sprintf("Customer industry changed to '%s'", industry))
+	s.logActivity(ctx, customer.ID, customer.Name, "Bransje oppdatert", fmt.Sprintf("Kundebransje endret til '%s'", industry))
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -733,13 +741,13 @@ func (s *CustomerService) UpdateNotes(ctx context.Context, id uuid.UUID, notes s
 		return nil, fmt.Errorf("failed to update customer notes: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Notes updated", "Customer notes were updated")
+	s.logActivity(ctx, customer.ID, customer.Name, "Notater oppdatert", "Kundens notater ble oppdatert")
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -765,17 +773,17 @@ func (s *CustomerService) UpdateCompanyID(ctx context.Context, id uuid.UUID, com
 		return nil, fmt.Errorf("failed to update customer company: %w", err)
 	}
 
-	activityMsg := "Customer unassigned from company"
+	activityMsg := "Kunden ble fjernet fra selskap"
 	if companyID != nil {
-		activityMsg = fmt.Sprintf("Customer assigned to company '%s'", *companyID)
+		activityMsg = fmt.Sprintf("Kunden ble tilordnet selskap '%s'", *companyID)
 	}
-	s.logActivity(ctx, customer.ID, "Company updated", activityMsg)
+	s.logActivity(ctx, customer.ID, customer.Name, "Selskap oppdatert", activityMsg)
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -801,13 +809,13 @@ func (s *CustomerService) UpdateCustomerClass(ctx context.Context, id uuid.UUID,
 		return nil, fmt.Errorf("failed to update customer class: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Customer class updated", fmt.Sprintf("Customer class changed to '%s'", customerClass))
+	s.logActivity(ctx, customer.ID, customer.Name, "Kundeklasse oppdatert", fmt.Sprintf("Kundeklasse endret til '%s'", customerClass))
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -833,17 +841,17 @@ func (s *CustomerService) UpdateCreditLimit(ctx context.Context, id uuid.UUID, c
 		return nil, fmt.Errorf("failed to update customer credit limit: %w", err)
 	}
 
-	activityMsg := "Credit limit cleared"
+	activityMsg := "Kredittgrense fjernet"
 	if creditLimit != nil {
-		activityMsg = fmt.Sprintf("Credit limit set to %.2f", *creditLimit)
+		activityMsg = fmt.Sprintf("Kredittgrense satt til %.2f", *creditLimit)
 	}
-	s.logActivity(ctx, customer.ID, "Credit limit updated", activityMsg)
+	s.logActivity(ctx, customer.ID, customer.Name, "Kredittgrense oppdatert", activityMsg)
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -869,17 +877,17 @@ func (s *CustomerService) UpdateIsInternal(ctx context.Context, id uuid.UUID, is
 		return nil, fmt.Errorf("failed to update customer internal flag: %w", err)
 	}
 
-	activityMsg := "Customer marked as external"
+	activityMsg := "Kunden merket som ekstern"
 	if isInternal {
-		activityMsg = "Customer marked as internal"
+		activityMsg = "Kunden merket som intern"
 	}
-	s.logActivity(ctx, customer.ID, "Internal flag updated", activityMsg)
+	s.logActivity(ctx, customer.ID, customer.Name, "Intern-flagg oppdatert", activityMsg)
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -908,13 +916,13 @@ func (s *CustomerService) UpdateAddress(ctx context.Context, id uuid.UUID, addre
 		return nil, fmt.Errorf("failed to update customer address: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Address updated", "Customer address was updated")
+	s.logActivity(ctx, customer.ID, customer.Name, "Adresse oppdatert", "Kundens adresse ble oppdatert")
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -941,13 +949,13 @@ func (s *CustomerService) UpdatePostalCode(ctx context.Context, id uuid.UUID, po
 		return nil, fmt.Errorf("failed to update customer postal code: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Postal code updated", fmt.Sprintf("Customer postal code changed from '%s' to '%s'", oldPostalCode, postalCode))
+	s.logActivity(ctx, customer.ID, customer.Name, "Postnummer oppdatert", fmt.Sprintf("Kundens postnummer endret fra '%s' til '%s'", oldPostalCode, postalCode))
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -974,13 +982,13 @@ func (s *CustomerService) UpdateCity(ctx context.Context, id uuid.UUID, city str
 		return nil, fmt.Errorf("failed to update customer city: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "City updated", fmt.Sprintf("Customer city changed from '%s' to '%s'", oldCity, city))
+	s.logActivity(ctx, customer.ID, customer.Name, "By oppdatert", fmt.Sprintf("Kundens by endret fra '%s' til '%s'", oldCity, city))
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
@@ -1018,26 +1026,27 @@ func (s *CustomerService) UpdateContactInfo(ctx context.Context, id uuid.UUID, c
 		return nil, fmt.Errorf("failed to update customer contact info: %w", err)
 	}
 
-	s.logActivity(ctx, customer.ID, "Contact info updated", "Customer contact information was updated")
+	s.logActivity(ctx, customer.ID, customer.Name, "Kontaktinfo oppdatert", "Kundens kontaktinformasjon ble oppdatert")
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
 		stats = &repository.CustomerStats{}
 	}
-	dto := mapper.ToCustomerDTO(customer, stats.TotalValue, stats.ActiveOffers)
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
 	return &dto, nil
 }
 
 // logActivity is a helper to log customer activities
-func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID, title, body string) {
+func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID, customerName, title, body string) {
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetCustomer,
 			TargetID:    customerID,
+			TargetName:  customerName,
 			Title:       title,
 			Body:        body,
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 }

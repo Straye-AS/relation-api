@@ -715,6 +715,15 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusConflict, "Offer number already exists")
 	case errors.Is(err, service.ErrExternalReferenceConflict):
 		respondWithError(w, http.StatusConflict, "External reference already exists for this company")
+	// Order phase errors
+	case errors.Is(err, service.ErrOfferNotInSentPhase):
+		respondWithError(w, http.StatusBadRequest, "Offer must be in sent phase")
+	case errors.Is(err, service.ErrOfferNotInOrderPhase):
+		respondWithError(w, http.StatusBadRequest, "Offer must be in order phase")
+	case errors.Is(err, service.ErrOfferAlreadyInOrder):
+		respondWithError(w, http.StatusBadRequest, "Offer is already in order phase")
+	case errors.Is(err, service.ErrOfferAlreadyCompleted):
+		respondWithError(w, http.StatusBadRequest, "Offer is already completed")
 	default:
 		respondWithError(w, http.StatusInternalServerError, "Internal server error")
 	}
@@ -1293,6 +1302,212 @@ func (h *OfferHandler) UpdateExternalReference(w http.ResponseWriter, r *http.Re
 	offer, err := h.offerService.UpdateExternalReference(r.Context(), id, req.ExternalReference)
 	if err != nil {
 		h.logger.Error("failed to update external reference", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// ============================================================================
+// Order Phase Lifecycle Endpoints
+// ============================================================================
+
+// AcceptOrder godoc
+// @Summary Accept order
+// @Description Transitions a won offer to order phase, indicating work is beginning. This is used when a customer accepts a sent offer and work should start.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.AcceptOrderRequest true "Accept order options"
+// @Success 200 {object} domain.AcceptOrderResponse "Offer transitioned to order phase"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, or offer not in valid phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/accept-order [post]
+func (h *OfferHandler) AcceptOrder(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.AcceptOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Empty body is allowed
+		req = domain.AcceptOrderRequest{}
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	response, err := h.offerService.AcceptOrder(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to accept order", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, response)
+}
+
+// UpdateOfferHealth godoc
+// @Summary Update offer health status
+// @Description Updates the health status (on_track, at_risk, delayed, over_budget) and optionally the completion percentage of an offer in order phase. Used to track execution progress.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferHealthRequest true "Health data: health (enum: on_track|at_risk|delayed|over_budget), completionPercent (optional: 0-100)"
+// @Success 200 {object} domain.OfferDTO "Updated offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, or offer not in order phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/health [put]
+func (h *OfferHandler) UpdateOfferHealth(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferHealthRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateOfferHealth(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to update offer health", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// UpdateOfferSpent godoc
+// @Summary Update offer spent amount
+// @Description Updates the spent amount of an offer in order phase. Used to track actual costs incurred during execution.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferSpentRequest true "Spent amount data"
+// @Success 200 {object} domain.OfferDTO "Updated offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, or offer not in order phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/spent [put]
+func (h *OfferHandler) UpdateOfferSpent(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferSpentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateOfferSpent(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to update offer spent", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// UpdateOfferInvoiced godoc
+// @Summary Update offer invoiced amount
+// @Description Updates the invoiced amount of an offer in order phase. Used to track how much has been invoiced to the customer.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferInvoicedRequest true "Invoiced amount data"
+// @Success 200 {object} domain.OfferDTO "Updated offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID, request body, or offer not in order phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/invoiced [put]
+func (h *OfferHandler) UpdateOfferInvoiced(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferInvoicedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateOfferInvoiced(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to update offer invoiced", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// CompleteOffer godoc
+// @Summary Complete an offer
+// @Description Transitions an offer from order phase to completed phase. Indicates work is finished.
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferDTO "Completed offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or offer not in order phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/complete [post]
+func (h *OfferHandler) CompleteOffer(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	offer, err := h.offerService.CompleteOffer(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to complete offer", zap.Error(err), zap.String("offer_id", id.String()))
 		h.handleOfferError(w, err)
 		return
 	}

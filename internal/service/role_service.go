@@ -83,7 +83,7 @@ func (s *RoleService) AssignRole(ctx context.Context, input AssignRoleInput) (*d
 	}
 
 	// Log the activity
-	s.logRoleChange(ctx, input.UserID, input.Role, "assigned", grantedBy)
+	s.logRoleChange(ctx, input.UserID, input.Role, "tildelt", grantedBy)
 
 	return role, nil
 }
@@ -113,7 +113,7 @@ func (s *RoleService) RemoveRole(ctx context.Context, userID string, role domain
 	}
 
 	// Log the activity
-	s.logRoleChange(ctx, userID, role, "removed", removedBy)
+	s.logRoleChange(ctx, userID, role, "fjernet", removedBy)
 
 	return nil
 }
@@ -151,7 +151,7 @@ func (s *RoleService) RemoveRoleByID(ctx context.Context, roleID uuid.UUID) erro
 	}
 
 	// Log the activity
-	s.logRoleChange(ctx, role.UserID, role.Role, "removed", removedBy)
+	s.logRoleChange(ctx, role.UserID, role.Role, "fjernet", removedBy)
 
 	return nil
 }
@@ -240,8 +240,9 @@ func (s *RoleService) logRoleChange(ctx context.Context, userID string, role dom
 	activity := &domain.Activity{
 		TargetType:   domain.ActivityTargetType("User"),
 		TargetID:     userUUID,
-		Title:        "Role " + action,
-		Body:         "Role '" + string(role) + "' was " + action + " by " + changedBy,
+		TargetName:   string(role),
+		Title:        "Rolle " + action,
+		Body:         "Rollen '" + string(role) + "' ble " + action + " av " + changedBy,
 		ActivityType: domain.ActivityTypeSystem,
 		Status:       domain.ActivityStatusCompleted,
 		CreatorID:    changedBy,

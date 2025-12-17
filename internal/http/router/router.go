@@ -102,7 +102,7 @@ func (rt *Router) Setup() http.Handler {
 	// Health check (basic liveness probe)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Database health check (readiness probe with detailed stats)
@@ -112,7 +112,7 @@ func (rt *Router) Setup() http.Handler {
 			rt.logger.Error("Database health check failed", zap.Error(err))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "unhealthy",
 				"error":   err.Error(),
 				"service": "database",
@@ -122,7 +122,7 @@ func (rt *Router) Setup() http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "healthy",
 			"service": "database",
 			"stats": map[string]interface{}{
@@ -160,13 +160,13 @@ func (rt *Router) Setup() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		if allHealthy {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "healthy",
 				"checks": checks,
 			})
 		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "unhealthy",
 				"checks": checks,
 			})
@@ -250,17 +250,13 @@ func (rt *Router) Setup() http.Handler {
 				r.Delete("/{id}/relationships/{relationshipId}", rt.contactHandler.RemoveRelationship)
 			})
 
-			// Projects
+			// Projects (simplified containers for offers)
 			r.Route("/projects", func(r chi.Router) {
 				r.Get("/", rt.projectHandler.List)
 				r.Post("/", rt.projectHandler.Create)
 				r.Get("/{id}", rt.projectHandler.GetByID)
 				r.Put("/{id}", rt.projectHandler.Update)
 				r.Delete("/{id}", rt.projectHandler.Delete)
-				r.Put("/{id}/health", rt.projectHandler.UpdateHealth)
-				r.Get("/{id}/budget", rt.projectHandler.GetBudget)
-				r.Post("/{id}/inherit-budget", rt.projectHandler.InheritBudget)
-				r.Post("/{id}/resync-from-offer", rt.projectHandler.ResyncFromBestOffer)
 				r.Post("/{id}/reopen", rt.projectHandler.ReopenProject) // Reopen completed/cancelled project
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
@@ -270,15 +266,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/name", rt.projectHandler.UpdateName)
 				r.Put("/{id}/description", rt.projectHandler.UpdateDescription)
 				r.Put("/{id}/phase", rt.projectHandler.UpdatePhase)
-				r.Put("/{id}/manager", rt.projectHandler.UpdateManager)
 				r.Put("/{id}/dates", rt.projectHandler.UpdateDates)
-				r.Put("/{id}/budget", rt.projectHandler.UpdateBudget)
-				r.Put("/{id}/spent", rt.projectHandler.UpdateSpent)
-				r.Put("/{id}/team-members", rt.projectHandler.UpdateTeamMembers)
-				r.Put("/{id}/completion", rt.projectHandler.UpdateCompletionPercent)
-				r.Put("/{id}/estimated-completion-date", rt.projectHandler.UpdateEstimatedCompletionDate)
 				r.Put("/{id}/project-number", rt.projectHandler.UpdateProjectNumber)
-				r.Put("/{id}/company", rt.projectHandler.UpdateCompany)
 			})
 
 			// Inquiries (draft offers)
@@ -306,6 +295,13 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/reject", rt.offerHandler.Reject)
 				r.Post("/{id}/win", rt.offerHandler.Win) // Win offer within project (offer folder model)
 				r.Post("/{id}/clone", rt.offerHandler.Clone)
+
+				// Order phase lifecycle endpoints
+				r.Post("/{id}/accept-order", rt.offerHandler.AcceptOrder)    // Transition to order phase
+				r.Put("/{id}/health", rt.offerHandler.UpdateOfferHealth)     // Update completion percentage
+				r.Put("/{id}/spent", rt.offerHandler.UpdateOfferSpent)       // Update spent amount
+				r.Put("/{id}/invoiced", rt.offerHandler.UpdateOfferInvoiced) // Update invoiced amount
+				r.Post("/{id}/complete", rt.offerHandler.CompleteOffer)      // Transition to completed phase
 
 				// Individual property update endpoints
 				r.Put("/{id}/probability", rt.offerHandler.UpdateProbability)

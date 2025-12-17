@@ -314,11 +314,6 @@ func (s *BudgetItemService) validateParent(ctx context.Context, parentType domai
 
 // updateParentTotals recalculates and updates the parent's totals
 func (s *BudgetItemService) updateParentTotals(ctx context.Context, parentType domain.BudgetParentType, parentID uuid.UUID) error {
-	summary, err := s.budgetItemRepo.GetSummaryByParent(ctx, parentType, parentID)
-	if err != nil {
-		return fmt.Errorf("failed to get budget summary: %w", err)
-	}
-
 	switch parentType {
 	case domain.BudgetParentOffer:
 		// Update offer value based on budget items
@@ -326,17 +321,8 @@ func (s *BudgetItemService) updateParentTotals(ctx context.Context, parentType d
 			return fmt.Errorf("failed to update offer totals: %w", err)
 		}
 	case domain.BudgetParentProject:
-		// Update project value based on budget items
-		project, err := s.projectRepo.GetByID(ctx, parentID)
-		if err != nil {
-			return fmt.Errorf("failed to get project: %w", err)
-		}
-		project.Value = summary.TotalRevenue
-		project.Cost = summary.TotalCost
-		project.HasDetailedBudget = summary.ItemCount > 0
-		if err := s.projectRepo.Update(ctx, project); err != nil {
-			return fmt.Errorf("failed to update project: %w", err)
-		}
+		// Projects are now simplified containers - no budget fields to update
+		// Budget items can still exist for backward compatibility but don't affect project model
 	}
 
 	return nil

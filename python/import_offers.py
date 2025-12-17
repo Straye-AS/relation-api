@@ -32,13 +32,22 @@ from psycopg2.extras import execute_values
 
 
 # Mapping of Excel status to our Phase and Status
+# Note: "BUDSJETT" and "Tilbud" need sent_date to determine phase (handled in get_status_mapping)
+# Phase meanings:
+#   - in_progress: Being worked on internally (no sent_date)
+#   - sent: Sent to customer (has sent_date)
+#   - order: Customer accepted, work in progress
+#   - completed: Order finished
+#   - lost: Customer rejected
+#   - expired: Offer expired (UTGÅR - skip these)
 STATUS_MAPPING = {
-    "Tilbud": ("sent", "active"),       # Offer sent, awaiting response
-    "Ferdig": ("won", "won"),            # Won and completed
-    "Ordre": ("won", "won"),             # Order received = won
-    "Tapt": ("lost", "lost"),            # Lost
-    "BUDSJETT": ("draft", "active"),     # Still budgeting/drafting
-    "UTGÅR": ("expired", "expired"),     # Expired
+    "Tilbud": ("_needs_sent_date", "active"),   # Depends on sent_date
+    "Ferdig": ("completed", "active"),          # Completed order
+    "Ordre": ("order", "active"),               # Active order
+    "Tapt": ("lost", "lost"),                   # Lost
+    "BUDSJETT": ("_needs_sent_date", "active"), # Depends on sent_date
+    "UTGÅR": ("_skip", "expired"),              # Skip these entirely
+    "UTLØPT": ("_skip", "expired"),             # Skip these entirely
 }
 
 # Responsible person initials to names
@@ -98,10 +107,32 @@ def clean_date(value) -> datetime | None:
         return None
 
 
-def get_status_mapping(excel_status: str) -> tuple[str, str]:
-    """Map Excel status to (phase, status) tuple."""
+def get_status_mapping(excel_status: str, sent_date=None) -> tuple[str, str]:
+    """Map Excel status to (phase, status) tuple.
+
+    Args:
+        excel_status: The status from Excel
+        sent_date: The sent date (used to determine if offer was sent)
+
+    Returns:
+        Tuple of (phase, status). Phase can be:
+        - "_skip": This offer should be skipped entirely
+        - "_needs_sent_date": Handled here based on sent_date
+        - Regular phase: in_progress, sent, order, completed, lost
+    """
     excel_status = clean_string(excel_status)
-    return STATUS_MAPPING.get(excel_status, ("draft", "active"))
+
+    # Get base mapping
+    phase, status = STATUS_MAPPING.get(excel_status, ("_needs_sent_date", "active"))
+
+    # Handle status that depends on sent_date
+    if phase == "_needs_sent_date":
+        if sent_date is not None:
+            phase = "sent"
+        else:
+            phase = "in_progress"
+
+    return (phase, status)
 
 
 def get_responsible_name(initials: str) -> str:
@@ -110,54 +141,79 @@ def get_responsible_name(initials: str) -> str:
     return RESPONSIBLE_MAPPING.get(initials, initials)
 
 
-# Customer name aliases - maps variations to canonical names
+# Customer name aliases - maps variations to canonical names (normalized, lowercase, no AS suffix)
 CUSTOMER_ALIASES = {
-    # Straye variations
+    # === Straye variations ===
     "straye hybrid": "straye hybridbygg",
     "straye hybrid as": "straye hybridbygg",
     "strayeindustri": "straye industri",
     "strayeindustri as": "straye industri",
     "straye industribygg": "straye industri",
     "straye industribygg as": "straye industri",
-    # Veidekke variations - all map to Veidekke Entreprenør
+
+    # === Veidekke variations - all map to Veidekke Entreprenør ===
     "veidekke": "veidekke entreprenør",
     "veidekke as": "veidekke entreprenør",
     "veidekke bygg": "veidekke entreprenør",
     "veidekke bygg- vest": "veidekke entreprenør",
     "veidekke bygg vest": "veidekke entreprenør",
     "veidekke ålesund": "veidekke entreprenør",
-    # PEAB variations
+    "seby as/ veidekke as": "veidekke entreprenør",
+
+    # === PEAB variations ===
     "peab": "peab bygg",
     "peab as": "peab bygg",
-    # Typos and variations
+    "peab/ straye stålbygg": "straye stålbygg",  # Internal project
+
+    # === Section 2: Probable Matches ===
+    "a bygg": "a bygg entreprenør",
+    "betongbygg": "as betongbygg",
+    "betongbygg as": "as betongbygg",
+    "byggkompaniet": "byggkompaniet østfold",
     "enter solutions": "enter solution",
     "enter solutions as": "enter solution",
-    "workman": "workman norway",
-    "workman as": "workman norway",
     "furuno": "furuno norge",
     "furuno as": "furuno norge",
+    "fusen": "solenergi fusen",
+    "totalbetong": "totalbetong gruppen",
     "vestre bærum tennis": "vestre bærum tennisklubb",
-    "km bygg??": "km bygg",
+    "workman": "workman norway",
+    "workman as": "workman norway",
+
+    # === Joint/combined offers - assign to Hallmaker ===
+    "hallmaker as/ straye stålbygg as": "hallmaker",
+    "straye stålbygg as / hallmaker": "hallmaker",
+    "straye stålbygg as/ hallmaker": "hallmaker",
+    "thermica as/ hallmaker": "hallmaker",
+    "dpend/ straye stålbygg": "straye stålbygg",
+
+    # === Section 3: Needs Attention - Typos and variations ===
+    "byggekompaniet østfold": "byggkompaniet østfold",  # Typo: extra 'e'
+    "km bygg": "kopperud murtnes bygg",
+    "km bygg??": "kopperud murtnes bygg",
+    "arealbygg": "areal bygg",
+    "geir nielsen (holmskau)": "geir nilsen",  # Spelling: Nielsen vs Nilsen
+    "hansen & dahl": "hansen & dahl",  # Same but needs exact match
+    "høstbakken 11": "høstbakken eiendom",
+    "høstbakken 11 as": "høstbakken eiendom",
     "matotalbygg": "ma totalbygg",
     "matotalbygg as": "ma totalbygg",
-    # Joint/combined offers - assign to primary customer
-    "seby as/ veidekke as": "veidekke entreprenør",
-    "straye stålbygg as / hallmaker": "straye stålbygg",
-    "hallmaker as/ straye stålbygg as": "straye stålbygg",
-    "straye stålbygg as/ hallmaker": "straye stålbygg",
-    "thermica as/ hallmaker": "hallmaker",
-    "peab/ straye stålbygg": "straye stålbygg",
-    "dpend/ straye stålbygg": "straye stålbygg",
-    "flere- gikk til km bygg": "km bygg",
-    # More fixes
-    "geir nielsen (holmskau)": "holmskau prosjekt",
+    "nordbygg": "norbygg",
+    "nordbygg as": "norbygg",
+    "park & anlegg": "park og anlegg",
+    "sameie hoffsveien 88": "sameiet hoffsveien 88/90",
+    "sameiet kornmoenga": "kornmoenga 3 sameie",
     "tatalbygg midt-norge": "totalbygg midt-norge",
     "tatalbygg midt-norge as": "totalbygg midt-norge",
-    # Reassigned offers
-    "flere": "km bygg",
-    "ukjent kunde": "km bygg",
-    "grinda 9 revidert": "jesper vogt lorentzen",
-    "2581 hjelseth": "km bygg",
+    "øm fjell": "ø.m. fjeld",
+    "øm fjell as": "ø.m. fjeld",
+
+    # === Unknown/placeholder mappings ===
+    "grinda 9 revidert": "jesper vogt-lorentzen",  # Project name, not customer
+    "flere- gikk til km bygg": "kopperud murtnes bygg",
+    "flere": "kopperud murtnes bygg",
+    "ukjent kunde": "kopperud murtnes bygg",
+    "2581 hjelseth": "kopperud murtnes bygg",
 }
 
 
@@ -210,28 +266,51 @@ def find_customer(conn, customer_name: str) -> tuple[str, str] | None:
     return None
 
 
-def read_excel_offers(filepath: str) -> list[dict]:
-    """Read and transform Excel data to offer records."""
+def read_excel_offers(filepath: str) -> tuple[list[dict], dict]:
+    """Read and transform Excel data to offer records.
+
+    Returns:
+        Tuple of (offers_list, skip_stats) where skip_stats tracks skipped rows
+    """
     df = pd.read_excel(filepath, header=7)
     offers = []
+    skip_stats = {"empty_rows": 0, "utgaar": 0, "no_customer": 0}
 
     for _, row in df.iterrows():
         project_title = clean_string(row.get("Prosjekt", ""))
         if not project_title:
+            skip_stats["empty_rows"] += 1
             continue
+
+        # Split title into external_reference and name
+        # Format is typically "<external_reference> <name>" e.g. "22000 Hjalmar Bjørges vei 105"
+        external_reference = ""
+        title = project_title
+        parts = project_title.split(" ", 1)
+        if len(parts) == 2 and parts[0].isdigit():
+            external_reference = parts[0]
+            title = parts[1]
 
         customer_name = clean_string(row.get("Kunde / Byggherre", ""))
         if not customer_name:
             customer_name = "Ukjent kunde"
 
+        # Get sent_date first - needed for phase determination
+        sent_date = clean_date(row.get("Sendt"))
+
+        # Get status mapping (now depends on sent_date)
         excel_status = clean_string(row.get("Status", ""))
-        phase, status = get_status_mapping(excel_status)
+        phase, status = get_status_mapping(excel_status, sent_date)
+
+        # Skip UTGÅR/UTLØPT entries
+        if phase == "_skip":
+            skip_stats["utgaar"] += 1
+            continue
 
         value = clean_float(row.get("Tilbudspris", 0))
         margin_amount = clean_float(row.get("DB", 0))
         cost = value - margin_amount if value > 0 else 0
 
-        sent_date = clean_date(row.get("Sendt"))
         due_date = clean_date(row.get("Vedståelses frist"))
         last_updated = clean_date(row.get("Sist oppdatert"))
 
@@ -240,17 +319,21 @@ def read_excel_offers(filepath: str) -> list[dict]:
         responsible_initials = clean_string(row.get("Ansvarlig", ""))
         responsible_name = get_responsible_name(responsible_initials)
 
+        # Set probability based on phase
         probability = 0
-        if phase == "draft":
-            probability = 10
+        if phase == "in_progress":
+            probability = 20
         elif phase == "sent":
-            probability = 30
-        elif phase == "won":
-            probability = 100
+            probability = 50
+        elif phase == "order":
+            probability = 100  # Already accepted
+        elif phase == "completed":
+            probability = 100  # Finished
 
         offer = {
             "id": str(uuid.uuid4()),
-            "title": project_title,
+            "title": title,
+            "external_reference": external_reference,
             "customer_name": customer_name,
             "company_id": DEFAULT_COMPANY_ID,
             "phase": phase,
@@ -269,7 +352,52 @@ def read_excel_offers(filepath: str) -> list[dict]:
 
         offers.append(offer)
 
-    return offers
+    return offers, skip_stats
+
+
+def assign_offer_numbers(offers: list[dict], company_prefix: str = "TK") -> list[dict]:
+    """Assign sequential offer numbers based on sent_date.
+
+    Format: {PREFIX}-{YEAR}-{SEQ:03d}
+    Example: TK-2023-001, TK-2023-002, TK-2024-001
+
+    Offers are sorted by sent_date (nulls last, then by external_reference).
+    Numbers are assigned per year.
+    """
+    # Sort offers: by sent_date (nulls last), then by external_reference
+    def sort_key(o):
+        sent = o.get("sent_date")
+        ext_ref = o.get("external_reference", "")
+        # Use a far future date for nulls so they sort last
+        if sent is None:
+            return (datetime(9999, 12, 31, tzinfo=timezone.utc), ext_ref)
+        return (sent, ext_ref)
+
+    sorted_offers = sorted(offers, key=sort_key)
+
+    # Track sequence numbers per year
+    year_sequences: dict[int, int] = {}
+
+    for offer in sorted_offers:
+        # Determine year from sent_date or created_at
+        sent_date = offer.get("sent_date")
+        created_at = offer.get("created_at")
+
+        if sent_date:
+            year = sent_date.year
+        elif created_at:
+            year = created_at.year
+        else:
+            year = datetime.now().year
+
+        # Get next sequence for this year
+        seq = year_sequences.get(year, 0) + 1
+        year_sequences[year] = seq
+
+        # Generate offer number
+        offer["offer_number"] = f"{company_prefix}-{year}-{seq:03d}"
+
+    return sorted_offers
 
 
 def clear_offers(conn, company_id: str, dry_run: bool = False):
@@ -308,7 +436,7 @@ def insert_offers(conn, offers: list[dict], dry_run: bool = False) -> list[dict]
             skipped.append(offer)
 
     # Show stats
-    stats = {"draft": 0, "sent": 0, "won": 0, "lost": 0, "expired": 0}
+    stats = {"in_progress": 0, "sent": 0, "order": 0, "completed": 0, "lost": 0}
     total_value = 0
     for offer in importable:
         stats[offer["phase"]] = stats.get(offer["phase"], 0) + 1
@@ -318,11 +446,11 @@ def insert_offers(conn, offers: list[dict], dry_run: bool = False) -> list[dict]
     print(f"  Skipped (no customer match): {len(skipped)} offers")
     print()
     print(f"  Importable breakdown:")
-    print(f"    - Draft: {stats.get('draft', 0)}")
+    print(f"    - In Progress: {stats.get('in_progress', 0)}")
     print(f"    - Sent: {stats.get('sent', 0)}")
-    print(f"    - Won: {stats.get('won', 0)}")
+    print(f"    - Order: {stats.get('order', 0)}")
+    print(f"    - Completed: {stats.get('completed', 0)}")
     print(f"    - Lost: {stats.get('lost', 0)}")
-    print(f"    - Expired: {stats.get('expired', 0)}")
     print(f"    - Total value: {total_value:,.0f} NOK")
 
     if dry_run:
@@ -398,6 +526,106 @@ def save_skipped_offers(skipped: list[dict], output_file: str):
     print(f"  Saved {len(skipped)} skipped offers to: {output_file}")
 
 
+def escape_sql_string(value: str) -> str:
+    """Escape a string for SQL insertion."""
+    if value is None:
+        return ""
+    return str(value).replace("'", "''")
+
+
+def format_sql_date(dt: datetime | None) -> str:
+    """Format a datetime for SQL, or NULL if None."""
+    if dt is None:
+        return "NULL"
+    return f"'{dt.strftime('%Y-%m-%d %H:%M:%S')}'"
+
+
+def resolve_customer_name_for_sql(excel_name: str, db_customers: dict[str, str]) -> str:
+    """Resolve Excel customer name to actual database customer name.
+
+    Args:
+        excel_name: Customer name from Excel
+        db_customers: Dict mapping normalized names to actual DB names
+
+    Returns:
+        The actual database customer name, or the normalized Excel name as fallback
+    """
+    normalized = normalize_customer_name(excel_name)
+    if normalized in db_customers:
+        return db_customers[normalized]
+    return excel_name
+
+
+def generate_sql_file(offers: list[dict], output_file: str, skip_stats: dict):
+    """Generate a SQL file with INSERT statements for all offers."""
+
+    # Connect to database to get actual customer names
+    print("  Loading customer names from database...")
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT name FROM customers")
+            db_customers = {}
+            for row in cur.fetchall():
+                name = row[0]
+                normalized = normalize_customer_name(name)
+                db_customers[normalized] = name
+        conn.close()
+        print(f"  Loaded {len(db_customers)} customers")
+    except Exception as e:
+        print(f"  WARNING: Could not load customers from DB: {e}")
+        print(f"  SQL will use Excel customer names (may not match)")
+        db_customers = {}
+
+    # Stats for the header
+    stats = {"in_progress": 0, "sent": 0, "order": 0, "completed": 0, "lost": 0}
+    unmatched = []
+    for offer in offers:
+        stats[offer["phase"]] = stats.get(offer["phase"], 0) + 1
+        # Check if customer will match
+        normalized = normalize_customer_name(offer['customer_name'])
+        if normalized not in db_customers:
+            unmatched.append(offer['customer_name'])
+
+    if unmatched:
+        print(f"  WARNING: {len(set(unmatched))} unique customers won't match:")
+        for name in sorted(set(unmatched))[:10]:
+            print(f"    - {name}")
+        if len(set(unmatched)) > 10:
+            print(f"    ... and {len(set(unmatched)) - 10} more")
+
+    with open(output_file, 'w') as f:
+        # Write header
+        f.write(f"-- Import offers from Plan Straye Tak last.xlsx\n")
+        f.write(f"-- Generated: {datetime.now()}\n")
+        f.write(f"-- To import: {len(offers)}\n")
+        f.write(f"-- Skipped UTGÅR/UTLØPT: {skip_stats.get('utgaar', 0)}\n")
+        f.write(f"-- Skipped empty rows: {skip_stats.get('empty_rows', 0)}\n")
+        f.write(f"-- Phase breakdown: in_progress={stats['in_progress']}, sent={stats['sent']}, order={stats['order']}, completed={stats['completed']}, lost={stats['lost']}\n")
+        f.write(f"-- Unmatched customers: {len(set(unmatched))}\n\n")
+
+        # Write INSERT statements
+        for offer in offers:
+            # Resolve to actual DB customer name
+            db_customer_name = resolve_customer_name_for_sql(offer['customer_name'], db_customers)
+
+            customer_name_escaped = escape_sql_string(db_customer_name)
+            title_escaped = escape_sql_string(offer['title'])
+            notes_escaped = escape_sql_string(offer.get('notes', ''))
+            location_escaped = escape_sql_string(offer.get('location', ''))
+            external_ref_escaped = escape_sql_string(offer.get('external_reference', ''))
+            offer_number_escaped = escape_sql_string(offer.get('offer_number', ''))
+
+            sent_date_sql = format_sql_date(offer.get('sent_date'))
+
+            sql = f"""INSERT INTO offers (id, title, customer_id, customer_name, company_id, phase, probability, value, status, description, notes, created_at, updated_at, external_reference, offer_number, cost, location, sent_date)
+VALUES ('{offer['id']}', '{title_escaped}', (SELECT id FROM customers WHERE name = '{customer_name_escaped}'), '{customer_name_escaped}', '{offer['company_id']}', '{offer['phase']}', {offer['probability']}, {offer['value']}, '{offer['status']}', '', '{notes_escaped}', NOW(), NOW(), '{external_ref_escaped}', '{offer_number_escaped}', {offer['cost']}, '{location_escaped}', {sent_date_sql}) ON CONFLICT (id) DO NOTHING;\n"""
+            f.write(sql)
+
+    print(f"  Generated SQL file: {output_file}")
+    print(f"  Total INSERT statements: {len(offers)}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Import offers from Excel to database"
@@ -405,7 +633,7 @@ def main():
     parser.add_argument(
         "excel_file",
         nargs="?",
-        default="../erpdata/Plan Straye Tak new.xlsx",
+        default="../erpdata/Plan Straye Tak last.xlsx",
         help="Path to Excel file"
     )
     parser.add_argument(
@@ -418,20 +646,50 @@ def main():
         action="store_true",
         help="Clear existing offers for this company before import"
     )
+    parser.add_argument(
+        "--output-sql",
+        type=str,
+        metavar="FILE",
+        help="Generate SQL file instead of inserting to database"
+    )
     args = parser.parse_args()
 
     print(f"=== Offer Import Script ===")
     print(f"Excel file: {args.excel_file}")
     print(f"Company: {DEFAULT_COMPANY_ID}")
-    print(f"Dry run: {args.dry_run}")
-    print(f"Clear existing: {args.clear}")
+    if args.output_sql:
+        print(f"Output SQL: {args.output_sql}")
+    else:
+        print(f"Dry run: {args.dry_run}")
+        print(f"Clear existing: {args.clear}")
     print()
 
     # Read Excel data
     print("1. Reading Excel file...")
-    offers = read_excel_offers(args.excel_file)
+    offers, skip_stats = read_excel_offers(args.excel_file)
     print(f"   Found {len(offers)} valid offers in file")
+    print(f"   Skipped: {skip_stats['empty_rows']} empty rows, {skip_stats['utgaar']} UTGÅR/UTLØPT")
     print()
+
+    # Assign sequential offer numbers
+    print("2. Assigning offer numbers...")
+    offers = assign_offer_numbers(offers, company_prefix="TK")
+    # Count offers per year
+    year_counts: dict[int, int] = {}
+    for o in offers:
+        year = int(o["offer_number"].split("-")[1])
+        year_counts[year] = year_counts.get(year, 0) + 1
+    for year in sorted(year_counts.keys()):
+        print(f"   {year}: {year_counts[year]} offers")
+    print()
+
+    # If --output-sql is specified, generate SQL file and exit
+    if args.output_sql:
+        print("3. Generating SQL file...")
+        generate_sql_file(offers, args.output_sql, skip_stats)
+        print()
+        print("=== Done! ===")
+        return
 
     # Connect to database
     print("2. Connecting to database...")

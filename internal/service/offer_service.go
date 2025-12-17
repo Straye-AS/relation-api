@@ -69,7 +69,7 @@ func (s *OfferService) Create(ctx context.Context, req *domain.CreateOfferReques
 
 // CreateWithProjectResponse creates a new offer and returns both the offer and any auto-created project
 // Supports three scenarios:
-//   - CustomerID only: Current behavior - creates/links project with that customer
+//   - CustomerID only: Creates offer for that customer, optionally auto-creates project if CreateProject=true
 //   - ProjectID only: Inherits customer from existing project
 //   - Both IDs: Uses provided customer, links to specified project
 func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domain.CreateOfferRequest) (*domain.OfferWithProjectResponse, error) {
@@ -94,12 +94,12 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 		}
 
 		// Project must have a customer to inherit from
-		if project.CustomerID == uuid.Nil {
+		if project.CustomerID == nil {
 			return nil, ErrProjectHasNoCustomer
 		}
 
 		// Fetch the customer to get full details
-		customer, err = s.customerRepo.GetByID(ctx, project.CustomerID)
+		customer, err = s.customerRepo.GetByID(ctx, *project.CustomerID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, ErrCustomerNotFound
@@ -232,62 +232,32 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 	// Track project creation result
 	var projectLinkRes *projectLinkResult
 
-	// Handle project linking/creation for non-draft offers
-	if !s.isDraftPhase(phase) {
-		// For non-draft offers, ensure project exists (either provided or auto-created)
-		// But first create the offer so we have its ID for linking
-		if err := s.offerRepo.Create(ctx, offer); err != nil {
-			return nil, fmt.Errorf("failed to create offer: %w", err)
+	// Handle project linking/creation based on explicit flags
+	if req.ProjectID != nil {
+		// User provided a project ID - validate and link
+		projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, req.ProjectID, false)
+		if err != nil {
+			return nil, err
 		}
-
-		// Now handle project linking
-		if req.ProjectID != nil {
-			// User provided a project ID - validate and link
-			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, req.ProjectID)
-			if err != nil {
-				// Rollback offer creation
-				_ = s.offerRepo.Delete(ctx, offer.ID)
-				return nil, err
-			}
-		} else {
-			// Auto-create project
-			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil)
-			if err != nil {
-				// Rollback offer creation
-				_ = s.offerRepo.Delete(ctx, offer.ID)
-				return nil, err
-			}
-		}
-
-		// Link offer to project
 		offer.ProjectID = &projectLinkRes.ProjectID
+	} else if req.CreateProject && !s.isDraftPhase(phase) {
+		// CreateProject=true and no ProjectID provided - auto-create project (only for non-draft offers)
+		projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil, true)
+		if err != nil {
+			return nil, err
+		}
+		offer.ProjectID = &projectLinkRes.ProjectID
+	}
+
+	// Create the offer
+	if err := s.offerRepo.Create(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to create offer: %w", err)
+	}
+
+	// Link offer to project if we have one
+	if projectLinkRes != nil {
 		if err := s.offerRepo.LinkToProject(ctx, offer.ID, projectLinkRes.ProjectID); err != nil {
-			return nil, fmt.Errorf("failed to link offer to project: %w", err)
-		}
-
-		// Update project economics (CalculatedOfferValue) and customer
-		if projectLinkRes.Project != nil && projectLinkRes.Project.Phase == domain.ProjectPhaseTilbud {
-			if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, projectLinkRes.ProjectID); err != nil {
-				s.logger.Warn("failed to recalculate project economics", zap.Error(err))
-			}
-			// Recalculate project customer based on active offers
-			if err := s.recalculateProjectCustomer(ctx, projectLinkRes.ProjectID); err != nil {
-				s.logger.Warn("failed to recalculate project customer", zap.Error(err))
-			}
-		}
-	} else {
-		// Draft offer - optionally link to provided project (but don't auto-create)
-		if req.ProjectID != nil {
-			// Validate the project if provided
-			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, req.ProjectID)
-			if err != nil {
-				return nil, err
-			}
-			offer.ProjectID = &projectLinkRes.ProjectID
-		}
-
-		if err := s.offerRepo.Create(ctx, offer); err != nil {
-			return nil, fmt.Errorf("failed to create offer: %w", err)
+			s.logger.Warn("failed to link offer to project", zap.Error(err))
 		}
 	}
 
@@ -298,12 +268,12 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 	}
 
 	// Log activity
-	activityBody := fmt.Sprintf("Offer '%s' was created for customer %s", offer.Title, offer.CustomerName)
+	activityBody := fmt.Sprintf("Tilbudet '%s' ble opprettet for kunde %s", offer.Title, offer.CustomerName)
 	if projectLinkRes != nil && projectLinkRes.ProjectCreated {
-		activityBody = fmt.Sprintf("Offer '%s' was created for customer %s with auto-created project '%s'",
+		activityBody = fmt.Sprintf("Tilbudet '%s' ble opprettet for kunde %s med auto-opprettet prosjekt '%s'",
 			offer.Title, offer.CustomerName, projectLinkRes.Project.Name)
 	}
-	s.logActivity(ctx, offer.ID, "Offer created", activityBody)
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud opprettet", activityBody)
 
 	offerDTO := mapper.ToOfferDTO(offer)
 
@@ -425,9 +395,15 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 		return nil, ErrOfferAlreadyClosed
 	}
 
+	// Block updates to offers in order phase - use dedicated methods instead
+	// (UpdateOfferHealth, UpdateOfferSpent, UpdateOfferInvoiced, CompleteOffer)
+	if offer.Phase == domain.OfferPhaseOrder {
+		return nil, ErrOfferAlreadyClosed
+	}
+
 	// Block transitions to terminal phases - must use dedicated endpoints
-	// WinOffer, RejectOffer, or ExpireOffer handle proper project state transitions
-	if s.isClosedPhase(req.Phase) {
+	// AcceptOrder, RejectOffer, or ExpireOffer handle proper phase transitions
+	if s.isClosedPhase(req.Phase) || req.Phase == domain.OfferPhaseOrder {
 		return nil, ErrOfferCannotAdvanceToTerminalPhase
 	}
 
@@ -504,8 +480,8 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	}
 
 	// Log activity
-	s.logActivity(ctx, offer.ID, "Offer updated",
-		fmt.Sprintf("Offer '%s' was updated", offer.Title))
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud oppdatert",
+		fmt.Sprintf("Tilbudet '%s' ble oppdatert", offer.Title))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -526,8 +502,8 @@ func (s *OfferService) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	// Log activity (on customer since offer is deleted)
-	s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, offer.CustomerID,
-		"Offer deleted", fmt.Sprintf("Offer '%s' was deleted", offer.Title))
+	s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, offer.CustomerID, offer.CustomerName,
+		"Tilbud slettet", fmt.Sprintf("Tilbudet '%s' ble slettet", offer.Title))
 
 	return nil
 }
@@ -629,15 +605,114 @@ func (s *OfferService) SendOffer(ctx context.Context, id uuid.UUID) (*domain.Off
 	}
 
 	// Log activity
-	s.logActivity(ctx, offer.ID, "Offer sent",
-		fmt.Sprintf("Offer '%s' was sent to customer (phase: %s -> sent)", offer.Title, oldPhase))
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud sendt",
+		fmt.Sprintf("Tilbudet '%s' ble sendt til kunde (fase: %s -> sendt)", offer.Title, oldPhase))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
 }
 
-// AcceptOffer transitions an offer to won phase, optionally creating a project
+// AcceptOffer transitions an offer from sent to order phase
+// Supports optional project creation via CreateProject flag
 func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domain.AcceptOfferRequest) (*domain.AcceptOfferResponse, error) {
+	// Call AcceptOrder to transition the offer
+	acceptReq := &domain.AcceptOrderRequest{}
+	result, err := s.AcceptOrder(ctx, id, acceptReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// If project creation is not requested, return without project
+	if !req.CreateProject {
+		return &domain.AcceptOfferResponse{
+			Offer:   result.Offer,
+			Project: nil,
+		}, nil
+	}
+
+	// Get the offer for project creation
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get offer for project creation: %w", err)
+	}
+
+	// Create project from offer
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		return nil, ErrUnauthorized
+	}
+
+	// Determine project name
+	projectName := req.ProjectName
+	if projectName == "" {
+		projectName = offer.Title
+	}
+
+	// Create project (as a folder/container for offers)
+	// Projects are now simplified - no manager or company fields
+	customerID := offer.CustomerID
+	project := &domain.Project{
+		Name:          projectName,
+		CustomerID:    &customerID,
+		CustomerName:  offer.CustomerName,
+		Phase:         domain.ProjectPhaseTilbud,
+		StartDate:     time.Now(),
+		Description:   offer.Description,
+		CreatedByID:   userCtx.UserID.String(),
+		CreatedByName: userCtx.DisplayName,
+		UpdatedByID:   userCtx.UserID.String(),
+		UpdatedByName: userCtx.DisplayName,
+	}
+
+	if err := s.projectRepo.Create(ctx, project); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrProjectCreationFailed, err)
+	}
+
+	// Link offer to project
+	offer.ProjectID = &project.ID
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		s.logger.Warn("failed to link offer to project", zap.Error(err))
+	}
+
+	// Clone budget items from offer to project
+	offerItems, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, id)
+	if err == nil && len(offerItems) > 0 {
+		for _, item := range offerItems {
+			cloned := domain.BudgetItem{
+				ParentType:     domain.BudgetParentProject,
+				ParentID:       project.ID,
+				Name:           item.Name,
+				Description:    item.Description,
+				ExpectedCost:   item.ExpectedCost,
+				ExpectedMargin: item.ExpectedMargin,
+				DisplayOrder:   item.DisplayOrder,
+			}
+			if err := s.budgetItemRepo.Create(ctx, &cloned); err != nil {
+				s.logger.Warn("failed to clone budget item to project", zap.Error(err))
+			}
+		}
+	}
+
+	s.logger.Info("created project for offer",
+		zap.String("offerID", offer.ID.String()),
+		zap.String("projectID", project.ID.String()),
+		zap.String("projectName", project.Name))
+
+	// Log activity on the new project
+	s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID, project.Name,
+		"Prosjekt opprettet",
+		fmt.Sprintf("Prosjektet '%s' ble opprettet fra tilbud '%s'", project.Name, offer.Title))
+
+	projectDTO := mapper.ToProjectDTO(project)
+	return &domain.AcceptOfferResponse{
+		Offer:   result.Offer,
+		Project: &projectDTO,
+	}, nil
+}
+
+// AcceptOrder transitions a sent offer to order phase
+// This marks the offer as accepted by the customer and ready for execution
+func (s *OfferService) AcceptOrder(ctx context.Context, id uuid.UUID, req *domain.AcceptOrderRequest) (*domain.AcceptOrderResponse, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -648,213 +723,238 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 
 	// Validate phase - must be in sent phase
 	if offer.Phase != domain.OfferPhaseSent {
-		return nil, ErrOfferNotSent
+		return nil, ErrOfferNotInSentPhase
 	}
 
-	var project *domain.Project
-	var projectDTO *domain.ProjectDTO
-	var expiredOfferIDs []uuid.UUID
-	wonAt := time.Now()
-
-	// Use transaction for atomicity
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Update offer phase to won
-		offer.Phase = domain.OfferPhaseWon
-		if err := tx.Save(offer).Error; err != nil {
-			return fmt.Errorf("failed to update offer: %w", err)
-		}
-
-		// Case 1: Offer already linked to a project - transition that project to active
-		if offer.ProjectID != nil {
-			// Get the existing project
-			existingProject, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
-			if err != nil {
-				return fmt.Errorf("failed to get linked project: %w", err)
-			}
-			project = existingProject
-
-			// Only transition if project is in tilbud phase
-			if project.Phase == domain.ProjectPhaseTilbud {
-				// Store original offer number for project
-				originalOfferNumber := offer.OfferNumber
-
-				// Update offer number with "W" suffix to mark as won (only if not already suffixed)
-				if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "W") {
-					newOfferNumber := originalOfferNumber + "W"
-					if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
-						s.logger.Warn("failed to update offer number with W suffix", zap.Error(err))
-					}
-				}
-
-				// Expire sibling offers
-				expiredIDs, err := s.offerRepo.ExpireSiblingOffers(ctx, *offer.ProjectID, id)
-				if err != nil {
-					s.logger.Warn("failed to expire sibling offers", zap.Error(err))
-				}
-				expiredOfferIDs = expiredIDs
-
-				// Transition project to active phase with winning offer details (conditionally inherits manager, description, location, external reference)
-				if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, offer.Description, offer.Location, offer.ExternalReference, wonAt); err != nil {
-					return fmt.Errorf("failed to update project with winning offer: %w", err)
-				}
-
-				// Clone budget items from offer to project
-				if s.budgetItemRepo != nil {
-					items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, offer.ID)
-					if err == nil && len(items) > 0 {
-						for _, item := range items {
-							cloned := domain.BudgetItem{
-								ParentType:     domain.BudgetParentProject,
-								ParentID:       project.ID,
-								Name:           item.Name,
-								ExpectedCost:   item.ExpectedCost,
-								ExpectedMargin: item.ExpectedMargin,
-								Quantity:       item.Quantity,
-								PricePerItem:   item.PricePerItem,
-								Description:    item.Description,
-								DisplayOrder:   item.DisplayOrder,
-							}
-							if err := tx.Create(&cloned).Error; err != nil {
-								s.logger.Warn("failed to clone budget item",
-									zap.Error(err),
-									zap.String("item_id", item.ID.String()))
-							}
-						}
-						// Mark project as having detailed budget
-						if err := tx.Model(&domain.Project{}).Where("id = ?", project.ID).
-							Update("has_detailed_budget", true).Error; err != nil {
-							s.logger.Warn("failed to update project HasDetailedBudget flag", zap.Error(err))
-						}
-					}
-				}
-			}
-		} else if req.CreateProject {
-			// Case 2: No linked project - create a new one if requested
-			// Get user context for manager
-			userCtx, ok := auth.FromContext(ctx)
-			if !ok {
-				return ErrUnauthorized
-			}
-
-			// Determine project name
-			projectName := req.ProjectName
-			if projectName == "" {
-				projectName = offer.Title
-			}
-
-			// Determine manager
-			managerID := req.ManagerID
-			if managerID == "" {
-				managerID = userCtx.UserID.String()
-			}
-
-			project = &domain.Project{
-				Name:         projectName,
-				CustomerID:   offer.CustomerID,
-				CustomerName: offer.CustomerName,
-				CompanyID:    offer.CompanyID,
-				Phase:        domain.ProjectPhaseActive, // New projects from accepted offers start as active
-				StartDate:    time.Now(),
-				Value:        offer.Value,
-				Cost:         offer.Cost,
-				ManagerID:    &managerID,
-				OfferID:      &offer.ID,
-				WonAt:        &wonAt,
-				Description:  offer.Description,
-			}
-
-			if err := tx.Create(project).Error; err != nil {
-				return fmt.Errorf("%w: %v", ErrProjectCreationFailed, err)
-			}
-
-			// Link offer to new project
-			if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("project_id", project.ID).Error; err != nil {
-				s.logger.Warn("failed to link offer to new project", zap.Error(err))
-			}
-
-			// Clone budget items from offer to project
-			if s.budgetItemRepo != nil {
-				items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, offer.ID)
-				if err == nil && len(items) > 0 {
-					for _, item := range items {
-						cloned := domain.BudgetItem{
-							ParentType:     domain.BudgetParentProject,
-							ParentID:       project.ID,
-							Name:           item.Name,
-							ExpectedCost:   item.ExpectedCost,
-							ExpectedMargin: item.ExpectedMargin,
-							Quantity:       item.Quantity,
-							PricePerItem:   item.PricePerItem,
-							Description:    item.Description,
-							DisplayOrder:   item.DisplayOrder,
-						}
-						if err := tx.Create(&cloned).Error; err != nil {
-							s.logger.Warn("failed to clone budget item",
-								zap.Error(err),
-								zap.String("item_id", item.ID.String()))
-						}
-					}
-					// Mark project as having detailed budget
-					project.HasDetailedBudget = true
-					if err := tx.Save(project).Error; err != nil {
-						s.logger.Warn("failed to update project HasDetailedBudget flag", zap.Error(err))
-					}
-				}
-			}
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
+	// Check if already in order phase
+	if offer.Phase == domain.OfferPhaseOrder {
+		return nil, ErrOfferAlreadyInOrder
 	}
 
-	// Reload offer
+	oldPhase := offer.Phase
+
+	// Store original offer number before modification
+	originalOfferNumber := offer.OfferNumber
+
+	// Update offer number with "O" suffix to mark as order (only if not already suffixed)
+	if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "O") && !strings.HasSuffix(originalOfferNumber, "W") {
+		offer.OfferNumber = originalOfferNumber + "O"
+	}
+
+	// Transition to order phase
+	offer.Phase = domain.OfferPhaseOrder
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	// Reload with relations
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
-		s.logger.Warn("failed to reload offer after accept", zap.Error(err))
-	}
-	offerDTO := mapper.ToOfferDTO(offer)
-
-	// Reload and convert project to DTO
-	if project != nil {
-		reloadedProject, err := s.projectRepo.GetByID(ctx, project.ID)
-		if err == nil {
-			project = reloadedProject
-		}
-		dto := mapper.ToProjectDTO(project)
-		projectDTO = &dto
+		s.logger.Warn("failed to reload offer after accept order", zap.Error(err))
 	}
 
 	// Log activity
-	activityBody := fmt.Sprintf("Offer '%s' was accepted (won)", offer.Title)
-	if project != nil && offer.ProjectID != nil {
-		// Existing project was transitioned to active
-		activityBody = fmt.Sprintf("Offer '%s' was accepted, transitioning project '%s' to active phase", offer.Title, project.Name)
-		if len(expiredOfferIDs) > 0 {
-			activityBody = fmt.Sprintf("%s. %d sibling offer(s) were expired.", activityBody, len(expiredOfferIDs))
-		}
-		// Also log on the project
-		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
-			"Project activated",
-			fmt.Sprintf("Project activated with winning offer '%s'.", offer.Title))
-	} else if project != nil {
-		// New project was created
-		activityBody = fmt.Sprintf("Offer '%s' was accepted and project '%s' was created", offer.Title, project.Name)
+	activityBody := fmt.Sprintf("Tilbudet '%s' ble akseptert som ordre (fase: %s -> ordre)", offer.Title, oldPhase)
+	if req.Notes != "" {
+		activityBody = fmt.Sprintf("%s. Notater: %s", activityBody, req.Notes)
 	}
-	s.logActivity(ctx, offer.ID, "Offer accepted", activityBody)
+	s.logActivity(ctx, offer.ID, offer.Title, "Ordre akseptert", activityBody)
 
-	return &domain.AcceptOfferResponse{
-		Offer:   &offerDTO,
-		Project: projectDTO,
+	offerDTO := mapper.ToOfferDTO(offer)
+	return &domain.AcceptOrderResponse{
+		Offer: &offerDTO,
 	}, nil
 }
 
+// UpdateOfferHealth updates the health status and optionally completion percentage for an offer in order phase
+func (s *OfferService) UpdateOfferHealth(ctx context.Context, id uuid.UUID, req *domain.UpdateOfferHealthRequest) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Validate phase - must be in order phase
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil, ErrOfferNotInOrderPhase
+	}
+
+	// Validate health enum
+	if !req.Health.IsValid() {
+		return nil, fmt.Errorf("invalid health status: %s", req.Health)
+	}
+
+	oldHealth := ""
+	if offer.Health != nil {
+		oldHealth = string(*offer.Health)
+	}
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"health": req.Health,
+	}
+	// Include completion percent if provided
+	if req.CompletionPercent != nil {
+		updates["completion_percent"] = *req.CompletionPercent
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update health: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, offer.Title, "Tilbudshelse oppdatert",
+		fmt.Sprintf("Helse endret fra '%s' til '%s'", oldHealth, req.Health))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateOfferSpent updates the spent amount for an offer in order phase
+func (s *OfferService) UpdateOfferSpent(ctx context.Context, id uuid.UUID, req *domain.UpdateOfferSpentRequest) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Validate phase - must be in order phase
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil, ErrOfferNotInOrderPhase
+	}
+
+	oldSpent := offer.Spent
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"spent": req.Spent,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update spent: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, offer.Title, "Tilbudsforbruk oppdatert",
+		fmt.Sprintf("Forbruk endret fra %.2f til %.2f", oldSpent, req.Spent))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateOfferInvoiced updates the invoiced amount for an offer in order phase
+func (s *OfferService) UpdateOfferInvoiced(ctx context.Context, id uuid.UUID, req *domain.UpdateOfferInvoicedRequest) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Validate phase - must be in order phase
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil, ErrOfferNotInOrderPhase
+	}
+
+	oldInvoiced := offer.Invoiced
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"invoiced": req.Invoiced,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update invoiced: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, offer.Title, "Tilbud fakturering oppdatert",
+		fmt.Sprintf("Fakturert endret fra %.2f til %.2f", oldInvoiced, req.Invoiced))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// CompleteOffer transitions an order offer to completed phase
+func (s *OfferService) CompleteOffer(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Validate phase - must be in order phase
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil, ErrOfferNotInOrderPhase
+	}
+
+	oldPhase := offer.Phase
+	offer.Phase = domain.OfferPhaseCompleted
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	// Reload with relations
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after complete", zap.Error(err))
+	}
+
+	// Log activity
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud fullført",
+		fmt.Sprintf("Tilbudet '%s' ble fullført (fase: %s -> fullført)", offer.Title, oldPhase))
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
 // RejectOffer transitions an offer to lost phase with a reason
-// If the offer is linked to a project in tilbud phase:
-// - If other active offers remain: recalculates project economics
-// - If no other active offers: cancels the project
+// Projects are now just folders, so no project lifecycle logic is applied
 func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domain.RejectOfferRequest) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -864,8 +964,8 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 		return nil, fmt.Errorf("failed to get offer: %w", err)
 	}
 
-	// Validate phase - must be in sent phase
-	if offer.Phase != domain.OfferPhaseSent {
+	// Validate phase - can reject from sent or order phase
+	if offer.Phase != domain.OfferPhaseSent && offer.Phase != domain.OfferPhaseOrder {
 		return nil, ErrOfferNotSent
 	}
 
@@ -891,38 +991,6 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
-	// Handle project lifecycle if offer is linked to a project
-	var projectCancelled bool
-	if offer.ProjectID != nil {
-		project, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
-		if err == nil && project.Phase == domain.ProjectPhaseTilbud {
-			// Check if there are other active offers
-			activeCount, err := s.offerRepo.CountActiveOffersByProject(ctx, *offer.ProjectID)
-			if err != nil {
-				s.logger.Warn("failed to count active offers", zap.Error(err))
-			} else if activeCount == 0 {
-				// No more active offers - cancel the project
-				if err := s.projectRepo.CancelProject(ctx, *offer.ProjectID); err != nil {
-					s.logger.Warn("failed to cancel project", zap.Error(err))
-				} else {
-					projectCancelled = true
-					s.logActivityOnTarget(ctx, domain.ActivityTargetProject, *offer.ProjectID,
-						"Project cancelled",
-						fmt.Sprintf("Project cancelled because all offers were lost (last: '%s')", offer.Title))
-				}
-			} else {
-				// Other active offers remain - recalculate economics and customer
-				if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, *offer.ProjectID); err != nil {
-					s.logger.Warn("failed to recalculate project economics", zap.Error(err))
-				}
-				// Recalculate project customer based on remaining active offers
-				if err := s.recalculateProjectCustomer(ctx, *offer.ProjectID); err != nil {
-					s.logger.Warn("failed to recalculate project customer", zap.Error(err))
-				}
-			}
-		}
-	}
-
 	// Reload with relations
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -930,196 +998,35 @@ func (s *OfferService) RejectOffer(ctx context.Context, id uuid.UUID, req *domai
 	}
 
 	// Log activity
-	activityBody := fmt.Sprintf("Offer '%s' was rejected (phase: %s -> lost)", offer.Title, oldPhase)
+	activityBody := fmt.Sprintf("Tilbudet '%s' ble avslått (fase: %s -> tapt)", offer.Title, oldPhase)
 	if req.Reason != "" {
-		activityBody = fmt.Sprintf("%s. Reason: %s", activityBody, req.Reason)
+		activityBody = fmt.Sprintf("%s. Årsak: %s", activityBody, req.Reason)
 	}
-	if projectCancelled {
-		activityBody = fmt.Sprintf("%s. Project was cancelled (no remaining active offers).", activityBody)
-	}
-	s.logActivity(ctx, offer.ID, "Offer rejected", activityBody)
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud avslått", activityBody)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
 }
 
-// WinOffer wins an offer within a project context (offer folder model)
-// This transitions the offer to won, the project to active phase,
-// and expires all sibling offers in the same project
+// WinOffer wins an offer (transitions to order phase)
+// Deprecated: Use AcceptOrder instead. This method is kept for backwards compatibility.
+// Projects are now just folders and do not have lifecycle transitions tied to offers.
 func (s *OfferService) WinOffer(ctx context.Context, id uuid.UUID, req *domain.WinOfferRequest) (*domain.WinOfferResponse, error) {
-	offer, err := s.offerRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrOfferNotFound
-		}
-		return nil, fmt.Errorf("failed to get offer: %w", err)
+	// Call the new AcceptOrder implementation
+	acceptReq := &domain.AcceptOrderRequest{
+		Notes: req.Notes,
 	}
-
-	// Validate offer has a project linked
-	if offer.ProjectID == nil {
-		return nil, ErrOfferNotInProject
-	}
-
-	// Validate offer is not already in a terminal phase
-	if offer.Phase == domain.OfferPhaseWon {
-		return nil, ErrOfferAlreadyWon
-	}
-	if s.isClosedPhase(offer.Phase) {
-		return nil, ErrOfferAlreadyClosed
-	}
-
-	// Get the project and verify it's in tilbud phase
-	project, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrProjectNotFound
-		}
-		return nil, fmt.Errorf("failed to get project: %w", err)
-	}
-
-	if project.Phase != domain.ProjectPhaseTilbud {
-		return nil, ErrProjectNotInTilbudPhase
-	}
-
-	// Generate offer number if transitioning from draft
-	if s.isDraftPhase(offer.Phase) {
-		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
-			return nil, err
-		}
-	}
-
-	// Store the original offer number for the project
-	originalOfferNumber := offer.OfferNumber
-	wonAt := time.Now()
-
-	// Set updated by fields (never modify created by)
-	if userCtx, ok := auth.FromContext(ctx); ok {
-		offer.UpdatedByID = userCtx.UserID.String()
-		offer.UpdatedByName = userCtx.DisplayName
-	}
-
-	// Use transaction for atomicity
-	var expiredOfferIDs []uuid.UUID
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Mark the winning offer as won
-		offer.Phase = domain.OfferPhaseWon
-		if err := tx.Save(offer).Error; err != nil {
-			return fmt.Errorf("failed to update winning offer: %w", err)
-		}
-
-		// 2. Update the winning offer's number with "W" suffix to mark as won (only if not already suffixed)
-		if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "W") {
-			newOfferNumber := originalOfferNumber + "W"
-			if err := tx.Model(&domain.Offer{}).Where("id = ?", id).Update("offer_number", newOfferNumber).Error; err != nil {
-				s.logger.Warn("failed to update offer number with W suffix", zap.Error(err))
-			}
-		}
-
-		// 3. Expire sibling offers
-		expiredIDs, err := s.offerRepo.ExpireSiblingOffers(ctx, *offer.ProjectID, id)
-		if err != nil {
-			return fmt.Errorf("failed to expire sibling offers: %w", err)
-		}
-		expiredOfferIDs = expiredIDs
-
-		// 4. Update the project to active phase with winning offer details (conditionally inherits manager, description, location, external reference)
-		if err := s.projectRepo.SetWinningOffer(ctx, project.ID, id, originalOfferNumber, offer.Value, offer.Cost, offer.CustomerID, offer.CustomerName, offer.ResponsibleUserID, offer.ResponsibleUserName, offer.Description, offer.Location, offer.ExternalReference, wonAt); err != nil {
-			return fmt.Errorf("failed to update project with winning offer: %w", err)
-		}
-
-		// 5. Clone budget items from offer to project if they exist
-		if s.budgetItemRepo != nil {
-			items, err := s.budgetItemRepo.ListByParent(ctx, domain.BudgetParentOffer, id)
-			if err == nil && len(items) > 0 {
-				for _, item := range items {
-					cloned := domain.BudgetItem{
-						ParentType:     domain.BudgetParentProject,
-						ParentID:       project.ID,
-						Name:           item.Name,
-						ExpectedCost:   item.ExpectedCost,
-						ExpectedMargin: item.ExpectedMargin,
-						Quantity:       item.Quantity,
-						PricePerItem:   item.PricePerItem,
-						Description:    item.Description,
-						DisplayOrder:   item.DisplayOrder,
-					}
-					if err := tx.Create(&cloned).Error; err != nil {
-						s.logger.Warn("failed to clone budget item",
-							zap.Error(err),
-							zap.String("item_id", item.ID.String()))
-					}
-				}
-				// Mark project as having detailed budget
-				if err := tx.Model(&domain.Project{}).Where("id = ?", project.ID).
-					Update("has_detailed_budget", true).Error; err != nil {
-					s.logger.Warn("failed to update project HasDetailedBudget flag", zap.Error(err))
-				}
-			}
-		}
-
-		return nil
-	})
-
+	result, err := s.AcceptOrder(ctx, id, acceptReq)
 	if err != nil {
 		return nil, err
 	}
 
-	// Reload offer and project
-	offer, err = s.offerRepo.GetByID(ctx, id)
-	if err != nil {
-		s.logger.Warn("failed to reload offer after win", zap.Error(err))
-	}
-
-	project, err = s.projectRepo.GetByID(ctx, *offer.ProjectID)
-	if err != nil {
-		s.logger.Warn("failed to reload project after win", zap.Error(err))
-	}
-
-	// Get expired offers for response
-	var expiredOfferDTOs []domain.OfferDTO
-	if len(expiredOfferIDs) > 0 {
-		expiredOffers, err := s.offerRepo.GetExpiredSiblingOffers(ctx, *offer.ProjectID, id)
-		if err == nil {
-			expiredOfferDTOs = make([]domain.OfferDTO, len(expiredOffers))
-			for i, o := range expiredOffers {
-				expiredOfferDTOs[i] = mapper.ToOfferDTO(&o)
-			}
-		}
-	}
-
-	// Log activities
-	activityBody := fmt.Sprintf("Offer '%s' was won, transitioning project '%s' to active phase", offer.Title, project.Name)
-	if req.Notes != "" {
-		activityBody = fmt.Sprintf("%s. Notes: %s", activityBody, req.Notes)
-	}
-	s.logActivity(ctx, offer.ID, "Offer won", activityBody)
-
-	if len(expiredOfferIDs) > 0 {
-		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
-			"Project activated",
-			fmt.Sprintf("Project activated with winning offer '%s'. %d sibling offer(s) were expired.",
-				offer.Title, len(expiredOfferIDs)))
-
-		// Log activity for each auto-expired offer individually
-		for _, expiredOfferID := range expiredOfferIDs {
-			s.logActivity(ctx, expiredOfferID, "Offer auto-expired",
-				fmt.Sprintf("Offer was auto-expired because offer '%s' (%s) won on project '%s'",
-					offer.Title, offer.OfferNumber, project.Name))
-		}
-	} else {
-		s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
-			"Project activated",
-			fmt.Sprintf("Project activated with winning offer '%s'.", offer.Title))
-	}
-
-	offerDTO := mapper.ToOfferDTO(offer)
-	projectDTO := mapper.ToProjectDTO(project)
-
+	// Return in the old format for backwards compatibility
 	return &domain.WinOfferResponse{
-		Offer:         &offerDTO,
-		Project:       &projectDTO,
-		ExpiredOffers: expiredOfferDTOs,
-		ExpiredCount:  len(expiredOfferIDs),
+		Offer:         result.Offer,
+		Project:       nil, // Projects are now just folders
+		ExpiredOffers: nil, // No more sibling expiration
+		ExpiredCount:  0,
 	}, nil
 }
 
@@ -1148,9 +1055,7 @@ func (s *OfferService) GetProjectOffers(ctx context.Context, projectID uuid.UUID
 }
 
 // ExpireOffer transitions an offer to expired phase
-// If the offer is linked to a project in tilbud phase:
-// - If other active offers remain: recalculates project economics
-// - If no other active offers: cancels the project
+// Projects are now just folders, so no project lifecycle logic is applied
 func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1161,7 +1066,8 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	}
 
 	// Can expire from draft, in_progress, or sent phases
-	if s.isClosedPhase(offer.Phase) {
+	// Cannot expire offers in order phase (already accepted) or closed phases
+	if s.isClosedPhase(offer.Phase) || offer.Phase == domain.OfferPhaseOrder {
 		return nil, ErrOfferAlreadyClosed
 	}
 
@@ -1186,38 +1092,6 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
-	// Handle project lifecycle if offer is linked to a project
-	var projectCancelled bool
-	if offer.ProjectID != nil {
-		project, err := s.projectRepo.GetByID(ctx, *offer.ProjectID)
-		if err == nil && project.Phase == domain.ProjectPhaseTilbud {
-			// Check if there are other active offers
-			activeCount, err := s.offerRepo.CountActiveOffersByProject(ctx, *offer.ProjectID)
-			if err != nil {
-				s.logger.Warn("failed to count active offers", zap.Error(err))
-			} else if activeCount == 0 {
-				// No more active offers - cancel the project
-				if err := s.projectRepo.CancelProject(ctx, *offer.ProjectID); err != nil {
-					s.logger.Warn("failed to cancel project", zap.Error(err))
-				} else {
-					projectCancelled = true
-					s.logActivityOnTarget(ctx, domain.ActivityTargetProject, *offer.ProjectID,
-						"Project cancelled",
-						fmt.Sprintf("Project cancelled because all offers expired (last: '%s')", offer.Title))
-				}
-			} else {
-				// Other active offers remain - recalculate economics and customer
-				if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, *offer.ProjectID); err != nil {
-					s.logger.Warn("failed to recalculate project economics", zap.Error(err))
-				}
-				// Recalculate project customer based on remaining active offers
-				if err := s.recalculateProjectCustomer(ctx, *offer.ProjectID); err != nil {
-					s.logger.Warn("failed to recalculate project customer", zap.Error(err))
-				}
-			}
-		}
-	}
-
 	// Reload with relations
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1225,20 +1099,16 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	}
 
 	// Log activity
-	activityBody := fmt.Sprintf("Offer '%s' was marked as expired (phase: %s -> expired)", offer.Title, oldPhase)
-	if projectCancelled {
-		activityBody = fmt.Sprintf("%s. Project was cancelled (no remaining active offers).", activityBody)
-	}
-	s.logActivity(ctx, offer.ID, "Offer expired", activityBody)
+	activityBody := fmt.Sprintf("Tilbudet '%s' ble markert som utløpt (fase: %s -> utløpt)", offer.Title, oldPhase)
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud utløpt", activityBody)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
 }
 
-// RevertToSent transitions a won offer back to sent phase
-// This is used when reopening a project - the winning offer reverts to sent
-// so that it can be won again or managed as a normal sent offer.
-// Note: This does NOT remove the W suffix from the offer number.
+// RevertToSent transitions an order offer back to sent phase
+// This allows re-negotiation of an accepted order.
+// Note: This does NOT remove the O suffix from the offer number.
 func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1248,13 +1118,19 @@ func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.
 		return nil, fmt.Errorf("failed to get offer: %w", err)
 	}
 
-	// Can only revert won offers
-	if offer.Phase != domain.OfferPhaseWon {
-		return nil, fmt.Errorf("can only revert won offers to sent (current phase: %s)", offer.Phase)
+	// Can only revert order offers
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil, fmt.Errorf("can only revert order offers to sent (current phase: %s)", offer.Phase)
 	}
 
 	oldPhase := offer.Phase
 	offer.Phase = domain.OfferPhaseSent
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
 
 	if err := s.offerRepo.Update(ctx, offer); err != nil {
 		return nil, fmt.Errorf("failed to update offer: %w", err)
@@ -1267,8 +1143,8 @@ func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.
 	}
 
 	// Log activity
-	s.logActivity(ctx, offer.ID, "Offer reverted to sent",
-		fmt.Sprintf("Offer '%s' was reverted from %s to sent (project reopening)", offer.Title, oldPhase))
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud tilbakestilt til sendt",
+		fmt.Sprintf("Tilbudet '%s' ble tilbakestilt fra %s til sendt", offer.Title, oldPhase))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1370,12 +1246,12 @@ func (s *OfferService) CloneOffer(ctx context.Context, id uuid.UUID, req *domain
 	}
 
 	// Log activity on source offer
-	s.logActivity(ctx, id, "Offer cloned",
-		fmt.Sprintf("Offer '%s' was cloned to create '%s'", sourceOffer.Title, newOffer.Title))
+	s.logActivity(ctx, id, sourceOffer.Title, "Tilbud klonet",
+		fmt.Sprintf("Tilbudet '%s' ble klonet for å opprette '%s'", sourceOffer.Title, newOffer.Title))
 
 	// Log activity on new offer
-	s.logActivity(ctx, newOffer.ID, "Offer created from clone",
-		fmt.Sprintf("Offer '%s' was created as a clone of '%s'", newOffer.Title, sourceOffer.Title))
+	s.logActivity(ctx, newOffer.ID, newOffer.Title, "Tilbud opprettet fra klone",
+		fmt.Sprintf("Tilbudet '%s' ble opprettet som en klone av '%s'", newOffer.Title, sourceOffer.Title))
 
 	dto := mapper.ToOfferDTO(newOffer)
 	return &dto, nil
@@ -1438,8 +1314,8 @@ func (s *OfferService) RecalculateTotals(ctx context.Context, id uuid.UUID) (*do
 	}
 
 	// Log activity
-	s.logActivity(ctx, id, "Offer totals recalculated",
-		fmt.Sprintf("Offer '%s' value updated to %.2f from budget items", offer.Title, newValue))
+	s.logActivity(ctx, id, offer.Title, "Tilbudstotaler omberegnet",
+		fmt.Sprintf("Tilbudet '%s' verdi oppdatert til %.2f fra budsjettposter", offer.Title, newValue))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1462,7 +1338,8 @@ func (s *OfferService) Advance(ctx context.Context, id uuid.UUID, req *domain.Ad
 // AdvanceWithProjectResponse updates the offer phase and returns the offer and any auto-created project
 // When transitioning from draft to in_progress:
 // - If ProjectID is provided in request, validates and links to that project
-// - If no ProjectID and offer has no project, auto-creates one
+// - If CreateProject is true and no ProjectID provided, auto-creates a project
+// - Otherwise, offer remains without a project
 func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.UUID, req *domain.AdvanceOfferRequest) (*domain.OfferWithProjectResponse, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1472,9 +1349,9 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 		return nil, fmt.Errorf("failed to get offer: %w", err)
 	}
 
-	// Block transitions to terminal phases - must use dedicated endpoints
-	// WinOffer, RejectOffer, or ExpireOffer handle proper project state transitions
-	if s.isClosedPhase(req.Phase) {
+	// Block transitions to terminal phases or order - must use dedicated endpoints
+	// AcceptOffer/AcceptOrder for order, RejectOffer for lost, ExpireOffer for expired
+	if s.isClosedPhase(req.Phase) || req.Phase == domain.OfferPhaseOrder {
 		return nil, ErrOfferCannotAdvanceToTerminalPhase
 	}
 
@@ -1518,8 +1395,7 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 	// Track project creation result
 	var projectLinkRes *projectLinkResult
 
-	// Handle project auto-creation when transitioning to in_progress (or any non-draft phase)
-	// and the offer doesn't already have a project
+	// Handle project linking/creation based on explicit flags when transitioning from draft
 	if transitioningFromDraft && !s.isDraftPhase(req.Phase) {
 		// Determine the project ID to use
 		requestedProjectID := req.ProjectID
@@ -1530,20 +1406,20 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 
 		if requestedProjectID != nil {
 			// Validate the requested/existing project
-			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, requestedProjectID)
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, requestedProjectID, false)
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			// No project - auto-create one
-			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil)
+			offer.ProjectID = &projectLinkRes.ProjectID
+		} else if req.CreateProject {
+			// CreateProject=true and no project - auto-create one
+			projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil, true)
 			if err != nil {
 				return nil, err
 			}
+			offer.ProjectID = &projectLinkRes.ProjectID
 		}
-
-		// Link offer to project
-		offer.ProjectID = &projectLinkRes.ProjectID
+		// Otherwise, offer proceeds without a project
 	}
 
 	offer.Phase = req.Phase
@@ -1573,17 +1449,6 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
-	// Recalculate project economics and customer if linked to a tilbud phase project
-	if projectLinkRes != nil && projectLinkRes.Project != nil && projectLinkRes.Project.Phase == domain.ProjectPhaseTilbud {
-		if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, projectLinkRes.ProjectID); err != nil {
-			s.logger.Warn("failed to recalculate project economics", zap.Error(err))
-		}
-		// Recalculate project customer based on active offers
-		if err := s.recalculateProjectCustomer(ctx, projectLinkRes.ProjectID); err != nil {
-			s.logger.Warn("failed to recalculate project customer", zap.Error(err))
-		}
-	}
-
 	// Reload offer
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1591,15 +1456,15 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 	}
 
 	// Log activity
-	activityBody := fmt.Sprintf("Offer '%s' advanced from %s to %s", offer.Title, oldPhase, offer.Phase)
+	activityBody := fmt.Sprintf("Tilbudet '%s' avansert fra %s til %s", offer.Title, oldPhase, offer.Phase)
 	if transitioningFromDraft && offer.OfferNumber != "" {
-		activityBody = fmt.Sprintf("Offer '%s' advanced from %s to %s with offer number %s",
+		activityBody = fmt.Sprintf("Tilbudet '%s' avansert fra %s til %s med tilbudsnummer %s",
 			offer.Title, oldPhase, offer.Phase, offer.OfferNumber)
 	}
 	if projectLinkRes != nil && projectLinkRes.ProjectCreated {
-		activityBody = fmt.Sprintf("%s (auto-created project '%s')", activityBody, projectLinkRes.Project.Name)
+		activityBody = fmt.Sprintf("%s (auto-opprettet prosjekt '%s')", activityBody, projectLinkRes.Project.Name)
 	}
-	s.logActivity(ctx, offer.ID, "Offer phase advanced", activityBody)
+	s.logActivity(ctx, offer.ID, offer.Title, "Tilbudsfase avansert", activityBody)
 
 	offerDTO := mapper.ToOfferDTO(offer)
 
@@ -1607,7 +1472,7 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 		Offer: &offerDTO,
 	}
 
-	// Include project in response if one was created
+	// Include project in response if one was created or linked
 	if projectLinkRes != nil {
 		// Reload project to get latest state
 		project, err := s.projectRepo.GetByID(ctx, projectLinkRes.ProjectID)
@@ -1727,11 +1592,12 @@ type projectLinkResult struct {
 	ProjectCreated bool
 }
 
-// ensureProjectForOffer ensures an offer has a valid project link when transitioning to a non-draft phase.
-// If projectID is provided, validates it exists and matches customer/company.
-// If projectID is nil, creates a new project automatically.
-// Returns the project ID to link and whether a new project was created.
-func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.Offer, requestedProjectID *uuid.UUID) (*projectLinkResult, error) {
+// ensureProjectForOffer validates an existing project or creates a new one for the offer.
+// If requestedProjectID is provided, validates it exists and matches company.
+// If requestedProjectID is nil and createProject is true, creates a new project automatically.
+// If requestedProjectID is nil and createProject is false, returns nil (no project needed).
+// Returns the project link result and whether a new project was created.
+func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.Offer, requestedProjectID *uuid.UUID, createProject bool) (*projectLinkResult, error) {
 	// If a project ID is provided, validate and use it
 	if requestedProjectID != nil {
 		project, err := s.projectRepo.GetByID(ctx, *requestedProjectID)
@@ -1742,33 +1608,23 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 			return nil, fmt.Errorf("failed to get project: %w", err)
 		}
 
-		// Validate project is in tilbud (offer) phase - offers can only be linked to projects in offer phase
-		// This ensures offers cannot be added to projects that have already progressed past the bidding stage
+		// Validate project is not cancelled
 		if project.Phase == domain.ProjectPhaseCancelled {
 			return nil, ErrCannotAddOfferToCancelledProject
 		}
-		if project.Phase != domain.ProjectPhaseTilbud {
-			return nil, ErrProjectNotInOfferPhase
-		}
 
-		// Validate company match (always required)
-		if project.CompanyID != offer.CompanyID {
-			return nil, ErrProjectCompanyMismatch
-		}
-
-		// Note: Customer match is NOT validated during tilbud phase
-		// Multiple offers to different customers can be linked to the same project
-		// The project's customer will be recalculated based on active offers
+		// Projects are now cross-company, so no company validation needed
 
 		// Log when linking offer with different customer for audit purposes
-		if project.CustomerID != offer.CustomerID {
+		offerCustomerMatches := project.CustomerID != nil && *project.CustomerID == offer.CustomerID
+		if !offerCustomerMatches {
 			s.logger.Info("linking offer to project with different customer",
 				zap.String("offerID", offer.ID.String()),
 				zap.String("offerCustomerID", offer.CustomerID.String()),
 				zap.String("offerCustomerName", offer.CustomerName),
 				zap.String("projectID", project.ID.String()),
 				zap.String("projectCustomerID", func() string {
-					if project.CustomerID != uuid.Nil {
+					if project.CustomerID != nil {
 						return project.CustomerID.String()
 					}
 					return "nil"
@@ -1783,41 +1639,31 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		}, nil
 	}
 
-	// No project ID provided - create one automatically
+	// No project ID provided - check if we should create one
+	if !createProject {
+		return nil, nil // No project creation requested
+	}
+
+	// Create project automatically
 	userCtx, ok := auth.FromContext(ctx)
 	if !ok {
 		return nil, ErrUnauthorized
 	}
 
-	// Determine manager: use offer's responsible user if set, otherwise fall back to company default or current user
-	managerID := offer.ResponsibleUserID
-	if managerID == "" {
-		// Try to get company default
-		if s.companyService != nil {
-			defaultManager := s.companyService.GetDefaultProjectResponsible(ctx, offer.CompanyID)
-			if defaultManager != nil && *defaultManager != "" {
-				managerID = *defaultManager
-			}
-		}
-	}
-	if managerID == "" {
-		// Fall back to current user
-		managerID = userCtx.UserID.String()
-	}
-
-	// Auto-create project
+	// Auto-create project (as a folder/container for offers)
+	// Projects are now simplified - no manager or company fields
+	customerID := offer.CustomerID
 	project := &domain.Project{
-		Name:         fmt.Sprintf("[AUTO] %s", offer.Title),
-		CustomerID:   offer.CustomerID,
-		CustomerName: offer.CustomerName,
-		CompanyID:    offer.CompanyID,
-		Phase:        domain.ProjectPhaseTilbud,
-		StartDate:    time.Now(),
-		Value:        offer.Value, // Initial value from offer
-		Cost:         offer.Cost,  // Initial cost from offer
-		ManagerID:    &managerID,
-		Description:  offer.Description,
-		// CalculatedOfferValue will be set when economics are synced
+		Name:          fmt.Sprintf("[AUTO] %s", offer.Title),
+		CustomerID:    &customerID,
+		CustomerName:  offer.CustomerName,
+		Phase:         domain.ProjectPhaseTilbud,
+		StartDate:     time.Now(),
+		Description:   offer.Description,
+		CreatedByID:   userCtx.UserID.String(),
+		CreatedByName: userCtx.DisplayName,
+		UpdatedByID:   userCtx.UserID.String(),
+		UpdatedByName: userCtx.DisplayName,
 	}
 
 	if err := s.projectRepo.Create(ctx, project); err != nil {
@@ -1830,9 +1676,9 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		zap.String("projectName", project.Name))
 
 	// Log activity on the new project
-	s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID,
-		"Project auto-created",
-		fmt.Sprintf("Project '%s' was automatically created for offer '%s'", project.Name, offer.Title))
+	s.logActivityOnTarget(ctx, domain.ActivityTargetProject, project.ID, project.Name,
+		"Prosjekt auto-opprettet",
+		fmt.Sprintf("Prosjektet '%s' ble automatisk opprettet for tilbud '%s'", project.Name, offer.Title))
 
 	return &projectLinkResult{
 		ProjectID:      project.ID,
@@ -1841,74 +1687,9 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 	}, nil
 }
 
-// recalculateProjectCustomer updates the project's customer based on active offers.
-// If all active offers (in_progress/sent) are to the same customer, set that customer.
-// If active offers are to different customers (or none), set CustomerID to NULL.
-// This should only be called for projects in the tilbud phase.
-func (s *OfferService) recalculateProjectCustomer(ctx context.Context, projectID uuid.UUID) error {
-	// Get the project to verify it's in tilbud phase
-	project, err := s.projectRepo.GetByID(ctx, projectID)
-	if err != nil {
-		return fmt.Errorf("failed to get project: %w", err)
-	}
-
-	// Only recalculate for tilbud phase projects
-	if project.Phase != domain.ProjectPhaseTilbud {
-		return nil
-	}
-
-	// Get distinct customer IDs from active offers
-	customerIDs, err := s.offerRepo.GetDistinctCustomerIDsForActiveOffers(ctx, projectID)
-	if err != nil {
-		return fmt.Errorf("failed to get distinct customers: %w", err)
-	}
-
-	var newCustomerID *uuid.UUID
-	var newCustomerName string
-
-	if len(customerIDs) == 1 {
-		// All active offers are to the same customer - use that customer
-		// Get customer to verify it exists and get the name
-		customer, err := s.customerRepo.GetByID(ctx, customerIDs[0])
-		if err != nil {
-			// Customer lookup failed - log warning but still proceed
-			// The customer ID is from an existing offer, so it should be valid
-			s.logger.Warn("failed to get customer for project update, proceeding with ID only",
-				zap.String("customerID", customerIDs[0].String()),
-				zap.Error(err))
-			newCustomerID = &customerIDs[0]
-			newCustomerName = "" // Will be empty but ID is set
-		} else {
-			newCustomerID = &customerIDs[0]
-			newCustomerName = customer.Name
-		}
-
-		s.logger.Info("setting project customer from single active offer",
-			zap.String("projectID", projectID.String()),
-			zap.String("customerID", customerIDs[0].String()),
-			zap.String("customerName", newCustomerName))
-	} else if len(customerIDs) > 1 {
-		// Multiple different customers - cannot infer, set to NULL
-		s.logger.Info("clearing project customer due to multiple active offers with different customers",
-			zap.String("projectID", projectID.String()),
-			zap.Int("distinctCustomers", len(customerIDs)))
-	} else {
-		// No active offers - clear customer
-		s.logger.Info("clearing project customer due to no active offers",
-			zap.String("projectID", projectID.String()))
-	}
-
-	// Update the project's customer
-	if err := s.projectRepo.UpdateCustomerFromOffers(ctx, projectID, newCustomerID, newCustomerName); err != nil {
-		return fmt.Errorf("failed to update project customer: %w", err)
-	}
-
-	return nil
-}
-
 // isClosedPhase returns true if the phase is a terminal state
 func (s *OfferService) isClosedPhase(phase domain.OfferPhase) bool {
-	return phase == domain.OfferPhaseWon ||
+	return phase == domain.OfferPhaseCompleted ||
 		phase == domain.OfferPhaseLost ||
 		phase == domain.OfferPhaseExpired
 }
@@ -1957,12 +1738,12 @@ func (s *OfferService) generateOfferNumberIfNeeded(ctx context.Context, offer *d
 }
 
 // logActivity creates an activity log entry for an offer
-func (s *OfferService) logActivity(ctx context.Context, offerID uuid.UUID, title, body string) {
-	s.logActivityOnTarget(ctx, domain.ActivityTargetOffer, offerID, title, body)
+func (s *OfferService) logActivity(ctx context.Context, offerID uuid.UUID, offerTitle, title, body string) {
+	s.logActivityOnTarget(ctx, domain.ActivityTargetOffer, offerID, offerTitle, title, body)
 }
 
 // logActivityOnTarget creates an activity log entry for any target
-func (s *OfferService) logActivityOnTarget(ctx context.Context, targetType domain.ActivityTargetType, targetID uuid.UUID, title, body string) {
+func (s *OfferService) logActivityOnTarget(ctx context.Context, targetType domain.ActivityTargetType, targetID uuid.UUID, targetName, title, body string) {
 	userCtx, ok := auth.FromContext(ctx)
 	if !ok {
 		s.logger.Warn("no user context for activity logging")
@@ -1972,6 +1753,7 @@ func (s *OfferService) logActivityOnTarget(ctx context.Context, targetType domai
 	activity := &domain.Activity{
 		TargetType:  targetType,
 		TargetID:    targetID,
+		TargetName:  targetName,
 		Title:       title,
 		Body:        body,
 		CreatorName: userCtx.DisplayName,
@@ -2020,8 +1802,8 @@ func (s *OfferService) UpdateProbability(ctx context.Context, id uuid.UUID, prob
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer probability updated",
-		fmt.Sprintf("Probability changed from %d%% to %d%%", oldValue, probability))
+	s.logActivity(ctx, id, offer.Title, "Tilbudssannsynlighet oppdatert",
+		fmt.Sprintf("Sannsynlighet endret fra %d%% til %d%%", oldValue, probability))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2061,8 +1843,8 @@ func (s *OfferService) UpdateTitle(ctx context.Context, id uuid.UUID, title stri
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer title updated",
-		fmt.Sprintf("Title changed from '%s' to '%s'", oldTitle, title))
+	s.logActivity(ctx, id, offer.Title, "Tilbudstittel oppdatert",
+		fmt.Sprintf("Tittel endret fra '%s' til '%s'", oldTitle, title))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2102,8 +1884,8 @@ func (s *OfferService) UpdateResponsible(ctx context.Context, id uuid.UUID, resp
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer responsible updated",
-		fmt.Sprintf("Responsible changed from '%s' to '%s'", oldResponsible, responsibleUserID))
+	s.logActivity(ctx, id, offer.Title, "Tilbudsansvarlig oppdatert",
+		fmt.Sprintf("Ansvarlig endret fra '%s' til '%s'", oldResponsible, responsibleUserID))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2147,14 +1929,24 @@ func (s *OfferService) UpdateCustomer(ctx context.Context, id uuid.UUID, custome
 		return nil, fmt.Errorf("failed to update customer: %w", err)
 	}
 
+	// If the offer is linked to a project, sync the project's customer
+	if offer.ProjectID != nil {
+		if err := s.syncProjectCustomer(ctx, *offer.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project customer after offer customer change",
+				zap.String("offerID", id.String()),
+				zap.String("projectID", offer.ProjectID.String()),
+				zap.Error(err))
+		}
+	}
+
 	// Reload and return
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer customer updated",
-		fmt.Sprintf("Customer changed from '%s' to '%s'", oldCustomerName, customer.Name))
+	s.logActivity(ctx, id, offer.Title, "Tilbudskunde oppdatert",
+		fmt.Sprintf("Kunde endret fra '%s' til '%s'", oldCustomerName, customer.Name))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2194,8 +1986,8 @@ func (s *OfferService) UpdateValue(ctx context.Context, id uuid.UUID, value floa
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer value updated",
-		fmt.Sprintf("Value changed from %.2f to %.2f", oldValue, value))
+	s.logActivity(ctx, id, offer.Title, "Tilbudsverdi oppdatert",
+		fmt.Sprintf("Verdi endret fra %.2f til %.2f", oldValue, value))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2235,8 +2027,8 @@ func (s *OfferService) UpdateCost(ctx context.Context, id uuid.UUID, cost float6
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer cost updated",
-		fmt.Sprintf("Cost changed from %.2f to %.2f", oldCost, cost))
+	s.logActivity(ctx, id, offer.Title, "Tilbudskostnad oppdatert",
+		fmt.Sprintf("Kostnad endret fra %.2f til %.2f", oldCost, cost))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2274,12 +2066,12 @@ func (s *OfferService) UpdateDueDate(ctx context.Context, id uuid.UUID, dueDate 
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	dueDateStr := "cleared"
+	dueDateStr := "fjernet"
 	if dueDate != nil {
 		dueDateStr = dueDate.Format("2006-01-02")
 	}
-	s.logActivity(ctx, id, "Offer due date updated",
-		fmt.Sprintf("Due date set to %s", dueDateStr))
+	s.logActivity(ctx, id, offer.Title, "Tilbudsfrist oppdatert",
+		fmt.Sprintf("Frist satt til %s", dueDateStr))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2335,12 +2127,12 @@ func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, e
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	expirationDateStr := "60 days from sent date (default)"
+	expirationDateStr := "60 dager fra sendedato (standard)"
 	if expirationDate != nil {
 		expirationDateStr = expirationDate.Format("2006-01-02")
 	}
-	s.logActivity(ctx, id, "Offer expiration date updated",
-		fmt.Sprintf("Expiration date set to %s", expirationDateStr))
+	s.logActivity(ctx, id, offer.Title, "Tilbud utløpsdato oppdatert",
+		fmt.Sprintf("Utløpsdato satt til %s", expirationDateStr))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2378,7 +2170,7 @@ func (s *OfferService) UpdateDescription(ctx context.Context, id uuid.UUID, desc
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, id, "Offer description updated", "Description was updated")
+	s.logActivity(ctx, id, offer.Title, "Tilbudsbeskrivelse oppdatert", "Beskrivelsen ble oppdatert")
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2396,6 +2188,12 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 
 	if s.isClosedPhase(offer.Phase) {
 		return nil, ErrOfferAlreadyClosed
+	}
+
+	// Store old project ID if offer was previously linked (to sync its customer after)
+	var oldProjectID *uuid.UUID
+	if offer.ProjectID != nil && *offer.ProjectID != projectID {
+		oldProjectID = offer.ProjectID
 	}
 
 	// Verify project exists
@@ -2416,6 +2214,24 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 		return nil, fmt.Errorf("failed to link offer to project: %w", err)
 	}
 
+	// Sync old project's customer if the offer was moved from another project
+	if oldProjectID != nil {
+		if err := s.syncProjectCustomer(ctx, *oldProjectID); err != nil {
+			s.logger.Warn("failed to sync old project customer after moving offer",
+				zap.String("offerID", offerID.String()),
+				zap.String("oldProjectID", oldProjectID.String()),
+				zap.Error(err))
+		}
+	}
+
+	// Sync new project's customer based on all offers in the project
+	if err := s.syncProjectCustomer(ctx, projectID); err != nil {
+		s.logger.Warn("failed to sync project customer after linking offer",
+			zap.String("offerID", offerID.String()),
+			zap.String("projectID", projectID.String()),
+			zap.Error(err))
+	}
+
 	// Set updated by fields
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		updates := map[string]interface{}{
@@ -2433,8 +2249,8 @@ func (s *OfferService) LinkToProject(ctx context.Context, offerID uuid.UUID, pro
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, offerID, "Offer linked to project",
-		fmt.Sprintf("Offer linked to project '%s'", project.Name))
+	s.logActivity(ctx, offerID, offer.Title, "Tilbud koblet til prosjekt",
+		fmt.Sprintf("Tilbud koblet til prosjekt '%s'", project.Name))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2468,6 +2284,14 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 		return nil, fmt.Errorf("failed to unlink offer from project: %w", err)
 	}
 
+	// Sync project customer based on remaining offers in the project
+	if err := s.syncProjectCustomer(ctx, oldProjectID); err != nil {
+		s.logger.Warn("failed to sync project customer after unlinking offer",
+			zap.String("offerID", offerID.String()),
+			zap.String("projectID", oldProjectID.String()),
+			zap.Error(err))
+	}
+
 	// Set updated by fields
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		updates := map[string]interface{}{
@@ -2479,10 +2303,10 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 		}
 	}
 
-	// Recalculate project economics after unlinking (in case draft was contributing)
-	if err := s.projectRepo.RecalculateBestOfferEconomics(ctx, oldProjectID); err != nil {
-		s.logger.Warn("failed to recalculate project economics after unlink", zap.Error(err))
-	}
+	// Log the old project ID for reference (but don't sync economics - projects are just folders now)
+	s.logger.Info("offer unlinked from project",
+		zap.String("offerID", offerID.String()),
+		zap.String("oldProjectID", oldProjectID.String()))
 
 	// Reload and return
 	offer, err = s.offerRepo.GetByID(ctx, offerID)
@@ -2490,7 +2314,7 @@ func (s *OfferService) UnlinkFromProject(ctx context.Context, offerID uuid.UUID)
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	s.logActivity(ctx, offerID, "Offer unlinked from project", "Project link was removed")
+	s.logActivity(ctx, offerID, offer.Title, "Tilbud frakoblet fra prosjekt", "Prosjektkoblingen ble fjernet")
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2525,11 +2349,11 @@ func (s *OfferService) UpdateCustomerHasWonProject(ctx context.Context, offerID 
 	// Log activity
 	var activityBody string
 	if customerHasWonProject {
-		activityBody = "Customer marked as having won their project"
+		activityBody = "Kunden merket som å ha vunnet sitt prosjekt"
 	} else {
-		activityBody = "Customer marked as not having won their project"
+		activityBody = "Kunden merket som å ikke ha vunnet sitt prosjekt"
 	}
-	s.logActivity(ctx, offerID, "Customer project status updated", activityBody)
+	s.logActivity(ctx, offerID, offer.Title, "Kundens prosjektstatus oppdatert", activityBody)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2577,8 +2401,8 @@ func (s *OfferService) UpdateOfferNumber(ctx context.Context, offerID uuid.UUID,
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
-	s.logActivity(ctx, offerID, "Offer number updated",
-		fmt.Sprintf("Changed from '%s' to '%s'", oldNumber, offerNumber))
+	s.logActivity(ctx, offerID, offer.Title, "Tilbudsnummer oppdatert",
+		fmt.Sprintf("Endret fra '%s' til '%s'", oldNumber, offerNumber))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2620,13 +2444,13 @@ func (s *OfferService) UpdateExternalReference(ctx context.Context, offerID uuid
 
 	var activityBody string
 	if externalReference == "" {
-		activityBody = fmt.Sprintf("Removed external reference '%s'", oldRef)
+		activityBody = fmt.Sprintf("Fjernet ekstern referanse '%s'", oldRef)
 	} else if oldRef == "" {
-		activityBody = fmt.Sprintf("Set external reference to '%s'", externalReference)
+		activityBody = fmt.Sprintf("Satt ekstern referanse til '%s'", externalReference)
 	} else {
-		activityBody = fmt.Sprintf("Changed external reference from '%s' to '%s'", oldRef, externalReference)
+		activityBody = fmt.Sprintf("Endret ekstern referanse fra '%s' til '%s'", oldRef, externalReference)
 	}
-	s.logActivity(ctx, offerID, "External reference updated", activityBody)
+	s.logActivity(ctx, offerID, offer.Title, "Ekstern referanse oppdatert", activityBody)
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2651,4 +2475,52 @@ func (s *OfferService) GetNextOfferNumber(ctx context.Context, companyID domain.
 		CompanyID:       companyID,
 		Year:            time.Now().Year(),
 	}, nil
+}
+
+// ============================================================================
+// Project Customer Synchronization
+// ============================================================================
+
+// syncProjectCustomer updates the project's customer based on its offers.
+// If all offers have the same customer, the project gets that customer.
+// If offers have different customers (or no offers), the project customer is cleared.
+// This should be called whenever:
+// - An offer is linked to a project
+// - An offer is unlinked from a project
+// - An offer's customer is changed (if it's linked to a project)
+func (s *OfferService) syncProjectCustomer(ctx context.Context, projectID uuid.UUID) error {
+	// Get all unique customers for the project's offers
+	customers, err := s.offerRepo.GetUniqueCustomersForProject(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to get unique customers for project: %w", err)
+	}
+
+	var customerID *uuid.UUID
+	var customerName string
+
+	// Only set customer if exactly one unique customer exists across all offers
+	if len(customers) == 1 {
+		customerID = &customers[0].CustomerID
+		customerName = customers[0].CustomerName
+		s.logger.Debug("syncing project customer - all offers have same customer",
+			zap.String("projectID", projectID.String()),
+			zap.String("customerID", customerID.String()),
+			zap.String("customerName", customerName))
+	} else if len(customers) > 1 {
+		// Multiple different customers - clear project customer
+		s.logger.Info("syncing project customer - offers have different customers, clearing project customer",
+			zap.String("projectID", projectID.String()),
+			zap.Int("uniqueCustomerCount", len(customers)))
+	} else {
+		// No offers - clear project customer
+		s.logger.Debug("syncing project customer - no offers, clearing project customer",
+			zap.String("projectID", projectID.String()))
+	}
+
+	// Update the project's customer
+	if err := s.projectRepo.UpdateCustomer(ctx, projectID, customerID, customerName); err != nil {
+		return fmt.Errorf("failed to update project customer: %w", err)
+	}
+
+	return nil
 }

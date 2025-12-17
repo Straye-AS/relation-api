@@ -1,4 +1,4 @@
-.PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed test-db-up test-db-down test-db-reset
+run .PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed test-db-up test-db-down test-db-reset
 
 GO ?= go
 BIN_DIR ?= bin
@@ -30,14 +30,14 @@ run-dev: dev ## Alias for `make dev`
 api: run ## Alias for `make run`
 
 test: ## Run fast unit tests (no database required)
-	$(GO) test -v -race -cover ./tests/auth ./tests/mapper
+	$(GO) test -v -race -cover ./tests/auth ./tests/mapper ./tests/domain
 
 test-all: ## Run all tests including integration tests (uses test database on port 5433)
-	$(GO) test -v -race -cover ./tests/auth ./tests/mapper
+	$(GO) test -v -race -cover ./tests/auth ./tests/mapper ./tests/domain
 	DATABASE_PORT=5433 DATABASE_NAME=relation_test $(GO) test -v -p 1 -cover ./tests/repository ./tests/service ./tests/handler ./tests/middleware
 
 test-coverage: ## Run tests with coverage report
-	$(GO) test -v -race -coverprofile=coverage.out ./tests/auth ./tests/mapper
+	$(GO) test -v -race -coverprofile=coverage.out ./tests/auth ./tests/mapper ./tests/domain
 	$(GO) tool cover -html=coverage.out -o coverage.html
 
 test-integration: ## Run integration tests (uses test database on port 5433)

@@ -290,7 +290,7 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, stats)
 		assert.Equal(t, 0, stats.ActiveDeals)
-		assert.Equal(t, float64(0), stats.TotalValue)
+		assert.Equal(t, float64(0), stats.TotalValueWon)
 		assert.Equal(t, 0, stats.ActiveProjects)
 		assert.Equal(t, 0, stats.ActiveOffers)
 		assert.Equal(t, 0, stats.TotalContacts)
@@ -319,12 +319,12 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 	t.Run("customer with projects", func(t *testing.T) {
 		// Create projects for the customer
 		startDate := time.Now()
-		managerID := "mgr-1"
+		customerID := customer.ID
 		projects := []*domain.Project{
-			{Name: "Active Project 1", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseActive, ManagerID: &managerID, StartDate: startDate},
-			{Name: "Tilbud Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseTilbud, ManagerID: &managerID, StartDate: startDate},
-			{Name: "Completed Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseCompleted, ManagerID: &managerID, StartDate: startDate},
-			{Name: "Working Project", CustomerID: customer.ID, CompanyID: domain.CompanyStalbygg, Phase: domain.ProjectPhaseWorking, ManagerID: &managerID, StartDate: startDate},
+			{Name: "Working Project 1", CustomerID: &customerID, Phase: domain.ProjectPhaseWorking, StartDate: startDate},
+			{Name: "Tilbud Project", CustomerID: &customerID, Phase: domain.ProjectPhaseTilbud, StartDate: startDate},
+			{Name: "Completed Project", CustomerID: &customerID, Phase: domain.ProjectPhaseCompleted, StartDate: startDate},
+			{Name: "Working Project 2", CustomerID: &customerID, Phase: domain.ProjectPhaseWorking, StartDate: startDate},
 		}
 		for _, p := range projects {
 			err := db.Create(p).Error
@@ -334,7 +334,7 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 		stats, err := customerRepo.GetCustomerStats(context.Background(), customer.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, stats)
-		// Active projects = Active + Tilbud + Working (Completed not counted as active per the repo query)
+		// Active projects = Tilbud + Working (Completed not counted as active per the repo query)
 		assert.Equal(t, 3, stats.ActiveProjects)
 	})
 
@@ -344,7 +344,7 @@ func TestCustomerRepository_GetCustomerStats(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, stats)
 		assert.Equal(t, 0, stats.ActiveDeals)
-		assert.Equal(t, float64(0), stats.TotalValue)
+		assert.Equal(t, float64(0), stats.TotalValueWon)
 		assert.Equal(t, 0, stats.ActiveProjects)
 		assert.Equal(t, 0, stats.ActiveOffers)
 		assert.Equal(t, 0, stats.TotalContacts)

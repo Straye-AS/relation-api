@@ -8,37 +8,38 @@ import (
 )
 
 // ToCustomerDTO converts Customer to CustomerDTO
-func ToCustomerDTO(customer *domain.Customer, totalValue float64, activeOffers int) domain.CustomerDTO {
+func ToCustomerDTO(customer *domain.Customer, totalValueActive float64, totalValueWon float64, activeOffers int) domain.CustomerDTO {
 	return domain.CustomerDTO{
-		ID:            customer.ID,
-		Name:          customer.Name,
-		OrgNumber:     customer.OrgNumber,
-		Email:         customer.Email,
-		Phone:         customer.Phone,
-		Address:       customer.Address,
-		City:          customer.City,
-		PostalCode:    customer.PostalCode,
-		Country:       customer.Country,
-		ContactPerson: customer.ContactPerson,
-		ContactEmail:  customer.ContactEmail,
-		ContactPhone:  customer.ContactPhone,
-		Status:        customer.Status,
-		Tier:          customer.Tier,
-		Industry:      customer.Industry,
-		Notes:         customer.Notes,
-		CustomerClass: customer.CustomerClass,
-		CreditLimit:   customer.CreditLimit,
-		IsInternal:    customer.IsInternal,
-		Municipality:  customer.Municipality,
-		County:        customer.County,
-		CreatedAt:     customer.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:     customer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		TotalValue:    totalValue,
-		ActiveOffers:  activeOffers,
-		CreatedByID:   customer.CreatedByID,
-		CreatedByName: customer.CreatedByName,
-		UpdatedByID:   customer.UpdatedByID,
-		UpdatedByName: customer.UpdatedByName,
+		ID:               customer.ID,
+		Name:             customer.Name,
+		OrgNumber:        customer.OrgNumber,
+		Email:            customer.Email,
+		Phone:            customer.Phone,
+		Address:          customer.Address,
+		City:             customer.City,
+		PostalCode:       customer.PostalCode,
+		Country:          customer.Country,
+		ContactPerson:    customer.ContactPerson,
+		ContactEmail:     customer.ContactEmail,
+		ContactPhone:     customer.ContactPhone,
+		Status:           customer.Status,
+		Tier:             customer.Tier,
+		Industry:         customer.Industry,
+		Notes:            customer.Notes,
+		CustomerClass:    customer.CustomerClass,
+		CreditLimit:      customer.CreditLimit,
+		IsInternal:       customer.IsInternal,
+		Municipality:     customer.Municipality,
+		County:           customer.County,
+		CreatedAt:        customer.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:        customer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		TotalValueActive: totalValueActive,
+		TotalValueWon:    totalValueWon,
+		ActiveOffers:     activeOffers,
+		CreatedByID:      customer.CreatedByID,
+		CreatedByName:    customer.CreatedByName,
+		UpdatedByID:      customer.UpdatedByID,
+		UpdatedByName:    customer.UpdatedByName,
 	}
 }
 
@@ -154,7 +155,14 @@ func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHis
 }
 
 // ToProjectDTO converts Project to ProjectDTO
+// Projects are now simplified containers for offers - economic tracking moved to Offer
 func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
+	return ToProjectDTOWithOfferCount(project, 0)
+}
+
+// ToProjectDTOWithOfferCount converts Project to ProjectDTO with offer count
+// This is used when listing projects to include the count of linked offers
+func ToProjectDTOWithOfferCount(project *domain.Project, offerCount int) domain.ProjectDTO {
 	// Set default phase for backwards compatibility if not set
 	phase := project.Phase
 	if phase == "" {
@@ -162,41 +170,24 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 	}
 
 	dto := domain.ProjectDTO{
-		ID:                   project.ID,
-		Name:                 project.Name,
-		ProjectNumber:        project.ProjectNumber,
-		Summary:              project.Summary,
-		Description:          project.Description,
-		CustomerID:           project.CustomerID,
-		CustomerName:         project.CustomerName,
-		CompanyID:            project.CompanyID,
-		Phase:                phase,
-		Value:                project.Value,
-		Cost:                 project.Cost,
-		MarginPercent:        project.MarginPercent,
-		Spent:                project.Spent,
-		Invoiced:             project.Invoiced,
-		OrderReserve:         project.OrderReserve,
-		ManagerID:            project.ManagerID,
-		ManagerName:          project.ManagerName,
-		Location:             project.Location,
-		TeamMembers:          project.TeamMembers,
-		CreatedAt:            project.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:            project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		OfferID:              project.OfferID,
-		DealID:               project.DealID,
-		HasDetailedBudget:    project.HasDetailedBudget,
-		Health:               project.Health,
-		CompletionPercent:    project.CompletionPercent,
-		WinningOfferID:       project.WinningOfferID,
-		InheritedOfferNumber: project.InheritedOfferNumber,
-		ExternalReference:    project.ExternalReference,
-		CalculatedOfferValue: project.CalculatedOfferValue,
-		IsEconomicsEditable:  phase.IsEditablePhase(),
-		CreatedByID:          project.CreatedByID,
-		CreatedByName:        project.CreatedByName,
-		UpdatedByID:          project.UpdatedByID,
-		UpdatedByName:        project.UpdatedByName,
+		ID:                project.ID,
+		Name:              project.Name,
+		ProjectNumber:     project.ProjectNumber,
+		Summary:           project.Summary,
+		Description:       project.Description,
+		CustomerID:        project.CustomerID, // Now *uuid.UUID (nullable)
+		CustomerName:      project.CustomerName,
+		Phase:             phase,
+		Location:          project.Location,
+		CreatedAt:         project.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:         project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		DealID:            project.DealID,
+		ExternalReference: project.ExternalReference,
+		OfferCount:        offerCount,
+		CreatedByID:       project.CreatedByID,
+		CreatedByName:     project.CreatedByName,
+		UpdatedByID:       project.UpdatedByID,
+		UpdatedByName:     project.UpdatedByName,
 	}
 
 	if !project.StartDate.IsZero() {
@@ -205,14 +196,6 @@ func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
 
 	if project.EndDate != nil {
 		dto.EndDate = project.EndDate.Format("2006-01-02T15:04:05Z")
-	}
-
-	if project.EstimatedCompletionDate != nil {
-		dto.EstimatedCompletionDate = project.EstimatedCompletionDate.Format("2006-01-02")
-	}
-
-	if project.WonAt != nil {
-		dto.WonAt = project.WonAt.Format("2006-01-02T15:04:05Z")
 	}
 
 	return dto
@@ -246,6 +229,37 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 	// Calculate margin (Value - Cost), margin_percent is stored in DB
 	margin := offer.Value - offer.Cost
 
+	// Map execution fields (order phase)
+	var health *string
+	if offer.Health != nil {
+		h := string(*offer.Health)
+		health = &h
+	}
+
+	var startDate *string
+	if offer.StartDate != nil {
+		formatted := offer.StartDate.Format("2006-01-02T15:04:05Z")
+		startDate = &formatted
+	}
+
+	var endDate *string
+	if offer.EndDate != nil {
+		formatted := offer.EndDate.Format("2006-01-02T15:04:05Z")
+		endDate = &formatted
+	}
+
+	var estimatedCompletionDate *string
+	if offer.EstimatedCompletionDate != nil {
+		formatted := offer.EstimatedCompletionDate.Format("2006-01-02")
+		estimatedCompletionDate = &formatted
+	}
+
+	// Convert pq.StringArray to []string for team members
+	var teamMembers []string
+	if len(offer.TeamMembers) > 0 {
+		teamMembers = []string(offer.TeamMembers)
+	}
+
 	return domain.OfferDTO{
 		ID:                    offer.ID,
 		Title:                 offer.Title,
@@ -275,10 +289,23 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		SentDate:              sentDate,
 		ExpirationDate:        expirationDate,
 		CustomerHasWonProject: offer.CustomerHasWonProject,
-		CreatedByID:           offer.CreatedByID,
-		CreatedByName:         offer.CreatedByName,
-		UpdatedByID:           offer.UpdatedByID,
-		UpdatedByName:         offer.UpdatedByName,
+		// Order phase execution fields
+		ManagerID:               offer.ManagerID,
+		ManagerName:             offer.ManagerName,
+		TeamMembers:             teamMembers,
+		Spent:                   offer.Spent,
+		Invoiced:                offer.Invoiced,
+		OrderReserve:            offer.OrderReserve,
+		Health:                  health,
+		CompletionPercent:       offer.CompletionPercent,
+		StartDate:               startDate,
+		EndDate:                 endDate,
+		EstimatedCompletionDate: estimatedCompletionDate,
+		// User tracking fields
+		CreatedByID:   offer.CreatedByID,
+		CreatedByName: offer.CreatedByName,
+		UpdatedByID:   offer.UpdatedByID,
+		UpdatedByName: offer.UpdatedByName,
 	}
 }
 
@@ -381,28 +408,24 @@ func ToProjectActualCostDTO(cost *domain.ProjectActualCost) domain.ProjectActual
 }
 
 // ToProjectCostSummaryDTO creates a cost summary DTO for a project
+// DEPRECATED: Project no longer has economic fields. Use Offer-based cost tracking instead.
+// This function is kept for backwards compatibility but returns zeros for economic fields.
 func ToProjectCostSummaryDTO(project *domain.Project, actualCosts []domain.ProjectActualCost) domain.ProjectCostSummaryDTO {
 	totalActualCosts := 0.0
 	for _, cost := range actualCosts {
 		totalActualCosts += cost.Amount
 	}
 
-	remainingValue := project.Value - totalActualCosts
-	valueUsedPercent := 0.0
-	if project.Value > 0 {
-		valueUsedPercent = (totalActualCosts / project.Value) * 100
-	}
-
 	return domain.ProjectCostSummaryDTO{
 		ProjectID:        project.ID,
 		ProjectName:      project.Name,
-		Value:            project.Value,
-		Cost:             project.Cost,
-		MarginPercent:    project.MarginPercent,
-		Spent:            project.Spent,
+		Value:            0, // Economic tracking moved to Offer
+		Cost:             0, // Economic tracking moved to Offer
+		MarginPercent:    0, // Economic tracking moved to Offer
+		Spent:            0, // Economic tracking moved to Offer
 		ActualCosts:      totalActualCosts,
-		RemainingValue:   remainingValue,
-		ValueUsedPercent: valueUsedPercent,
+		RemainingValue:   0,
+		ValueUsedPercent: 0,
 		CostEntryCount:   len(actualCosts),
 	}
 }
@@ -461,9 +484,10 @@ func UpdateOfferDenormalizedFields(offer *domain.Offer, customerName, userName s
 	offer.ResponsibleUserName = userName
 }
 
-func UpdateProjectDenormalizedFields(project *domain.Project, customerName, managerName string) {
+// UpdateProjectDenormalizedFields updates denormalized fields in a project
+// Note: Project no longer has ManagerName - manager tracking has moved to Offer
+func UpdateProjectDenormalizedFields(project *domain.Project, customerName string) {
 	project.CustomerName = customerName
-	project.ManagerName = managerName
 }
 
 // UpdateDealDenormalizedFields updates denormalized fields in a deal
@@ -490,6 +514,7 @@ func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
 		ID:               activity.ID,
 		TargetType:       activity.TargetType,
 		TargetID:         activity.TargetID,
+		TargetName:       activity.TargetName,
 		Title:            activity.Title,
 		Body:             activity.Body,
 		OccurredAt:       activity.OccurredAt.Format("2006-01-02T15:04:05Z"),
@@ -588,19 +613,18 @@ func ToAuditLogDTO(log *domain.AuditLog) domain.AuditLogDTO {
 }
 
 // ToProjectBudgetDTO converts project budget info to DTO
+// DEPRECATED: Project no longer has economic fields. Use Offer-based budget tracking instead.
+// This function is kept for backwards compatibility but returns zeros.
+// Budget information should now be retrieved from the associated Offers.
 func ToProjectBudgetDTO(project *domain.Project) domain.ProjectBudgetDTO {
-	remaining := project.Value - project.Spent
-	percentUsed := 0.0
-	if project.Value > 0 {
-		percentUsed = (project.Spent / project.Value) * 100
-	}
+	// Project no longer has economic fields - they have moved to Offer
 	return domain.ProjectBudgetDTO{
-		Value:         project.Value,
-		Cost:          project.Cost,
-		MarginPercent: project.MarginPercent,
-		Spent:         project.Spent,
-		Remaining:     remaining,
-		PercentUsed:   percentUsed,
+		Value:         0,
+		Cost:          0,
+		MarginPercent: 0,
+		Spent:         0,
+		Remaining:     0,
+		PercentUsed:   0,
 	}
 }
 

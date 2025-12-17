@@ -183,6 +183,7 @@ INSERT INTO customers (id, name, org_number, email, phone, address, postal_code,
 VALUES
 ('17051d9c-cdd8-49dc-82cb-0b678bc6af06', 'Christian Gran', NULL, '', '', '', '', '', 'Norway', 'active', 'bronze', 'Private person', false, '', ''),
 ('c801ccf6-4b6d-45a5-b662-b93af503324c', 'Eli Østberg', NULL, '', '+4795997576', 'Grinda 9D', '0861', 'OSLO', 'Norway', 'active', 'bronze', 'Private person', false, 'OSLO', 'OSLO'),
+('4a27d756-4844-4880-843b-d92f332c2419', 'Geir Nilsen', NULL, '', '', '', '', '', 'Norway', 'active', 'bronze', 'Private person', false, '', ''),
 ('7898be31-ad09-4cc7-847e-400fd8d73e33', 'Hans Magnus Lie', NULL, '', '+4797697880', 'Goenveien 4', '1580', 'RYGGE', 'Norway', 'active', 'bronze', 'Private person', false, 'MOSS', 'ØSTFOLD'),
 ('993d3b6d-31ae-4f36-a1f0-bab5be353f42', 'Hauk Aleksander Olaussen', NULL, 'Hauk@straye.no', '+47 95000207', 'Langstien 17A', '1715', 'YVEN', 'Norway', 'active', 'bronze', 'Private person - Internal employee', false, 'SARPSBORG', 'ØSTFOLD'),
 ('840bbcd2-549a-4a7c-a38e-a2c190ea20ab', 'Jan Bremer Øvrebø', NULL, '', '', '', '', '', 'Norway', 'lead', 'bronze', 'Private person', false, '', ''),

@@ -150,7 +150,7 @@ func (r *DealRepository) GetByOwner(ctx context.Context, ownerID string) ([]doma
 		Preload("Company").
 		Where("owner_id = ?", ownerID)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Order("created_at DESC").Find(&deals).Error
+	err := query.Order("updated_at DESC").Find(&deals).Error
 	return deals, err
 }
 
@@ -162,7 +162,7 @@ func (r *DealRepository) GetByCustomer(ctx context.Context, customerID uuid.UUID
 		Preload("Company").
 		Where("customer_id = ?", customerID)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Order("created_at DESC").Find(&deals).Error
+	err := query.Order("updated_at DESC").Find(&deals).Error
 	return deals, err
 }
 
@@ -293,7 +293,7 @@ func (r *DealRepository) Search(ctx context.Context, searchQuery string, limit i
 			LOWER(notes) LIKE ?`,
 			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
-	err := query.Limit(limit).Order("created_at DESC").Find(&deals).Error
+	err := query.Limit(limit).Order("updated_at DESC").Find(&deals).Error
 	return deals, err
 }
 

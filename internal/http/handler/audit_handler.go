@@ -382,8 +382,8 @@ func (h *AuditHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the export action
-	h.auditService.LogExport(r.Context(), r, "AuditLog", 0, "json", nil)
+	// Log the export action (best effort - ignore errors)
+	_ = h.auditService.LogExport(r.Context(), r, "AuditLog", 0, "json", nil)
 
 	data, err := h.auditService.ExportLogs(r.Context(), startTime, endTime)
 	if err != nil {
@@ -397,7 +397,7 @@ func (h *AuditHandler) Export(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // toDTO converts an audit log to a DTO

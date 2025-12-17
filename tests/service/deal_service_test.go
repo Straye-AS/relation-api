@@ -446,7 +446,7 @@ func TestDealService_LoseDeal(t *testing.T) {
 			Reason: domain.LossReasonPrice,
 			Notes:  "First loss due to price concerns from the client",
 		}
-		svc.LoseDeal(ctx, deal.ID, firstLossReq)
+		_, _ = svc.LoseDeal(ctx, deal.ID, firstLossReq) // Intentionally ignore - we're testing subsequent call
 
 		secondLossReq := &domain.LoseDealRequest{
 			Reason: domain.LossReasonTiming,
@@ -528,7 +528,7 @@ func TestDealService_GetStageHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	// Advance to qualified
-	svc.AdvanceStage(ctx, deal.ID, &domain.UpdateDealStageRequest{Stage: domain.DealStageQualified})
+	_, _ = svc.AdvanceStage(ctx, deal.ID, &domain.UpdateDealStageRequest{Stage: domain.DealStageQualified})
 
 	// Get history
 	history, err := svc.GetStageHistory(ctx, deal.ID)

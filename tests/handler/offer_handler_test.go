@@ -448,7 +448,7 @@ func TestOfferHandler_Send(t *testing.T) {
 	})
 
 	t.Run("send won offer fails", func(t *testing.T) {
-		offer := createTestOffer(t, db, customer, domain.OfferPhaseWon)
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
 
 		req := httptest.NewRequest(http.MethodPost, "/offers/"+offer.ID.String()+"/send", nil)
 		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
@@ -497,7 +497,7 @@ func TestOfferHandler_Accept(t *testing.T) {
 		var result domain.AcceptOfferResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
-		assert.Equal(t, domain.OfferPhaseWon, result.Offer.Phase)
+		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
 		assert.Nil(t, result.Project)
 	})
 
@@ -522,7 +522,7 @@ func TestOfferHandler_Accept(t *testing.T) {
 		var result domain.AcceptOfferResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
-		assert.Equal(t, domain.OfferPhaseWon, result.Offer.Phase)
+		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
 		assert.NotNil(t, result.Project)
 		assert.Equal(t, "New Project from Offer", result.Project.Name)
 	})
@@ -830,7 +830,7 @@ func TestOfferHandler_Lifecycle(t *testing.T) {
 		var acceptResponse domain.AcceptOfferResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &acceptResponse)
 		assert.NoError(t, err)
-		assert.Equal(t, domain.OfferPhaseWon, acceptResponse.Offer.Phase)
+		assert.Equal(t, domain.OfferPhaseOrder, acceptResponse.Offer.Phase)
 		assert.NotNil(t, acceptResponse.Project)
 		assert.Equal(t, "Project from Lifecycle Test", acceptResponse.Project.Name)
 	})
@@ -865,5 +865,334 @@ func TestOfferHandler_Lifecycle(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &rejectedOffer)
 		assert.NoError(t, err)
 		assert.Equal(t, domain.OfferPhaseLost, rejectedOffer.Phase)
+	})
+}
+
+// ============================================================================
+// Order Phase Tests
+// ============================================================================
+
+// TestOfferHandler_AcceptOrder tests the AcceptOrder endpoint
+func TestOfferHandler_AcceptOrder(t *testing.T) {
+	db := setupOfferHandlerTestDB(t)
+	h := createOfferHandler(t, db)
+	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
+	ctx := createOfferTestContext()
+
+	t.Run("accept order from sent offer", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
+
+		reqBody := domain.AcceptOrderRequest{
+			Notes: "Customer confirmed the order",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/offers/"+offer.ID.String()+"/accept-order", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.AcceptOrder(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.AcceptOrderResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.NotNil(t, result.Offer)
+		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
+	})
+
+	t.Run("accept order from draft offer fails", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseDraft)
+
+		reqBody := domain.AcceptOrderRequest{}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/offers/"+offer.ID.String()+"/accept-order", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.AcceptOrder(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("accept order with invalid ID", func(t *testing.T) {
+		reqBody := domain.AcceptOrderRequest{}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/offers/invalid-id/accept-order", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": "invalid-id"}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.AcceptOrder(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("accept order non-existent offer", func(t *testing.T) {
+		reqBody := domain.AcceptOrderRequest{}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/offers/"+uuid.New().String()+"/accept-order", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": uuid.New().String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.AcceptOrder(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+}
+
+// TestOfferHandler_UpdateOfferHealth tests the UpdateOfferHealth endpoint
+func TestOfferHandler_UpdateOfferHealth(t *testing.T) {
+	db := setupOfferHandlerTestDB(t)
+	h := createOfferHandler(t, db)
+	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
+	ctx := createOfferTestContext()
+
+	t.Run("update health for order phase offer", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
+
+		completionPct := 50.0
+		reqBody := domain.UpdateOfferHealthRequest{
+			Health:            domain.OfferHealthAtRisk,
+			CompletionPercent: &completionPct,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/health", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferHealth(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.OfferDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.NotNil(t, result.Health)
+		assert.Equal(t, "at_risk", *result.Health)
+	})
+
+	t.Run("update health for non-order phase fails", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
+
+		reqBody := domain.UpdateOfferHealthRequest{
+			Health: domain.OfferHealthOnTrack,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/health", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferHealth(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("update health with invalid body", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/health", bytes.NewReader([]byte("invalid")))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferHealth(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("update health with invalid ID", func(t *testing.T) {
+		reqBody := domain.UpdateOfferHealthRequest{
+			Health: domain.OfferHealthOnTrack,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/invalid-id/health", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": "invalid-id"}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferHealth(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+// TestOfferHandler_UpdateOfferSpent tests the UpdateOfferSpent endpoint
+func TestOfferHandler_UpdateOfferSpent(t *testing.T) {
+	db := setupOfferHandlerTestDB(t)
+	h := createOfferHandler(t, db)
+	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
+	ctx := createOfferTestContext()
+
+	t.Run("update spent for order phase offer", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
+
+		reqBody := domain.UpdateOfferSpentRequest{
+			Spent: 25000.50,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/spent", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferSpent(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.OfferDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.Equal(t, 25000.50, result.Spent)
+	})
+
+	t.Run("update spent for non-order phase fails", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
+
+		reqBody := domain.UpdateOfferSpentRequest{
+			Spent: 5000,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/spent", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferSpent(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("update spent with invalid body", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/spent", bytes.NewReader([]byte("invalid")))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferSpent(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+// TestOfferHandler_UpdateOfferInvoiced tests the UpdateOfferInvoiced endpoint
+func TestOfferHandler_UpdateOfferInvoiced(t *testing.T) {
+	db := setupOfferHandlerTestDB(t)
+	h := createOfferHandler(t, db)
+	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
+	ctx := createOfferTestContext()
+
+	t.Run("update invoiced for order phase offer", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
+
+		reqBody := domain.UpdateOfferInvoicedRequest{
+			Invoiced: 50000,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/invoiced", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferInvoiced(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.OfferDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.Equal(t, 50000.0, result.Invoiced)
+	})
+
+	t.Run("update invoiced for non-order phase fails", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseDraft)
+
+		reqBody := domain.UpdateOfferInvoicedRequest{
+			Invoiced: 10000,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/invoiced", bytes.NewReader(body))
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.UpdateOfferInvoiced(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+// TestOfferHandler_CompleteOffer tests the CompleteOffer endpoint
+func TestOfferHandler_CompleteOffer(t *testing.T) {
+	db := setupOfferHandlerTestDB(t)
+	h := createOfferHandler(t, db)
+	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
+	ctx := createOfferTestContext()
+
+	t.Run("complete order phase offer", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
+
+		req := httptest.NewRequest(http.MethodPost, "/offers/"+offer.ID.String()+"/complete", nil)
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+
+		rr := httptest.NewRecorder()
+		h.CompleteOffer(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var result domain.OfferDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.Equal(t, domain.OfferPhaseCompleted, result.Phase)
+	})
+
+	t.Run("complete non-order phase fails", func(t *testing.T) {
+		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
+
+		req := httptest.NewRequest(http.MethodPost, "/offers/"+offer.ID.String()+"/complete", nil)
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+
+		rr := httptest.NewRecorder()
+		h.CompleteOffer(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("complete with invalid ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/offers/invalid-id/complete", nil)
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": "invalid-id"}))
+
+		rr := httptest.NewRecorder()
+		h.CompleteOffer(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("complete non-existent offer", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/offers/"+uuid.New().String()+"/complete", nil)
+		req = req.WithContext(withChiContext(ctx, map[string]string{"id": uuid.New().String()}))
+
+		rr := httptest.NewRecorder()
+		h.CompleteOffer(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 }

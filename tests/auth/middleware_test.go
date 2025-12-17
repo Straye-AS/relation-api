@@ -103,7 +103,7 @@ func TestMiddleware_Authenticate_WithJWT(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(jwks)
+		_ = json.NewEncoder(w).Encode(jwks)
 	}))
 	defer server.Close()
 
@@ -430,7 +430,7 @@ func TestMiddleware_APIKeyPriority(t *testing.T) {
 				{"kty": "RSA", "use": "sig", "kid": kid, "n": n, "e": e, "alg": "RS256"},
 			},
 		}
-		json.NewEncoder(w).Encode(jwks)
+		_ = json.NewEncoder(w).Encode(jwks)
 	}))
 	defer server.Close()
 

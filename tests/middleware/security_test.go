@@ -198,7 +198,7 @@ func TestSecurityHeaders_PassesThroughRequest(t *testing.T) {
 	handlerCalled := false
 	handler := middleware.SecurityHeaders(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)

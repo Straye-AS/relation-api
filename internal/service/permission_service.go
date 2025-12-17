@@ -163,7 +163,7 @@ func (s *PermissionService) GrantPermission(ctx context.Context, input GrantPerm
 		return nil, err
 	}
 
-	s.logPermissionChange(ctx, input.UserID, input.Permission, "granted", grantedBy, input.Reason)
+	s.logPermissionChange(ctx, input.UserID, input.Permission, "gitt", grantedBy, input.Reason)
 
 	return perm, nil
 }
@@ -193,7 +193,7 @@ func (s *PermissionService) DenyPermission(ctx context.Context, input DenyPermis
 		return nil, err
 	}
 
-	s.logPermissionChange(ctx, input.UserID, input.Permission, "denied", grantedBy, input.Reason)
+	s.logPermissionChange(ctx, input.UserID, input.Permission, "nektet", grantedBy, input.Reason)
 
 	return perm, nil
 }
@@ -210,7 +210,7 @@ func (s *PermissionService) RemoveOverride(ctx context.Context, userID string, p
 		return err
 	}
 
-	s.logPermissionChange(ctx, userID, permission, "override removed", removedBy, "")
+	s.logPermissionChange(ctx, userID, permission, "fjernet (overstyring)", removedBy, "")
 
 	return nil
 }
@@ -267,15 +267,16 @@ func (s *PermissionService) logPermissionChange(ctx context.Context, userID stri
 		return
 	}
 
-	body := "Permission '" + string(permission) + "' was " + action + " by " + changedBy
+	body := "Tillatelsen '" + string(permission) + "' ble " + action + " av " + changedBy
 	if reason != "" {
-		body += ". Reason: " + reason
+		body += ". Årsak: " + reason
 	}
 
 	activity := &domain.Activity{
 		TargetType:   domain.ActivityTargetType("User"),
 		TargetID:     userUUID,
-		Title:        "Permission " + action,
+		TargetName:   string(permission),
+		Title:        "Tillatelse " + action,
 		Body:         body,
 		ActivityType: domain.ActivityTypeSystem,
 		Status:       domain.ActivityStatusCompleted,

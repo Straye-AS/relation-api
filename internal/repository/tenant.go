@@ -25,10 +25,10 @@ type SortConfig struct {
 	Order SortOrder // asc or desc
 }
 
-// DefaultSortConfig returns a default sort configuration (created_at DESC)
+// DefaultSortConfig returns a default sort configuration (updated_at DESC)
 func DefaultSortConfig() SortConfig {
 	return SortConfig{
-		Field: "createdAt",
+		Field: "updatedAt",
 		Order: SortOrderDesc,
 	}
 }

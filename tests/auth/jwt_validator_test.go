@@ -58,7 +58,7 @@ func createMockJWKSServer(t *testing.T, keyPair *testKeyPair) *httptest.Server {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(jwks)
+		_ = json.NewEncoder(w).Encode(jwks)
 	}))
 }
 

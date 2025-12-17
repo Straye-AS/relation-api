@@ -268,20 +268,11 @@ func (DealStageHistory) TableName() string {
 	return "deal_stage_history"
 }
 
-// ProjectHealth represents the health status of a project
-type ProjectHealth string
-
-const (
-	ProjectHealthOnTrack    ProjectHealth = "on_track"
-	ProjectHealthAtRisk     ProjectHealth = "at_risk"
-	ProjectHealthDelayed    ProjectHealth = "delayed"
-	ProjectHealthOverBudget ProjectHealth = "over_budget"
-)
-
 // ProjectPhase represents the lifecycle phase of a project
-// - tilbud: Offer/bidding phase (default). Economics mirror highest offer value (read-only)
-// - working: Project has started (has StartDate) but no WinningOfferID. Economics are editable.
-// - active: Project is active with a winning offer. Economics are fully editable
+// Projects are now lightweight containers for offers. Economic tracking moved to Offer.
+// - tilbud: Offer/bidding phase (default). Project collecting offers.
+// - working: Active project with work in progress
+// - on_hold: Project temporarily paused
 // - completed: Project is finished
 // - cancelled: Project was cancelled
 type ProjectPhase string
@@ -289,7 +280,7 @@ type ProjectPhase string
 const (
 	ProjectPhaseTilbud    ProjectPhase = "tilbud"
 	ProjectPhaseWorking   ProjectPhase = "working"
-	ProjectPhaseActive    ProjectPhase = "active"
+	ProjectPhaseOnHold    ProjectPhase = "on_hold"
 	ProjectPhaseCompleted ProjectPhase = "completed"
 	ProjectPhaseCancelled ProjectPhase = "cancelled"
 )
@@ -297,20 +288,20 @@ const (
 // IsValid checks if the ProjectPhase is a valid enum value
 func (p ProjectPhase) IsValid() bool {
 	switch p {
-	case ProjectPhaseTilbud, ProjectPhaseWorking, ProjectPhaseActive, ProjectPhaseCompleted, ProjectPhaseCancelled:
+	case ProjectPhaseTilbud, ProjectPhaseWorking, ProjectPhaseOnHold, ProjectPhaseCompleted, ProjectPhaseCancelled:
 		return true
 	}
 	return false
 }
 
-// IsEditablePhase returns true if economic values can be edited in this phase
+// IsEditablePhase returns true if the project can be modified in this phase
 func (p ProjectPhase) IsEditablePhase() bool {
-	return p == ProjectPhaseActive || p == ProjectPhaseWorking
+	return p == ProjectPhaseTilbud || p == ProjectPhaseWorking || p == ProjectPhaseOnHold
 }
 
-// IsActivePhase returns true if the phase represents an active project (working or active)
+// IsActivePhase returns true if the phase represents an active project
 func (p ProjectPhase) IsActivePhase() bool {
-	return p == ProjectPhaseWorking || p == ProjectPhaseActive
+	return p == ProjectPhaseWorking
 }
 
 // IsClosedPhase returns true if the phase represents a closed/terminal state
@@ -320,20 +311,11 @@ func (p ProjectPhase) IsClosedPhase() bool {
 
 // CanTransitionTo checks if a phase transition is valid
 // Valid transitions:
-// - tilbud -> working (start work without winning offer)
-// - tilbud -> active (via winning offer)
-// - tilbud -> cancelled (cancel before starting)
-// - working -> active (via winning offer)
-// - working -> completed (complete without formal offer win)
-// - working -> cancelled (cancel during work)
-// - working -> tilbud (reopen to tilbud - rare but allowed)
-// - active -> completed (normal completion)
-// - active -> cancelled (cancel active project)
-// - active -> working (reopen: revert winning offer to sent)
-// - completed -> working (reopen completed project)
-// - completed -> active (reopen completed project with winning offer retained)
-// - cancelled -> tilbud (reopen cancelled project)
-// - cancelled -> working (reopen cancelled project that had work)
+// - tilbud -> working (start work), on_hold (pause), cancelled
+// - working -> on_hold, completed, cancelled, tilbud (revert)
+// - on_hold -> working (resume), cancelled, completed
+// - completed -> working (can reopen)
+// - cancelled -> (terminal state, no transitions)
 func (p ProjectPhase) CanTransitionTo(target ProjectPhase) bool {
 	if p == target {
 		return true // Same phase is always valid
@@ -342,66 +324,43 @@ func (p ProjectPhase) CanTransitionTo(target ProjectPhase) bool {
 	switch p {
 	case ProjectPhaseTilbud:
 		return target == ProjectPhaseWorking ||
-			target == ProjectPhaseActive ||
+			target == ProjectPhaseOnHold ||
 			target == ProjectPhaseCancelled
 	case ProjectPhaseWorking:
-		return target == ProjectPhaseActive ||
+		return target == ProjectPhaseOnHold ||
 			target == ProjectPhaseCompleted ||
 			target == ProjectPhaseCancelled ||
 			target == ProjectPhaseTilbud
-	case ProjectPhaseActive:
-		return target == ProjectPhaseCompleted ||
-			target == ProjectPhaseCancelled ||
-			target == ProjectPhaseWorking
-	case ProjectPhaseCompleted:
+	case ProjectPhaseOnHold:
 		return target == ProjectPhaseWorking ||
-			target == ProjectPhaseActive
+			target == ProjectPhaseCancelled ||
+			target == ProjectPhaseCompleted
+	case ProjectPhaseCompleted:
+		return target == ProjectPhaseWorking
 	case ProjectPhaseCancelled:
-		return target == ProjectPhaseTilbud ||
-			target == ProjectPhaseWorking
+		return false // Cancelled is a terminal state - no transitions allowed
 	}
 	return false
 }
 
-// Project represents work being performed for a customer
+// Project represents a container for related offers. Projects are cross-company.
+// Economic tracking (value, cost, spent, invoiced) has moved to the Offer model.
 type Project struct {
 	BaseModel
-	Name                    string         `gorm:"type:varchar(200);not null;index"`
-	ProjectNumber           string         `gorm:"type:varchar(50);unique;index;column:project_number"` // External reference number for ERP/accounting systems
-	Summary                 string         `gorm:"type:varchar(500)"`
-	Description             string         `gorm:"type:text"`
-	CustomerID              uuid.UUID      `gorm:"type:uuid;not null;index"`
-	Customer                *Customer      `gorm:"foreignKey:CustomerID"`
-	CustomerName            string         `gorm:"type:varchar(200)"`
-	CompanyID               CompanyID      `gorm:"type:varchar(50);not null;index"`
-	Phase                   ProjectPhase   `gorm:"type:project_phase;not null;default:'tilbud';index"`
-	StartDate               time.Time      `gorm:"type:date"`
-	EndDate                 *time.Time     `gorm:"type:date"`
-	Value                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	Cost                    float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	MarginPercent           float64        `gorm:"type:decimal(8,4);not null;default:0;column:margin_percent"` // Auto-calculated by DB trigger
-	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`
-	Invoiced                float64        `gorm:"type:decimal(15,2);not null;default:0;column:invoiced"` // Amount invoiced to customer (hittil fakturert)
-	OrderReserve            float64        `gorm:"type:decimal(15,2);->"` // Generated column: value - invoiced (read-only)
-	ManagerID               *string        `gorm:"type:varchar(100)"`
-	ManagerName             string         `gorm:"type:varchar(200)"`
-	Location                string         `gorm:"type:varchar(200)"`
-	TeamMembers             pq.StringArray `gorm:"type:text[]"`
-	OfferID                 *uuid.UUID     `gorm:"type:uuid;index"`
-	Offer                   *Offer         `gorm:"foreignKey:OfferID"`
-	DealID                  *uuid.UUID     `gorm:"type:uuid;index;column:deal_id"`
-	Deal                    *Deal          `gorm:"foreignKey:DealID"`
-	HasDetailedBudget       bool           `gorm:"not null;default:false;column:has_detailed_budget"`
-	Health                  *ProjectHealth `gorm:"type:project_health;default:'on_track'"`
-	CompletionPercent       *float64       `gorm:"type:decimal(5,2);default:0;column:completion_percent"`
-	EstimatedCompletionDate *time.Time     `gorm:"type:date;column:estimated_completion_date"`
-	// Phase-related fields for offer folder functionality
-	WinningOfferID       *uuid.UUID `gorm:"type:uuid;index;column:winning_offer_id"`
-	WinningOffer         *Offer     `gorm:"foreignKey:WinningOfferID"`
-	InheritedOfferNumber string     `gorm:"type:varchar(50);column:inherited_offer_number"`
-	ExternalReference    string     `gorm:"type:varchar(100);column:external_reference"`
-	CalculatedOfferValue float64    `gorm:"type:decimal(15,2);default:0;column:calculated_offer_value"`
-	WonAt                *time.Time `gorm:"column:won_at"`
+	Name              string       `gorm:"type:varchar(200);not null;index"`
+	ProjectNumber     string       `gorm:"type:varchar(50);unique;index;column:project_number"` // External reference number for ERP/accounting systems
+	Summary           string       `gorm:"type:varchar(500)"`
+	Description       string       `gorm:"type:text"`
+	CustomerID        *uuid.UUID   `gorm:"type:uuid;index"` // Optional - projects can be cross-company without specific customer
+	Customer          *Customer    `gorm:"foreignKey:CustomerID"`
+	CustomerName      string       `gorm:"type:varchar(200)"`
+	Phase             ProjectPhase `gorm:"type:project_phase;not null;default:'tilbud';index"`
+	StartDate         time.Time    `gorm:"type:date"`
+	EndDate           *time.Time   `gorm:"type:date"`
+	Location          string       `gorm:"type:varchar(200)"`
+	DealID            *uuid.UUID   `gorm:"type:uuid;index;column:deal_id"`
+	Deal              *Deal        `gorm:"foreignKey:DealID"`
+	ExternalReference string       `gorm:"type:varchar(100);column:external_reference"`
 	// User tracking fields
 	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
 	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
@@ -459,16 +418,94 @@ type ProjectActualCost struct {
 }
 
 // OfferPhase represents the phase of an offer in the sales pipeline
+// Pipeline: draft -> in_progress -> sent -> order -> completed (or lost/expired)
 type OfferPhase string
 
 const (
 	OfferPhaseDraft      OfferPhase = "draft"
 	OfferPhaseInProgress OfferPhase = "in_progress"
 	OfferPhaseSent       OfferPhase = "sent"
-	OfferPhaseWon        OfferPhase = "won"
+	OfferPhaseOrder      OfferPhase = "order"     // Customer accepted, work in progress
+	OfferPhaseCompleted  OfferPhase = "completed" // Work finished
 	OfferPhaseLost       OfferPhase = "lost"
 	OfferPhaseExpired    OfferPhase = "expired"
 )
+
+// IsValid checks if the OfferPhase is a valid enum value
+func (p OfferPhase) IsValid() bool {
+	switch p {
+	case OfferPhaseDraft, OfferPhaseInProgress, OfferPhaseSent, OfferPhaseOrder, OfferPhaseCompleted, OfferPhaseLost, OfferPhaseExpired:
+		return true
+	}
+	return false
+}
+
+// IsActivePhase returns true if the offer is in an active working phase
+func (p OfferPhase) IsActivePhase() bool {
+	return p == OfferPhaseOrder
+}
+
+// IsClosedPhase returns true if the offer is in a terminal state
+func (p OfferPhase) IsClosedPhase() bool {
+	return p == OfferPhaseCompleted || p == OfferPhaseLost || p == OfferPhaseExpired
+}
+
+// IsSalesPhase returns true if the offer is in the sales pipeline (not yet order)
+func (p OfferPhase) IsSalesPhase() bool {
+	return p == OfferPhaseDraft || p == OfferPhaseInProgress || p == OfferPhaseSent
+}
+
+// CanTransitionTo checks if an offer phase transition is valid
+// Valid transitions:
+// - draft -> in_progress, lost
+// - in_progress -> sent, draft, lost
+// - sent -> order, lost, expired, in_progress
+// - order -> completed, lost
+// - completed -> order (can reopen)
+// - lost -> draft (can restart)
+// - expired -> draft (can restart)
+func (p OfferPhase) CanTransitionTo(target OfferPhase) bool {
+	if p == target {
+		return true // Same phase is always valid
+	}
+
+	switch p {
+	case OfferPhaseDraft:
+		return target == OfferPhaseInProgress || target == OfferPhaseLost
+	case OfferPhaseInProgress:
+		return target == OfferPhaseSent || target == OfferPhaseDraft || target == OfferPhaseLost
+	case OfferPhaseSent:
+		return target == OfferPhaseOrder || target == OfferPhaseLost || target == OfferPhaseExpired || target == OfferPhaseInProgress
+	case OfferPhaseOrder:
+		return target == OfferPhaseCompleted || target == OfferPhaseLost
+	case OfferPhaseCompleted:
+		return target == OfferPhaseOrder // Can reopen completed offer
+	case OfferPhaseLost:
+		return target == OfferPhaseDraft // Can restart lost offer
+	case OfferPhaseExpired:
+		return target == OfferPhaseDraft // Can restart expired offer
+	}
+	return false
+}
+
+// OfferHealth represents the health status of an offer in execution (order phase)
+type OfferHealth string
+
+const (
+	OfferHealthOnTrack    OfferHealth = "on_track"
+	OfferHealthAtRisk     OfferHealth = "at_risk"
+	OfferHealthDelayed    OfferHealth = "delayed"
+	OfferHealthOverBudget OfferHealth = "over_budget"
+)
+
+// IsValid checks if the OfferHealth is a valid enum value
+func (h OfferHealth) IsValid() bool {
+	switch h {
+	case OfferHealthOnTrack, OfferHealthAtRisk, OfferHealthDelayed, OfferHealthOverBudget:
+		return true
+	}
+	return false
+}
 
 // OfferStatus represents the status of an offer
 type OfferStatus string
@@ -479,7 +516,7 @@ const (
 	OfferStatusArchived OfferStatus = "archived"
 )
 
-// Offer represents a sales proposal
+// Offer represents a sales proposal and, when in order phase, the execution of work
 type Offer struct {
 	BaseModel
 	Title                 string      `gorm:"type:varchar(200);not null;index"`
@@ -507,6 +544,18 @@ type Offer struct {
 	SentDate              *time.Time  `gorm:"type:timestamp;index;column:sent_date"`
 	ExpirationDate        *time.Time  `gorm:"type:timestamp;index;column:expiration_date"` // When the offer expires (default: 60 days after sent_date)
 	CustomerHasWonProject bool        `gorm:"not null;default:false;column:customer_has_won_project"`
+	// Order phase execution fields (used when phase = "order" or "completed")
+	ManagerID               *string        `gorm:"type:varchar(100);column:manager_id"`
+	ManagerName             string         `gorm:"type:varchar(200);column:manager_name"`
+	TeamMembers             pq.StringArray `gorm:"type:text[];column:team_members"`
+	Spent                   float64        `gorm:"type:decimal(15,2);not null;default:0"`                 // Actual costs incurred
+	Invoiced                float64        `gorm:"type:decimal(15,2);not null;default:0"`                 // Amount invoiced to customer
+	OrderReserve            float64        `gorm:"type:decimal(15,2);column:order_reserve;->"`            // Generated column: value - invoiced (read-only)
+	Health                  *OfferHealth   `gorm:"type:varchar(20);default:'on_track'"`                   // Health status during execution
+	CompletionPercent       *float64       `gorm:"type:decimal(5,2);default:0;column:completion_percent"` // 0-100 progress indicator
+	StartDate               *time.Time     `gorm:"type:date;column:start_date"`                           // When work started
+	EndDate                 *time.Time     `gorm:"type:date;column:end_date"`                             // Planned end date
+	EstimatedCompletionDate *time.Time     `gorm:"type:date;column:estimated_completion_date"`            // Current estimate for completion
 	// User tracking fields
 	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
 	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
@@ -695,6 +744,7 @@ type Activity struct {
 	BaseModel
 	TargetType       ActivityTargetType `gorm:"type:varchar(50);not null;index;column:target_type"`
 	TargetID         uuid.UUID          `gorm:"type:uuid;not null;index;column:target_id"`
+	TargetName       string             `gorm:"type:varchar(255);column:target_name"`
 	Title            string             `gorm:"type:varchar(200);not null"`
 	Body             string             `gorm:"type:varchar(2000)"`
 	OccurredAt       time.Time          `gorm:"not null;default:CURRENT_TIMESTAMP;index;column:occurred_at"`

@@ -41,8 +41,8 @@ func NewActivityHandler(activityService *service.ActivityService, logger *zap.Lo
 // @Param targetType query string false "Filter by target type (customer, project, offer, deal)"
 // @Param targetId query string false "Filter by target entity ID" format(uuid)
 // @Param assignedTo query string false "Filter by assigned user ID"
-// @Param dueDateFrom query string false "Filter by due date from (YYYY-MM-DD)"
-// @Param dueDateTo query string false "Filter by due date to (YYYY-MM-DD)"
+// @Param from query string false "Filter activities from this date (YYYY-MM-DD), inclusive from 00:00:00"
+// @Param to query string false "Filter activities to this date (YYYY-MM-DD), inclusive until 23:59:59"
 // @Success 200 {object} domain.PaginatedResponse{data=[]domain.ActivityDTO}
 // @Failure 400 {object} domain.ErrorResponse
 // @Failure 401 {object} domain.ErrorResponse
@@ -117,32 +117,34 @@ func (h *ActivityHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.AssignedToID = &assignedTo
 	}
 
-	// Due date from filter
-	if dueDateFromStr := r.URL.Query().Get("dueDateFrom"); dueDateFromStr != "" {
-		dueDateFrom, err := time.Parse("2006-01-02", dueDateFromStr)
+	// Date range filter for occurred_at - "from" is start of day (00:00:00)
+	if fromStr := r.URL.Query().Get("from"); fromStr != "" {
+		fromDate, err := time.Parse("2006-01-02", fromStr)
 		if err != nil {
 			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
 				Error:   "Bad Request",
-				Message: "Invalid dueDateFrom format, expected YYYY-MM-DD",
+				Message: "Invalid 'from' format, expected YYYY-MM-DD",
 			})
 			return
 		}
-		filters.DueDateFrom = &dueDateFrom
+		// Set to start of day in UTC
+		fromDate = time.Date(fromDate.Year(), fromDate.Month(), fromDate.Day(), 0, 0, 0, 0, time.UTC)
+		filters.OccurredFrom = &fromDate
 	}
 
-	// Due date to filter
-	if dueDateToStr := r.URL.Query().Get("dueDateTo"); dueDateToStr != "" {
-		dueDateTo, err := time.Parse("2006-01-02", dueDateToStr)
+	// Date range filter for occurred_at - "to" is end of day (23:59:59.999999999)
+	if toStr := r.URL.Query().Get("to"); toStr != "" {
+		toDate, err := time.Parse("2006-01-02", toStr)
 		if err != nil {
 			respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
 				Error:   "Bad Request",
-				Message: "Invalid dueDateTo format, expected YYYY-MM-DD",
+				Message: "Invalid 'to' format, expected YYYY-MM-DD",
 			})
 			return
 		}
-		// Set to end of day for inclusive filtering
-		dueDateTo = dueDateTo.Add(24*time.Hour - time.Second)
-		filters.DueDateTo = &dueDateTo
+		// Set to end of day in UTC for inclusive filtering
+		toDate = time.Date(toDate.Year(), toDate.Month(), toDate.Day(), 23, 59, 59, 999999999, time.UTC)
+		filters.OccurredTo = &toDate
 	}
 
 	result, err := h.activityService.List(r.Context(), filters, page, pageSize)

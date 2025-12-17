@@ -139,11 +139,12 @@ func (s *DealService) Create(ctx context.Context, req *domain.CreateDealRequest)
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Deal created",
-			Body:        fmt.Sprintf("Deal '%s' was created with value %s %.2f", deal.Title, deal.Currency, deal.Value),
+			TargetName:  deal.Title,
+			Title:       "Salgsmulighet opprettet",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' ble opprettet med verdi %s %.2f", deal.Title, deal.Currency, deal.Value),
 			CreatorName: creatorName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	// Reload with relations
@@ -221,7 +222,7 @@ func (s *DealService) Update(ctx context.Context, id uuid.UUID, req *domain.Upda
 			changedByID = userCtx.UserID.String()
 			changedByName = userCtx.DisplayName
 		}
-		s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, req.Stage, changedByID, changedByName, "Stage updated via deal update")
+		_ = s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, req.Stage, changedByID, changedByName, "Stage updated via deal update")
 	}
 
 	// Create activity
@@ -229,11 +230,12 @@ func (s *DealService) Update(ctx context.Context, id uuid.UUID, req *domain.Upda
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Deal updated",
-			Body:        fmt.Sprintf("Deal '%s' was updated", deal.Title),
+			TargetName:  deal.Title,
+			Title:       "Salgsmulighet oppdatert",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' ble oppdatert", deal.Title),
 			CreatorName: userCtx.DisplayName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToDealDTO(deal)
@@ -323,18 +325,19 @@ func (s *DealService) AdvanceStage(ctx context.Context, id uuid.UUID, req *domai
 		changedByID = userCtx.UserID.String()
 		changedByName = userCtx.DisplayName
 	}
-	s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, req.Stage, changedByID, changedByName, req.Notes)
+	_ = s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, req.Stage, changedByID, changedByName, req.Notes)
 
 	// Create activity
 	if changedByName != "" {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Deal stage changed",
-			Body:        fmt.Sprintf("Deal '%s' moved from %s to %s", deal.Title, oldStage, req.Stage),
+			TargetName:  deal.Title,
+			Title:       "Salgsmulighet fase endret",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' flyttet fra %s til %s", deal.Title, oldStage, req.Stage),
 			CreatorName: changedByName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToDealDTO(deal)
@@ -366,18 +369,19 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 		changedByID = userCtx.UserID.String()
 		changedByName = userCtx.DisplayName
 	}
-	s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageWon, changedByID, changedByName, "Deal won")
+	_ = s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageWon, changedByID, changedByName, "Deal won")
 
 	// Create activity
 	if changedByName != "" {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Deal won!",
-			Body:        fmt.Sprintf("Deal '%s' was won with value %s %.2f", deal.Title, deal.Currency, deal.Value),
+			TargetName:  deal.Title,
+			Title:       "Salgsmulighet vunnet!",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' ble vunnet med verdi %s %.2f", deal.Title, deal.Currency, deal.Value),
 			CreatorName: changedByName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	// Reload deal
@@ -387,36 +391,16 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 	// Create project if requested
 	var projectDTO *domain.ProjectDTO
 	if createProject {
-		// Determine budget: inherit from offer if linked, otherwise use deal value
-		budget := deal.Value
-		var linkedOfferID *uuid.UUID
-
-		if deal.OfferID != nil && s.offerRepo != nil {
-			offer, err := s.offerRepo.GetByID(ctx, *deal.OfferID)
-			if err == nil && offer != nil {
-				// Use offer value as budget (offer value typically more accurate)
-				budget = offer.Value
-				linkedOfferID = deal.OfferID
-				s.logger.Info("inherited budget from linked offer",
-					zap.String("deal_id", deal.ID.String()),
-					zap.String("offer_id", deal.OfferID.String()),
-					zap.Float64("budget", budget))
-			}
-		}
-
-		managerID := deal.OwnerID
+		// Projects are now simplified containers for offers - economic tracking is on Offer
+		customerID := deal.CustomerID
 		project := &domain.Project{
 			Name:         deal.Title,
 			Description:  deal.Description,
-			CustomerID:   deal.CustomerID,
+			CustomerID:   &customerID,
 			CustomerName: deal.CustomerName,
-			CompanyID:    deal.CompanyID,
+			Phase:        domain.ProjectPhaseTilbud,
 			StartDate:    closeDate,
-			Value:        budget,
-			ManagerID:    &managerID,
-			ManagerName:  deal.OwnerName,
 			DealID:       &deal.ID,
-			OfferID:      linkedOfferID,
 		}
 
 		if err := s.projectRepo.Create(ctx, project); err != nil {
@@ -428,18 +412,15 @@ func (s *DealService) WinDeal(ctx context.Context, id uuid.UUID, createProject b
 
 			// Create activity for project creation
 			if changedByName != "" {
-				budgetSource := "deal value"
-				if linkedOfferID != nil {
-					budgetSource = "linked offer"
-				}
 				activity := &domain.Activity{
 					TargetType:  domain.ActivityTargetProject,
 					TargetID:    project.ID,
-					Title:       "Project created from deal",
-					Body:        fmt.Sprintf("Project '%s' created from won deal with budget %.2f (from %s)", project.Name, budget, budgetSource),
+					TargetName:  project.Name,
+					Title:       "Prosjekt opprettet fra salgsmulighet",
+					Body:        fmt.Sprintf("Prosjektet '%s' ble opprettet fra vunnet salgsmulighet", project.Name),
 					CreatorName: changedByName,
 				}
-				s.activityRepo.Create(ctx, activity)
+				_ = s.activityRepo.Create(ctx, activity)
 			}
 		}
 	}
@@ -531,18 +512,19 @@ func (s *DealService) LoseDeal(ctx context.Context, id uuid.UUID, req *domain.Lo
 		changedByID = userCtx.UserID.String()
 		changedByName = userCtx.DisplayName
 	}
-	s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageLost, changedByID, changedByName, historyNotes)
+	_ = s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageLost, changedByID, changedByName, historyNotes)
 
 	// Create activity with category context
 	if changedByName != "" {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Deal lost",
-			Body:        fmt.Sprintf("Deal '%s' was lost. Category: %s. Details: %s", deal.Title, req.Reason, req.Notes),
+			TargetName:  deal.Title,
+			Title:       "Salgsmulighet tapt",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' ble tapt. Kategori: %s. Detaljer: %s", deal.Title, req.Reason, req.Notes),
 			CreatorName: changedByName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	// Reload deal
@@ -579,18 +561,19 @@ func (s *DealService) ReopenDeal(ctx context.Context, id uuid.UUID) (*domain.Dea
 		changedByID = userCtx.UserID.String()
 		changedByName = userCtx.DisplayName
 	}
-	s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageLead, changedByID, changedByName, "Deal reopened")
+	_ = s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageLead, changedByID, changedByName, "Deal reopened")
 
 	// Create activity
 	if changedByName != "" {
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Deal reopened",
-			Body:        fmt.Sprintf("Deal '%s' was reopened as a new lead", deal.Title),
+			TargetName:  deal.Title,
+			Title:       "Salgsmulighet gjenåpnet",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' ble gjenåpnet som ny lead", deal.Title),
 			CreatorName: changedByName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 	}
 
 	dto := mapper.ToDealDTO(deal)
@@ -904,7 +887,7 @@ func (s *DealService) CreateOfferFromDeal(ctx context.Context, dealID uuid.UUID,
 
 	// Record stage history (outside transaction for non-critical operation)
 	if creatorName != "" {
-		s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageProposal, ownerID, creatorName, "Offer created from deal")
+		_ = s.historyRepo.RecordTransition(ctx, deal.ID, &oldStage, domain.DealStageProposal, ownerID, creatorName, "Tilbud opprettet fra salgsmulighet")
 	}
 
 	// Log activity on deal
@@ -912,21 +895,23 @@ func (s *DealService) CreateOfferFromDeal(ctx context.Context, dealID uuid.UUID,
 		activity := &domain.Activity{
 			TargetType:  domain.ActivityTargetDeal,
 			TargetID:    deal.ID,
-			Title:       "Offer created from deal",
-			Body:        fmt.Sprintf("Deal '%s' advanced to proposal stage with new offer '%s'", deal.Title, createdOffer.Title),
+			TargetName:  deal.Title,
+			Title:       "Tilbud opprettet fra salgsmulighet",
+			Body:        fmt.Sprintf("Salgsmulighet '%s' avansert til forslagsfase med nytt tilbud '%s'", deal.Title, createdOffer.Title),
 			CreatorName: creatorName,
 		}
-		s.activityRepo.Create(ctx, activity)
+		_ = s.activityRepo.Create(ctx, activity)
 
 		// Log activity on offer
 		offerActivity := &domain.Activity{
 			TargetType:  domain.ActivityTargetOffer,
 			TargetID:    createdOffer.ID,
-			Title:       "Offer created from deal",
-			Body:        fmt.Sprintf("Offer '%s' was created from deal '%s'", createdOffer.Title, deal.Title),
+			TargetName:  createdOffer.Title,
+			Title:       "Tilbud opprettet fra salgsmulighet",
+			Body:        fmt.Sprintf("Tilbudet '%s' ble opprettet fra salgsmulighet '%s'", createdOffer.Title, deal.Title),
 			CreatorName: creatorName,
 		}
-		s.activityRepo.Create(ctx, offerActivity)
+		_ = s.activityRepo.Create(ctx, offerActivity)
 	}
 
 	// Reload offer with relations

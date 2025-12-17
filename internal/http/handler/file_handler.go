@@ -122,5 +122,5 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	io.Copy(w, reader)
+	_, _ = io.Copy(w, reader)
 }

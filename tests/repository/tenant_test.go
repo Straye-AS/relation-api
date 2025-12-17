@@ -31,7 +31,7 @@ type SimpleModel struct {
 
 func TestApplyCompanyFilter_WithFilter(t *testing.T) {
 	db := setupMinimalTestDB(t)
-	db.AutoMigrate(&SimpleModel{})
+	_ = db.AutoMigrate(&SimpleModel{})
 
 	// Create a context with company filter
 	stalbygg := domain.CompanyStalbygg
@@ -49,7 +49,7 @@ func TestApplyCompanyFilter_WithFilter(t *testing.T) {
 
 func TestApplyCompanyFilter_WithoutFilter(t *testing.T) {
 	db := setupMinimalTestDB(t)
-	db.AutoMigrate(&SimpleModel{})
+	_ = db.AutoMigrate(&SimpleModel{})
 
 	// Create a context without company filter (Gruppen user)
 	userCtx := &auth.UserContext{
@@ -69,7 +69,7 @@ func TestApplyCompanyFilter_WithoutFilter(t *testing.T) {
 
 func TestApplyCompanyFilterWithColumn(t *testing.T) {
 	db := setupMinimalTestDB(t)
-	db.AutoMigrate(&SimpleModel{})
+	_ = db.AutoMigrate(&SimpleModel{})
 
 	// Create a context with company filter
 	stalbygg := domain.CompanyStalbygg
