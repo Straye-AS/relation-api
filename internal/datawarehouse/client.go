@@ -160,9 +160,15 @@ func NewClient(cfg *config.DataWarehouseConfig, logger *zap.Logger) (*Client, er
 
 // buildConnectionString constructs a SQL Server connection string from the config.
 // URL format expected: host:port/database or host:port (uses default database)
+// Also handles URLs with https:// or http:// prefix which will be stripped.
 func buildConnectionString(cfg *config.DataWarehouseConfig) (string, error) {
+	// Strip https:// or http:// prefix if present
+	urlStr := cfg.URL
+	urlStr = strings.TrimPrefix(urlStr, "https://")
+	urlStr = strings.TrimPrefix(urlStr, "http://")
+
 	// Parse URL format: host:port/database or host:port
-	urlParts := strings.SplitN(cfg.URL, "/", 2)
+	urlParts := strings.SplitN(urlStr, "/", 2)
 	hostPort := urlParts[0]
 	database := ""
 	if len(urlParts) > 1 {
