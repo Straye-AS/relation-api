@@ -17,7 +17,9 @@ import (
 )
 
 // MockUserRepository implements a mock user repository for testing
-type MockUserRepository struct{}
+type MockUserRepository struct {
+	users []domain.User
+}
 
 func (m *MockUserRepository) Upsert(ctx context.Context, user *domain.User) error {
 	return nil
@@ -28,6 +30,9 @@ func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*dom
 }
 
 func (m *MockUserRepository) ListByCompanyAccess(ctx context.Context, companyFilter *domain.CompanyID) ([]domain.User, error) {
+	if m.users != nil {
+		return m.users, nil
+	}
 	return []domain.User{}, nil
 }
 
@@ -66,8 +71,13 @@ func (m *MockGraphClient) GetUserProfile(ctx context.Context, accessToken string
 
 // createTestAuthHandlerWithMocks creates an auth handler with mock dependencies
 func createTestAuthHandlerWithMocks(permissions []domain.PermissionType) *handler.AuthHandler {
+	return createTestAuthHandlerWithMocksAndUsers(permissions, nil)
+}
+
+// createTestAuthHandlerWithMocksAndUsers creates an auth handler with mock dependencies and optional users
+func createTestAuthHandlerWithMocksAndUsers(permissions []domain.PermissionType, users []domain.User) *handler.AuthHandler {
 	logger := zap.NewNop()
-	mockUserRepo := &MockUserRepository{}
+	mockUserRepo := &MockUserRepository{users: users}
 	mockPermService := &MockPermissionService{permissions: permissions}
 	mockGraphClient := &MockGraphClient{}
 
@@ -280,10 +290,25 @@ func TestAuthHandler_Permissions_SuperAdmin(t *testing.T) {
 }
 
 func TestAuthHandler_ListUsers(t *testing.T) {
-	h := createTestAuthHandlerWithMocks(nil)
+	// Create a test user ID to use in both the mock and context
+	testUserID := uuid.New()
+	companyID := domain.CompanyStalbygg
+
+	// Create mock users that will be returned by the repository
+	mockUsers := []domain.User{
+		{
+			ID:          testUserID.String(),
+			DisplayName: "Test User",
+			Email:       "test@example.com",
+			Roles:       []string{"viewer"},
+			CompanyID:   &companyID,
+		},
+	}
+
+	h := createTestAuthHandlerWithMocksAndUsers(nil, mockUsers)
 
 	userCtx := &auth.UserContext{
-		UserID:      uuid.New(),
+		UserID:      testUserID,
 		DisplayName: "Test User",
 		Email:       "test@example.com",
 		Roles:       []domain.UserRoleType{domain.RoleViewer},
@@ -303,7 +328,7 @@ func TestAuthHandler_ListUsers(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, response, 1)
-	assert.Equal(t, userCtx.UserID.String(), response[0].ID)
+	assert.Equal(t, testUserID.String(), response[0].ID)
 	assert.Equal(t, "Test User", response[0].Name)
 }
 
