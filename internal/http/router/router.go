@@ -397,6 +397,9 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/budget/dimensions/{dimensionId}", rt.budgetItemHandler.UpdateOfferDimension)
 				r.Delete("/{id}/budget/dimensions/{dimensionId}", rt.budgetItemHandler.DeleteOfferDimension)
 				r.Put("/{id}/budget/reorder", rt.budgetItemHandler.ReorderOfferDimensions)
+
+				// Data warehouse sync (POC)
+				r.Get("/{id}/external-sync", rt.offerHandler.GetExternalSync)
 			})
 
 			// Deals

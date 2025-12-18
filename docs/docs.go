@@ -6870,6 +6870,61 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/external-sync": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves financial data from the data warehouse for the given offer.\nThis is a read-only POC endpoint to verify data warehouse connectivity.\nThe offer must have an external_reference to be matched in the data warehouse.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get data warehouse financials for an offer (POC)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Data warehouse financials",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferExternalSyncResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID or offer has no external reference",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/files": {
             "get": {
                 "security": [
@@ -10935,6 +10990,27 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.DataWarehouseFinancialsDTO": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "description": "Whether data warehouse connection was successful",
+                    "type": "boolean"
+                },
+                "netResult": {
+                    "description": "totalIncome - totalCosts",
+                    "type": "number"
+                },
+                "totalCosts": {
+                    "description": "Sum of cost accounts (all other)",
+                    "type": "number"
+                },
+                "totalIncome": {
+                    "description": "Sum of income accounts (3000-3999)",
+                    "type": "number"
+                }
+            }
+        },
         "domain.DealDTO": {
             "type": "object",
             "properties": {
@@ -11573,6 +11649,23 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.OfferExternalSyncResponse": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "dataWarehouse": {
+                    "$ref": "#/definitions/domain.DataWarehouseFinancialsDTO"
+                },
+                "externalReference": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.OfferHealth": {
             "type": "string",
             "enum": [
@@ -11682,6 +11775,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "externalReference": {
+                    "description": "External/customer reference number",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -11692,6 +11789,10 @@ const docTemplate = `{
                     }
                 },
                 "notes": {
+                    "type": "string"
+                },
+                "offerNumber": {
+                    "description": "Internal number, e.g., \"TK-2025-001\"",
                     "type": "string"
                 },
                 "phase": {

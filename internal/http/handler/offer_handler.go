@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/straye-as/relation-api/internal/datawarehouse"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
@@ -16,12 +17,14 @@ import (
 
 type OfferHandler struct {
 	offerService *service.OfferService
+	dwClient     *datawarehouse.Client
 	logger       *zap.Logger
 }
 
-func NewOfferHandler(offerService *service.OfferService, logger *zap.Logger) *OfferHandler {
+func NewOfferHandler(offerService *service.OfferService, dwClient *datawarehouse.Client, logger *zap.Logger) *OfferHandler {
 	return &OfferHandler{
 		offerService: offerService,
+		dwClient:     dwClient,
 		logger:       logger,
 	}
 }
@@ -1630,4 +1633,101 @@ func (h *OfferHandler) GetNextNumber(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, result)
+}
+
+// ============================================================================
+// Data Warehouse Sync Endpoints (POC)
+// ============================================================================
+
+// GetExternalSync godoc
+// @Summary Get data warehouse financials for an offer (POC)
+// @Description Retrieves financial data from the data warehouse for the given offer.
+// @Description This is a read-only POC endpoint to verify data warehouse connectivity.
+// @Description The offer must have an external_reference to be matched in the data warehouse.
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferExternalSyncResponse "Data warehouse financials"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or offer has no external reference"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/external-sync [get]
+func (h *OfferHandler) GetExternalSync(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	// Get the offer from the database
+	offer, err := h.offerService.GetByID(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to get offer for external sync",
+			zap.Error(err),
+			zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	// Build the response
+	response := &domain.OfferExternalSyncResponse{
+		OfferID:           offer.ID,
+		ExternalReference: offer.ExternalReference,
+		CompanyID:         offer.CompanyID,
+		DataWarehouse: &domain.DataWarehouseFinancialsDTO{
+			TotalIncome: 0,
+			TotalCosts:  0,
+			NetResult:   0,
+			Connected:   false,
+		},
+	}
+
+	// Check if offer has an external reference
+	if offer.ExternalReference == "" {
+		h.logger.Info("offer has no external reference, returning disconnected response",
+			zap.String("offer_id", id.String()))
+		respondJSON(w, http.StatusOK, response)
+		return
+	}
+
+	// Check if data warehouse client is available
+	if h.dwClient == nil || !h.dwClient.IsEnabled() {
+		h.logger.Info("data warehouse not connected, returning disconnected response",
+			zap.String("offer_id", id.String()))
+		respondJSON(w, http.StatusOK, response)
+		return
+	}
+
+	// Query the data warehouse for project financials
+	financials, err := h.dwClient.GetProjectFinancials(r.Context(), string(offer.CompanyID), offer.ExternalReference)
+	if err != nil {
+		h.logger.Error("failed to query data warehouse",
+			zap.Error(err),
+			zap.String("offer_id", id.String()),
+			zap.String("external_reference", offer.ExternalReference),
+			zap.String("company_id", string(offer.CompanyID)))
+
+		// Return disconnected response on error (don't fail the request)
+		respondJSON(w, http.StatusOK, response)
+		return
+	}
+
+	// Populate the response with data warehouse data
+	response.DataWarehouse = &domain.DataWarehouseFinancialsDTO{
+		TotalIncome: financials.TotalIncome,
+		TotalCosts:  financials.TotalCosts,
+		NetResult:   financials.NetResult,
+		Connected:   true,
+	}
+
+	h.logger.Info("successfully retrieved data warehouse financials",
+		zap.String("offer_id", id.String()),
+		zap.String("external_reference", offer.ExternalReference),
+		zap.Float64("total_income", financials.TotalIncome),
+		zap.Float64("total_costs", financials.TotalCosts),
+		zap.Float64("net_result", financials.NetResult))
+
+	respondJSON(w, http.StatusOK, response)
 }

@@ -320,6 +320,8 @@ func (s *OfferService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Offer
 	dto := &domain.OfferWithItemsDTO{
 		ID:                  offer.ID,
 		Title:               offer.Title,
+		OfferNumber:         offer.OfferNumber,
+		ExternalReference:   offer.ExternalReference,
 		CustomerID:          offer.CustomerID,
 		CustomerName:        offer.CustomerName,
 		CompanyID:           offer.CompanyID,

@@ -874,6 +874,8 @@ type ApproveProjectActualCostRequest struct {
 type OfferWithItemsDTO struct {
 	ID                  uuid.UUID      `json:"id"`
 	Title               string         `json:"title"`
+	OfferNumber         string         `json:"offerNumber,omitempty"`       // Internal number, e.g., "TK-2025-001"
+	ExternalReference   string         `json:"externalReference,omitempty"` // External/customer reference number
 	CustomerID          uuid.UUID      `json:"customerId"`
 	CustomerName        string         `json:"customerName,omitempty"`
 	CompanyID           CompanyID      `json:"companyId"`
@@ -1545,4 +1547,24 @@ type ReopenProjectResponse struct {
 	RevertedOffer     *OfferDTO   `json:"revertedOffer,omitempty"` // Offer that was reverted to sent (if any)
 	ClearedOfferID    bool        `json:"clearedOfferId"`          // Whether WinningOfferID was cleared
 	ClearedOfferValue bool        `json:"clearedOfferValue"`       // Whether economic values were cleared
+}
+
+// ============================================================================
+// Data Warehouse Sync DTOs
+// ============================================================================
+
+// DataWarehouseFinancialsDTO contains financial data retrieved from the data warehouse
+type DataWarehouseFinancialsDTO struct {
+	TotalIncome float64 `json:"totalIncome"` // Sum of income accounts (3000-3999)
+	TotalCosts  float64 `json:"totalCosts"`  // Sum of cost accounts (all other)
+	NetResult   float64 `json:"netResult"`   // totalIncome - totalCosts
+	Connected   bool    `json:"connected"`   // Whether data warehouse connection was successful
+}
+
+// OfferExternalSyncResponse contains the result of querying the data warehouse for an offer
+type OfferExternalSyncResponse struct {
+	OfferID           uuid.UUID                   `json:"offerId"`
+	ExternalReference string                      `json:"externalReference"`
+	CompanyID         CompanyID                   `json:"companyId"`
+	DataWarehouse     *DataWarehouseFinancialsDTO `json:"dataWarehouse"`
 }

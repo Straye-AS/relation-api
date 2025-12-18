@@ -178,7 +178,7 @@ func run() error {
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, offerService, projectService, log)
 	contactHandler := handler.NewContactHandler(contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, offerService, log)
-	offerHandler := handler.NewOfferHandler(offerService, log)
+	offerHandler := handler.NewOfferHandler(offerService, dwClient, log)
 	inquiryHandler := handler.NewInquiryHandler(inquiryService, log)
 	dealHandler := handler.NewDealHandler(dealService, log)
 	fileHandler := handler.NewFileHandler(fileService, cfg.Storage.MaxUploadSizeMB, log)

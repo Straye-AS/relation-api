@@ -1265,6 +1265,21 @@ definitions:
         - $ref: '#/definitions/domain.WinRateMetrics'
         description: Win Rate Metrics
     type: object
+  domain.DataWarehouseFinancialsDTO:
+    properties:
+      connected:
+        description: Whether data warehouse connection was successful
+        type: boolean
+      netResult:
+        description: totalIncome - totalCosts
+        type: number
+      totalCosts:
+        description: Sum of cost accounts (all other)
+        type: number
+      totalIncome:
+        description: Sum of income accounts (3000-3999)
+        type: number
+    type: object
   domain.DealDTO:
     properties:
       actualCloseDate:
@@ -1709,6 +1724,17 @@ definitions:
       value:
         type: number
     type: object
+  domain.OfferExternalSyncResponse:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      dataWarehouse:
+        $ref: '#/definitions/domain.DataWarehouseFinancialsDTO'
+      externalReference:
+        type: string
+      offerId:
+        type: string
+    type: object
   domain.OfferHealth:
     enum:
     - on_track
@@ -1791,6 +1817,9 @@ definitions:
         type: string
       description:
         type: string
+      externalReference:
+        description: External/customer reference number
+        type: string
       id:
         type: string
       items:
@@ -1798,6 +1827,9 @@ definitions:
           $ref: '#/definitions/domain.OfferItemDTO'
         type: array
       notes:
+        type: string
+      offerNumber:
+        description: Internal number, e.g., "TK-2025-001"
         type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
@@ -7362,6 +7394,43 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update external reference
+      tags:
+      - Offers
+  /offers/{id}/external-sync:
+    get:
+      description: |-
+        Retrieves financial data from the data warehouse for the given offer.
+        This is a read-only POC endpoint to verify data warehouse connectivity.
+        The offer must have an external_reference to be matched in the data warehouse.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Data warehouse financials
+          schema:
+            $ref: '#/definitions/domain.OfferExternalSyncResponse'
+        "400":
+          description: Invalid offer ID or offer has no external reference
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get data warehouse financials for an offer (POC)
       tags:
       - Offers
   /offers/{id}/files:
