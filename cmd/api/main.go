@@ -118,14 +118,19 @@ func run() error {
 		dwClient, err = datawarehouse.NewClient(&cfg.DataWarehouse, log)
 		if err != nil {
 			// Log error but don't fail - data warehouse is optional
-			log.Warn("Failed to connect to data warehouse, continuing without it",
+			log.Warn("Data warehouse connection failed, continuing without it",
 				zap.Error(err),
 			)
 		} else if dwClient != nil {
-			log.Info("Data warehouse connection initialized")
+			log.Info("Data warehouse connected successfully",
+				zap.Int("max_open_conns", cfg.DataWarehouse.MaxOpenConns),
+				zap.Int("query_timeout_seconds", cfg.DataWarehouse.QueryTimeout),
+			)
 		}
 	} else {
-		log.Info("Data warehouse connection disabled")
+		log.Info("Data warehouse not configured, skipping",
+			zap.Bool("enabled", cfg.DataWarehouse.Enabled),
+		)
 	}
 
 	// Initialize repositories
