@@ -310,35 +310,35 @@ func (r *CustomerRepository) GetCustomerStats(ctx context.Context, customerID uu
 	stats.ActiveDeals = int(dealsCount)
 
 	// Get active projects count (tilbud, working, or on_hold phases)
+	// Note: Projects no longer have company_id (removed in migration 00050)
+	// Projects are linked to customers which are global entities
 	var activeProjectsCount int64
-	activeProjectsQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseOnHold})
-	activeProjectsQuery = ApplyCompanyFilter(ctx, activeProjectsQuery)
-	err = activeProjectsQuery.Count(&activeProjectsCount).Error
+	err = r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ? AND phase IN (?)", customerID, []domain.ProjectPhase{domain.ProjectPhaseTilbud, domain.ProjectPhaseWorking, domain.ProjectPhaseOnHold}).
+		Count(&activeProjectsCount).Error
 	if err != nil {
 		return nil, err
 	}
 	stats.ActiveProjects = int(activeProjectsCount)
 
 	// Get total projects count (all projects for this customer)
+	// Note: Projects no longer have company_id (removed in migration 00050)
 	var totalProjectsCount int64
-	totalProjectsQuery := r.db.WithContext(ctx).Model(&domain.Project{}).
-		Where("customer_id = ?", customerID)
-	totalProjectsQuery = ApplyCompanyFilter(ctx, totalProjectsQuery)
-	err = totalProjectsQuery.Count(&totalProjectsCount).Error
+	err = r.db.WithContext(ctx).Model(&domain.Project{}).
+		Where("customer_id = ?", customerID).
+		Count(&totalProjectsCount).Error
 	if err != nil {
 		return nil, err
 	}
 	stats.TotalProjects = int(totalProjectsCount)
 
 	// Get total contacts count
-	// Note: Contacts are linked to customers which are global entities,
-	// but we filter by company_id if the contact has one
+	// Note: Contacts are linked to customers which are global entities
+	// Contacts do not have company_id - they belong to customers, not companies
 	var contactsCount int64
-	contactsQuery := r.db.WithContext(ctx).Model(&domain.Contact{}).
-		Where("primary_customer_id = ?", customerID)
-	contactsQuery = ApplyCompanyFilter(ctx, contactsQuery)
-	err = contactsQuery.Count(&contactsCount).Error
+	err = r.db.WithContext(ctx).Model(&domain.Contact{}).
+		Where("primary_customer_id = ?", customerID).
+		Count(&contactsCount).Error
 	if err != nil {
 		return nil, err
 	}
