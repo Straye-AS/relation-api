@@ -146,12 +146,12 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
 - `industri` -> `strayeindustri`
 
 **General Ledger Tables**: `dbo.nxt_<prefix>_generalledgertransaction`
-- Use `OrgUnit12` column to match against project `external_reference`
+- Use `OrgUnit2` column to match against project `external_reference`
 
 **Usage**:
 ```go
 // Get client from main.go initialization
-results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM dbo.nxt_strayetak_generalledgertransaction WHERE OrgUnit12 = @ref", externalRef)
+results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM dbo.nxt_strayetak_generalledgertransaction WHERE OrgUnit2 = @ref", externalRef)
 
 // Get table name for a company
 tableName, err := datawarehouse.GetGeneralLedgerTableName("tak")
