@@ -37,7 +37,7 @@ const (
 var CompanyMapping = map[string]string{
 	"tak":        "strayetak",
 	"stalbygg":   "strayestaal",
-	"montasje":   "strayemontage",
+	"montasje":   "strayemontasje",
 	"hybridbygg": "strayehybridbygg",
 	"industri":   "strayeindustri",
 }

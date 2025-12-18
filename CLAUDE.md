@@ -144,7 +144,7 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
 **Company Mapping** (Straye ID -> Table Prefix):
 - `tak` -> `strayetak`
 - `stalbygg` -> `strayestaal`
-- `montasje` -> `strayemontage`
+- `montasje` -> `strayemontasje`
 - `hybridbygg` -> `strayehybridbygg`
 - `industri` -> `strayeindustri`
 
