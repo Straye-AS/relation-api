@@ -25,6 +25,12 @@ const (
 
 	// Default health check timeout
 	defaultHealthCheckTimeout = 5 * time.Second
+
+	// Account number ranges for classifying general ledger entries.
+	// Income/Revenue accounts fall within the 3000-3999 range.
+	// All other account numbers are considered cost accounts.
+	IncomeAccountMin = 3000
+	IncomeAccountMax = 3999
 )
 
 // CompanyMapping maps Straye company identifiers to data warehouse table name prefixes
@@ -408,6 +414,181 @@ func GetGeneralLedgerTableName(companyID string) (string, error) {
 // IsEnabled returns true if the client is initialized and ready for queries.
 func (c *Client) IsEnabled() bool {
 	return c != nil && c.db != nil
+}
+
+// IsIncomeAccount returns true if the account number falls within the income/revenue range (3000-3999).
+func IsIncomeAccount(accountNo int) bool {
+	return accountNo >= IncomeAccountMin && accountNo <= IncomeAccountMax
+}
+
+// IsCostAccount returns true if the account number is NOT within the income/revenue range.
+// Cost accounts are any accounts outside the 3000-3999 range.
+func IsCostAccount(accountNo int) bool {
+	return !IsIncomeAccount(accountNo)
+}
+
+// ProjectFinancials represents aggregated income and costs for a project from the general ledger.
+type ProjectFinancials struct {
+	ExternalReference string  `json:"externalReference"`
+	TotalIncome       float64 `json:"totalIncome"`
+	TotalCosts        float64 `json:"totalCosts"`
+	NetResult         float64 `json:"netResult"`
+}
+
+// GetProjectIncome queries the general ledger for total income (accounts 3000-3999) for a project.
+// The project is identified by the externalRef which matches the OrgUnit2 column in the GL table.
+// Returns the sum of PostedAmountDomestic for all income accounts.
+func (c *Client) GetProjectIncome(ctx context.Context, companyID, externalRef string) (float64, error) {
+	if c == nil || c.db == nil {
+		return 0, fmt.Errorf("data warehouse client not initialized")
+	}
+
+	tableName, err := GetGeneralLedgerTableName(companyID)
+	if err != nil {
+		return 0, fmt.Errorf("get table name: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT COALESCE(SUM(PostedAmountDomestic), 0) as total_income
+		FROM %s
+		WHERE OrgUnit2 = @p1
+		  AND AccountNo >= @p2
+		  AND AccountNo <= @p3
+	`, tableName)
+
+	row, err := c.QueryRow(ctx, query, externalRef, IncomeAccountMin, IncomeAccountMax)
+	if err != nil {
+		return 0, fmt.Errorf("query project income: %w", err)
+	}
+
+	if row == nil {
+		return 0, nil
+	}
+
+	totalIncome, err := parseFloat64(row["total_income"])
+	if err != nil {
+		return 0, fmt.Errorf("parse income result: %w", err)
+	}
+
+	return totalIncome, nil
+}
+
+// GetProjectCosts queries the general ledger for total costs (accounts outside 3000-3999) for a project.
+// The project is identified by the externalRef which matches the OrgUnit2 column in the GL table.
+// Returns the sum of PostedAmountDomestic for all non-income accounts.
+func (c *Client) GetProjectCosts(ctx context.Context, companyID, externalRef string) (float64, error) {
+	if c == nil || c.db == nil {
+		return 0, fmt.Errorf("data warehouse client not initialized")
+	}
+
+	tableName, err := GetGeneralLedgerTableName(companyID)
+	if err != nil {
+		return 0, fmt.Errorf("get table name: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT COALESCE(SUM(PostedAmountDomestic), 0) as total_costs
+		FROM %s
+		WHERE OrgUnit2 = @p1
+		  AND (AccountNo < @p2 OR AccountNo > @p3)
+	`, tableName)
+
+	row, err := c.QueryRow(ctx, query, externalRef, IncomeAccountMin, IncomeAccountMax)
+	if err != nil {
+		return 0, fmt.Errorf("query project costs: %w", err)
+	}
+
+	if row == nil {
+		return 0, nil
+	}
+
+	totalCosts, err := parseFloat64(row["total_costs"])
+	if err != nil {
+		return 0, fmt.Errorf("parse costs result: %w", err)
+	}
+
+	return totalCosts, nil
+}
+
+// GetProjectFinancials queries the general ledger for both income and costs for a project.
+// Returns aggregated financials including income (3000-3999), costs (all other accounts), and net result.
+func (c *Client) GetProjectFinancials(ctx context.Context, companyID, externalRef string) (*ProjectFinancials, error) {
+	if c == nil || c.db == nil {
+		return nil, fmt.Errorf("data warehouse client not initialized")
+	}
+
+	tableName, err := GetGeneralLedgerTableName(companyID)
+	if err != nil {
+		return nil, fmt.Errorf("get table name: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			COALESCE(SUM(CASE WHEN AccountNo >= @p2 AND AccountNo <= @p3 THEN PostedAmountDomestic ELSE 0 END), 0) as total_income,
+			COALESCE(SUM(CASE WHEN AccountNo < @p2 OR AccountNo > @p3 THEN PostedAmountDomestic ELSE 0 END), 0) as total_costs
+		FROM %s
+		WHERE OrgUnit2 = @p1
+	`, tableName)
+
+	row, err := c.QueryRow(ctx, query, externalRef, IncomeAccountMin, IncomeAccountMax)
+	if err != nil {
+		return nil, fmt.Errorf("query project financials: %w", err)
+	}
+
+	if row == nil {
+		return &ProjectFinancials{
+			ExternalReference: externalRef,
+			TotalIncome:       0,
+			TotalCosts:        0,
+			NetResult:         0,
+		}, nil
+	}
+
+	totalIncome, err := parseFloat64(row["total_income"])
+	if err != nil {
+		return nil, fmt.Errorf("parse income result: %w", err)
+	}
+
+	totalCosts, err := parseFloat64(row["total_costs"])
+	if err != nil {
+		return nil, fmt.Errorf("parse costs result: %w", err)
+	}
+
+	return &ProjectFinancials{
+		ExternalReference: externalRef,
+		TotalIncome:       totalIncome,
+		TotalCosts:        totalCosts,
+		NetResult:         totalIncome - totalCosts,
+	}, nil
+}
+
+// parseFloat64 safely extracts a float64 from a database result value.
+// Handles various numeric types returned by the SQL driver.
+func parseFloat64(val interface{}) (float64, error) {
+	if val == nil {
+		return 0, nil
+	}
+
+	switch v := val.(type) {
+	case float64:
+		return v, nil
+	case float32:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case int:
+		return float64(v), nil
+	case []byte:
+		var f float64
+		_, err := fmt.Sscanf(string(v), "%f", &f)
+		return f, err
+	case string:
+		var f float64
+		_, err := fmt.Sscanf(v, "%f", &f)
+		return f, err
+	default:
+		return 0, fmt.Errorf("cannot convert %T to float64", val)
+	}
 }
 
 // truncateQuery truncates a query string for logging purposes

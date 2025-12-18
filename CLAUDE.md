@@ -147,6 +147,13 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
 
 **General Ledger Tables**: `dbo.nxt_<prefix>_generalledgertransaction`
 - Use `OrgUnit2` column to match against project `external_reference`
+- `AccountNo` column identifies the account type
+- `PostedAmountDomestic` column contains the transaction amount
+
+**Account Number Ranges**:
+- `3000-3999`: Income/Revenue accounts
+- All other accounts: Cost accounts
+- Use `IsIncomeAccount(accountNo)` and `IsCostAccount(accountNo)` helper functions
 
 **Usage**:
 ```go
@@ -156,6 +163,14 @@ results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM dbo.nxt_strayetak_gene
 // Get table name for a company
 tableName, err := datawarehouse.GetGeneralLedgerTableName("tak")
 // Returns: "dbo.nxt_strayetak_generalledgertransaction"
+
+// Query project income/costs using helper methods
+income, err := dwClient.GetProjectIncome(ctx, "tak", "PROJECT-123")
+costs, err := dwClient.GetProjectCosts(ctx, "tak", "PROJECT-123")
+
+// Or get all financials in one query
+financials, err := dwClient.GetProjectFinancials(ctx, "tak", "PROJECT-123")
+// Returns: ProjectFinancials{TotalIncome, TotalCosts, NetResult}
 ```
 
 **Health Check**: `GET /health/datawarehouse` returns status, latency, and pool stats.
