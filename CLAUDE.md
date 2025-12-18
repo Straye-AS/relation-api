@@ -132,11 +132,14 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
 - Optional connection - app starts normally without it if not configured
 - Connection pooling with retry logic for transient failures
 
-**Configuration** (via Azure Key Vault or environment):
-- `WAREHOUSE-URL` / `WAREHOUSE_URL`: Connection URL (host:port/database)
-- `WAREHOUSE-USERNAME` / `WAREHOUSE_USERNAME`: Database user
-- `WAREHOUSE-PASSWORD` / `WAREHOUSE_PASSWORD`: Database password
-- Enable via `DATAWAREHOUSE_ENABLED=true` or config
+**Configuration**:
+- Enable via `DATAWAREHOUSE_ENABLED=true` environment variable
+- Requires `AZURE_KEY_VAULT_NAME` to be configured for credential access
+- Credentials are ONLY loaded from Azure Key Vault (never from environment variables):
+  - `WAREHOUSE-URL`: Connection URL (host:port/database)
+  - `WAREHOUSE-USERNAME`: Database user
+  - `WAREHOUSE-PASSWORD`: Database password
+- Works in ANY environment (including development) when enabled and Key Vault is configured
 
 **Company Mapping** (Straye ID -> Table Prefix):
 - `tak` -> `strayetak`

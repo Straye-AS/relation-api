@@ -267,17 +267,9 @@ func Load() (*Config, error) {
 		cfg.DataWarehouse.Enabled = true
 	}
 
-	// Load data warehouse credentials from environment variables
-	// This allows the data warehouse to connect in any environment when credentials are present
-	if cfg.DataWarehouse.URL == "" {
-		cfg.DataWarehouse.URL = v.GetString("WAREHOUSE_URL")
-	}
-	if cfg.DataWarehouse.User == "" {
-		cfg.DataWarehouse.User = v.GetString("WAREHOUSE_USERNAME")
-	}
-	if cfg.DataWarehouse.Password == "" {
-		cfg.DataWarehouse.Password = v.GetString("WAREHOUSE_PASSWORD")
-	}
+	// NOTE: Data warehouse credentials are ONLY loaded from Azure Key Vault
+	// They are never loaded from environment variables for security reasons
+	// See LoadWithSecrets() for credential loading
 
 	return &cfg, nil
 }
@@ -286,9 +278,14 @@ func Load() (*Config, error) {
 // In development (or when secrets.source = "environment"), secrets come from env vars
 // In staging/production (or when secrets.source = "vault"), secrets come from Azure Key Vault
 //
-// Key Vault is only used when BOTH conditions are met:
+// Key Vault is used when BOTH conditions are met:
 // 1. USE_AZURE_KEY_VAULT environment variable is set to "true"
 // 2. Environment is "staging" or "production"
+//
+// EXCEPTION: Data warehouse credentials are ALWAYS loaded from Key Vault when:
+// - DATAWAREHOUSE_ENABLED=true AND
+// - AZURE_KEY_VAULT_NAME is configured
+// This allows data warehouse connectivity in any environment while keeping credentials secure.
 func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 	// First load basic config
 	cfg, err := Load()
@@ -296,20 +293,32 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		return nil, err
 	}
 
-	// Check if Azure Key Vault should be used
+	// Check if Azure Key Vault should be used for main secrets
 	// Requires both USE_AZURE_KEY_VAULT=true AND environment is staging/production
 	useKeyVault := strings.ToLower(os.Getenv("USE_AZURE_KEY_VAULT")) == "true"
 	isValidEnv := cfg.App.Environment == "staging" || cfg.App.Environment == "production"
 
+	// Data warehouse credentials are loaded from Key Vault regardless of environment
+	// when the feature is enabled and Key Vault is configured
+	if cfg.DataWarehouse.Enabled && cfg.Secrets.KeyVaultName != "" {
+		if err := loadDataWarehouseSecrets(ctx, cfg, logger); err != nil {
+			logger.Warn("Failed to load data warehouse secrets from Key Vault",
+				zap.Error(err),
+				zap.String("environment", cfg.App.Environment),
+			)
+			// Don't fail startup - data warehouse is optional
+		}
+	}
+
 	if !useKeyVault {
-		logger.Info("USE_AZURE_KEY_VAULT not enabled, using environment variables for secrets",
+		logger.Info("USE_AZURE_KEY_VAULT not enabled, using environment variables for main secrets",
 			zap.String("environment", cfg.App.Environment),
 		)
 		return cfg, nil
 	}
 
 	if !isValidEnv {
-		logger.Warn("USE_AZURE_KEY_VAULT is enabled but environment is not staging or production, using environment variables",
+		logger.Warn("USE_AZURE_KEY_VAULT is enabled but environment is not staging or production, using environment variables for main secrets",
 			zap.String("environment", cfg.App.Environment),
 			zap.Bool("use_key_vault", useKeyVault),
 		)
@@ -390,34 +399,55 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		cfg.Storage.CloudConnectionString = connStr
 	}
 
-	// Data warehouse secrets (optional - loaded from Key Vault with env var fallback)
-	// This allows the data warehouse to connect in any environment when credentials are present
-	if cfg.DataWarehouse.Enabled {
-		if url, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-URL", "WAREHOUSE_URL"); err == nil && url != "" {
-			cfg.DataWarehouse.URL = url
-		}
-		if user, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-USERNAME", "WAREHOUSE_USERNAME"); err == nil && user != "" {
-			cfg.DataWarehouse.User = user
-		}
-		if password, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-PASSWORD", "WAREHOUSE_PASSWORD"); err == nil && password != "" {
-			cfg.DataWarehouse.Password = password
-		}
-
-		// Log whether credentials were loaded (without exposing values)
-		hasCredentials := cfg.DataWarehouse.URL != "" && cfg.DataWarehouse.User != "" && cfg.DataWarehouse.Password != ""
-		if !hasCredentials {
-			logger.Warn("Data warehouse enabled but credentials not available",
-				zap.Bool("url_present", cfg.DataWarehouse.URL != ""),
-				zap.Bool("user_present", cfg.DataWarehouse.User != ""),
-				zap.Bool("password_present", cfg.DataWarehouse.Password != ""),
-			)
-		} else {
-			logger.Info("Data warehouse credentials loaded successfully")
-		}
-	}
+	// Note: Data warehouse secrets are already loaded earlier in LoadWithSecrets
+	// via loadDataWarehouseSecrets() regardless of environment
 
 	logger.Info("Secrets loaded from vault successfully")
 	return cfg, nil
+}
+
+// loadDataWarehouseSecrets loads data warehouse credentials from Azure Key Vault
+// This is called regardless of environment when DATAWAREHOUSE_ENABLED=true
+// Data warehouse credentials ONLY come from Key Vault, never from environment variables
+func loadDataWarehouseSecrets(ctx context.Context, cfg *Config, logger *zap.Logger) error {
+	logger.Info("Loading data warehouse secrets from Key Vault",
+		zap.String("key_vault_name", cfg.Secrets.KeyVaultName),
+		zap.String("environment", cfg.App.Environment),
+	)
+
+	// Initialize a vault-only provider for data warehouse secrets
+	provider, err := secrets.NewProvider(&secrets.ProviderConfig{
+		Source:       secrets.SourceVault,
+		VaultName:    cfg.Secrets.KeyVaultName,
+		Environment:  cfg.App.Environment,
+		CacheEnabled: cfg.Secrets.CacheEnabled,
+		CacheTTL:     time.Duration(cfg.Secrets.CacheTTL) * time.Second,
+	}, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault client for data warehouse: %w", err)
+	}
+
+	// Load credentials from Key Vault only (no env var fallback)
+	url, err := provider.GetSecret(ctx, "WAREHOUSE-URL")
+	if err != nil {
+		return fmt.Errorf("failed to get WAREHOUSE-URL from Key Vault: %w", err)
+	}
+	cfg.DataWarehouse.URL = url
+
+	user, err := provider.GetSecret(ctx, "WAREHOUSE-USERNAME")
+	if err != nil {
+		return fmt.Errorf("failed to get WAREHOUSE-USERNAME from Key Vault: %w", err)
+	}
+	cfg.DataWarehouse.User = user
+
+	password, err := provider.GetSecret(ctx, "WAREHOUSE-PASSWORD")
+	if err != nil {
+		return fmt.Errorf("failed to get WAREHOUSE-PASSWORD from Key Vault: %w", err)
+	}
+	cfg.DataWarehouse.Password = password
+
+	logger.Info("Data warehouse credentials loaded from Key Vault successfully")
+	return nil
 }
 
 func setDefaults(v *viper.Viper) {
