@@ -262,6 +262,13 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 		if err := s.offerRepo.LinkToProject(ctx, offer.ID, projectLinkRes.ProjectID); err != nil {
 			s.logger.Warn("failed to link offer to project", zap.Error(err))
 		}
+		// Sync project customer after linking new offer
+		if err := s.syncProjectCustomer(ctx, projectLinkRes.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project customer after offer creation",
+				zap.String("offerID", offer.ID.String()),
+				zap.String("projectID", projectLinkRes.ProjectID.String()),
+				zap.Error(err))
+		}
 	}
 
 	// Reload with relations
@@ -500,8 +507,21 @@ func (s *OfferService) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("failed to get offer: %w", err)
 	}
 
+	// Store project ID before deletion for customer sync
+	projectID := offer.ProjectID
+
 	if err := s.offerRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete offer: %w", err)
+	}
+
+	// Sync project customer if offer was linked to a project
+	if projectID != nil {
+		if err := s.syncProjectCustomer(ctx, *projectID); err != nil {
+			s.logger.Warn("failed to sync project customer after offer deletion",
+				zap.String("offerID", id.String()),
+				zap.String("projectID", projectID.String()),
+				zap.Error(err))
+		}
 	}
 
 	// Log activity (on customer since offer is deleted)
@@ -2581,9 +2601,11 @@ func (s *OfferService) GetNextOfferNumber(ctx context.Context, companyID domain.
 // If all offers have the same customer, the project gets that customer.
 // If offers have different customers (or no offers), the project customer is cleared.
 // This should be called whenever:
+// - An offer is created with a project link
 // - An offer is linked to a project
 // - An offer is unlinked from a project
 // - An offer's customer is changed (if it's linked to a project)
+// - An offer is deleted (if it was linked to a project)
 func (s *OfferService) syncProjectCustomer(ctx context.Context, projectID uuid.UUID) error {
 	// Get all unique customers for the project's offers
 	customers, err := s.offerRepo.GetUniqueCustomersForProject(ctx, projectID)
