@@ -13,6 +13,7 @@ import (
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
+	"github.com/straye-as/relation-api/internal/datawarehouse"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/http/middleware"
 	"github.com/straye-as/relation-api/internal/http/router"
@@ -110,6 +111,23 @@ func run() error {
 
 	log.Info("Storage initialized", zap.String("mode", cfg.Storage.Mode))
 
+	// Initialize data warehouse connection (optional - for reporting)
+	// This connection is read-only and the app continues without it if not configured
+	var dwClient *datawarehouse.Client
+	if cfg.DataWarehouse.Enabled {
+		dwClient, err = datawarehouse.NewClient(&cfg.DataWarehouse, log)
+		if err != nil {
+			// Log error but don't fail - data warehouse is optional
+			log.Warn("Failed to connect to data warehouse, continuing without it",
+				zap.Error(err),
+			)
+		} else if dwClient != nil {
+			log.Info("Data warehouse connection initialized")
+		}
+	} else {
+		log.Info("Data warehouse connection disabled")
+	}
+
 	// Initialize repositories
 	customerRepo := repository.NewCustomerRepository(db)
 	contactRepo := repository.NewContactRepository(db)
@@ -178,6 +196,7 @@ func run() error {
 		cfg,
 		log,
 		db,
+		dwClient,
 		authMiddleware,
 		companyFilterMiddleware,
 		rateLimiter,
@@ -230,6 +249,13 @@ func run() error {
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Error("Failed to shutdown gracefully", zap.Error(err))
 			return err
+		}
+
+		// Close data warehouse connection if initialized
+		if dwClient != nil {
+			if err := dwClient.Close(); err != nil {
+				log.Warn("Error closing data warehouse connection", zap.Error(err))
+			}
 		}
 
 		log.Info("Server stopped gracefully")

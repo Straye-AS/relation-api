@@ -15,17 +15,18 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	App       AppConfig
-	Database  DatabaseConfig
-	AzureAd   AzureAdConfig
-	ApiKey    ApiKeyConfig
-	Storage   StorageConfig
-	Secrets   SecretsConfig
-	Logging   LoggingConfig
-	Server    ServerConfig
-	CORS      CORSConfig
-	Security  SecurityConfig
-	RateLimit RateLimitConfig
+	App           AppConfig
+	Database      DatabaseConfig
+	DataWarehouse DataWarehouseConfig
+	AzureAd       AzureAdConfig
+	ApiKey        ApiKeyConfig
+	Storage       StorageConfig
+	Secrets       SecretsConfig
+	Logging       LoggingConfig
+	Server        ServerConfig
+	CORS          CORSConfig
+	Security      SecurityConfig
+	RateLimit     RateLimitConfig
 }
 
 type AppConfig struct {
@@ -44,6 +45,27 @@ type DatabaseConfig struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime int
+}
+
+// DataWarehouseConfig holds configuration for the MS SQL Server data warehouse
+// This connection is optional and read-only
+type DataWarehouseConfig struct {
+	// Enabled controls whether the data warehouse connection is attempted
+	Enabled bool
+	// URL is the connection URL in format host:port/database (from WAREHOUSE-URL secret)
+	URL string
+	// User is the database username (from WAREHOUSE-USERNAME secret)
+	User string
+	// Password is the database password (from WAREHOUSE-PASSWORD secret)
+	Password string
+	// MaxOpenConns is the maximum number of open connections to the database
+	MaxOpenConns int
+	// MaxIdleConns is the maximum number of connections in the idle connection pool
+	MaxIdleConns int
+	// ConnMaxLifetime is the maximum amount of time a connection may be reused (seconds)
+	ConnMaxLifetime int
+	// QueryTimeout is the default timeout for queries (seconds)
+	QueryTimeout int
 }
 
 type AzureAdConfig struct {
@@ -173,6 +195,16 @@ func (d *DatabaseConfig) ConnMaxLifetimeDuration() time.Duration {
 	return time.Duration(d.ConnMaxLifetime) * time.Second
 }
 
+// ConnMaxLifetimeDuration returns connection max lifetime as duration
+func (d *DataWarehouseConfig) ConnMaxLifetimeDuration() time.Duration {
+	return time.Duration(d.ConnMaxLifetime) * time.Second
+}
+
+// QueryTimeoutDuration returns query timeout as duration
+func (d *DataWarehouseConfig) QueryTimeoutDuration() time.Duration {
+	return time.Duration(d.QueryTimeout) * time.Second
+}
+
 // Load loads configuration from file and environment variables
 // This is a basic load that doesn't fetch secrets from vault
 // Use LoadWithSecrets for full secret resolution
@@ -228,6 +260,23 @@ func Load() (*Config, error) {
 	// Load Azure Key Vault name from environment if not in config
 	if cfg.Secrets.KeyVaultName == "" {
 		cfg.Secrets.KeyVaultName = v.GetString("AZURE_KEY_VAULT_NAME")
+	}
+
+	// Load data warehouse config from environment if enabled
+	// Check for DATAWAREHOUSE_ENABLED env var override
+	if v.GetBool("DATAWAREHOUSE_ENABLED") {
+		cfg.DataWarehouse.Enabled = true
+	}
+	if cfg.DataWarehouse.Enabled {
+		if cfg.DataWarehouse.URL == "" {
+			cfg.DataWarehouse.URL = v.GetString("WAREHOUSE_URL")
+		}
+		if cfg.DataWarehouse.User == "" {
+			cfg.DataWarehouse.User = v.GetString("WAREHOUSE_USERNAME")
+		}
+		if cfg.DataWarehouse.Password == "" {
+			cfg.DataWarehouse.Password = v.GetString("WAREHOUSE_PASSWORD")
+		}
 	}
 
 	return &cfg, nil
@@ -341,6 +390,27 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		cfg.Storage.CloudConnectionString = connStr
 	}
 
+	// Data warehouse secrets (optional - only loaded if enabled)
+	if cfg.DataWarehouse.Enabled {
+		if url, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-URL", "WAREHOUSE_URL"); err == nil && url != "" {
+			cfg.DataWarehouse.URL = url
+		}
+		if user, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-USERNAME", "WAREHOUSE_USERNAME"); err == nil && user != "" {
+			cfg.DataWarehouse.User = user
+		}
+		if password, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-PASSWORD", "WAREHOUSE_PASSWORD"); err == nil && password != "" {
+			cfg.DataWarehouse.Password = password
+		}
+
+		// Log whether credentials were loaded (without exposing values)
+		hasCredentials := cfg.DataWarehouse.URL != "" && cfg.DataWarehouse.User != "" && cfg.DataWarehouse.Password != ""
+		logger.Info("Data warehouse configuration loaded",
+			zap.Bool("has_credentials", hasCredentials),
+			zap.Bool("url_present", cfg.DataWarehouse.URL != ""),
+			zap.Bool("user_present", cfg.DataWarehouse.User != ""),
+		)
+	}
+
 	logger.Info("Secrets loaded from vault successfully")
 	return cfg, nil
 }
@@ -361,6 +431,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.maxOpenConns", 25)
 	v.SetDefault("database.maxIdleConns", 5)
 	v.SetDefault("database.connMaxLifetime", 300)
+
+	// Data warehouse defaults (MS SQL Server - optional, read-only)
+	v.SetDefault("dataWarehouse.enabled", false) // Disabled by default
+	v.SetDefault("dataWarehouse.maxOpenConns", 10)
+	v.SetDefault("dataWarehouse.maxIdleConns", 2)
+	v.SetDefault("dataWarehouse.connMaxLifetime", 300) // 5 minutes
+	v.SetDefault("dataWarehouse.queryTimeout", 30)     // 30 seconds default query timeout
 
 	// Secrets defaults
 	v.SetDefault("secrets.source", "auto")

@@ -8,6 +8,7 @@ import (
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
+	"github.com/straye-as/relation-api/internal/datawarehouse"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/http/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
@@ -21,6 +22,7 @@ type Router struct {
 	cfg                     *config.Config
 	logger                  *zap.Logger
 	db                      *gorm.DB
+	dwClient                *datawarehouse.Client
 	authMiddleware          *auth.Middleware
 	companyFilterMiddleware *middleware.CompanyFilterMiddleware
 	rateLimiter             *middleware.RateLimiter
@@ -45,6 +47,7 @@ func NewRouter(
 	cfg *config.Config,
 	logger *zap.Logger,
 	db *gorm.DB,
+	dwClient *datawarehouse.Client,
 	authMiddleware *auth.Middleware,
 	companyFilterMiddleware *middleware.CompanyFilterMiddleware,
 	rateLimiter *middleware.RateLimiter,
@@ -68,6 +71,7 @@ func NewRouter(
 		cfg:                     cfg,
 		logger:                  logger,
 		db:                      db,
+		dwClient:                dwClient,
 		authMiddleware:          authMiddleware,
 		companyFilterMiddleware: companyFilterMiddleware,
 		rateLimiter:             rateLimiter,
@@ -138,6 +142,43 @@ func (rt *Router) Setup() http.Handler {
 		})
 	})
 
+	// Data warehouse health check (optional service)
+	r.Get("/health/datawarehouse", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if rt.dwClient == nil || !rt.dwClient.IsEnabled() {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "disabled",
+				"service": "datawarehouse",
+				"message": "Data warehouse connection is not configured",
+			})
+			return
+		}
+
+		status := rt.dwClient.HealthCheck(r.Context())
+		if status.Status == "healthy" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  status.Status,
+			"service": "datawarehouse",
+			"stats": map[string]interface{}{
+				"latency_ms":           status.Latency.Milliseconds(),
+				"max_open_connections": status.MaxOpen,
+				"open_connections":     status.Open,
+				"in_use":               status.InUse,
+				"idle":                 status.Idle,
+				"wait_count":           status.WaitCount,
+				"wait_time_ms":         status.WaitTimeMs,
+			},
+			"error": status.Error,
+		})
+	})
+
 	// Combined readiness check (checks all dependencies)
 	r.Get("/health/ready", func(w http.ResponseWriter, r *http.Request) {
 		checks := make(map[string]interface{})
@@ -154,6 +195,24 @@ func (rt *Router) Setup() http.Handler {
 		} else {
 			checks["database"] = map[string]interface{}{
 				"status": "healthy",
+			}
+		}
+
+		// Check data warehouse (optional - doesn't affect overall health)
+		if rt.dwClient != nil && rt.dwClient.IsEnabled() {
+			dwStatus := rt.dwClient.HealthCheck(r.Context())
+			checks["datawarehouse"] = map[string]interface{}{
+				"status":     dwStatus.Status,
+				"latency_ms": dwStatus.Latency.Milliseconds(),
+			}
+			if dwStatus.Error != "" {
+				checks["datawarehouse"].(map[string]interface{})["error"] = dwStatus.Error
+			}
+			// Note: Data warehouse issues don't make the app unhealthy
+			// as it's an optional service for reporting only
+		} else {
+			checks["datawarehouse"] = map[string]interface{}{
+				"status": "disabled",
 			}
 		}
 

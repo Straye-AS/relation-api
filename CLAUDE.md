@@ -122,6 +122,44 @@ HTTP Request → Handler → Service → Repository → Database
 
 **File Storage**: Abstracted in `internal/storage/storage.go`. Supports local filesystem or cloud (Azure Blob, S3). Files linked to Offers via `File.OfferID`.
 
+### Data Warehouse (internal/datawarehouse/)
+
+Read-only connectivity to the MS SQL Server data warehouse for reporting and financial data integration.
+
+**Architecture**:
+- Uses `database/sql` with `github.com/microsoft/go-mssqldb` driver (not GORM)
+- Separate from the main repository layer since it's read-only
+- Optional connection - app starts normally without it if not configured
+- Connection pooling with retry logic for transient failures
+
+**Configuration** (via Azure Key Vault or environment):
+- `WAREHOUSE-URL` / `WAREHOUSE_URL`: Connection URL (host:port/database)
+- `WAREHOUSE-USERNAME` / `WAREHOUSE_USERNAME`: Database user
+- `WAREHOUSE-PASSWORD` / `WAREHOUSE_PASSWORD`: Database password
+- Enable via `DATAWAREHOUSE_ENABLED=true` or config
+
+**Company Mapping** (Straye ID -> Table Prefix):
+- `tak` -> `strayetak`
+- `stalbygg` -> `strayestaal`
+- `montasje` -> `strayemontage`
+- `hybridbygg` -> `strayehybridbygg`
+- `industri` -> `strayeindustri`
+
+**General Ledger Tables**: `dbo.nxt_<prefix>_generalledgertransaction`
+- Use `OrgUnit12` column to match against project `external_reference`
+
+**Usage**:
+```go
+// Get client from main.go initialization
+results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM dbo.nxt_strayetak_generalledgertransaction WHERE OrgUnit12 = @ref", externalRef)
+
+// Get table name for a company
+tableName, err := datawarehouse.GetGeneralLedgerTableName("tak")
+// Returns: "dbo.nxt_strayetak_generalledgertransaction"
+```
+
+**Health Check**: `GET /health/datawarehouse` returns status, latency, and pool stats.
+
 ## Configuration
 
 Hierarchy: Default values in config.go → config.json → Environment variables (highest priority)
