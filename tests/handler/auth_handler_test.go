@@ -27,6 +27,10 @@ func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*dom
 	return nil, nil
 }
 
+func (m *MockUserRepository) ListByCompanyAccess(ctx context.Context, companyFilter *domain.CompanyID) ([]domain.User, error) {
+	return []domain.User{}, nil
+}
+
 // MockPermissionService implements a mock permission service for testing
 type MockPermissionService struct {
 	permissions []domain.PermissionType

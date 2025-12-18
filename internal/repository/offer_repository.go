@@ -242,8 +242,9 @@ func (r *OfferRepository) Search(ctx context.Context, searchQuery string, limit 
 			LOWER(external_reference) LIKE ? OR
 			LOWER(customer_name) LIKE ? OR
 			LOWER(description) LIKE ? OR
-			LOWER(location) LIKE ?`,
-			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
+			LOWER(location) LIKE ? OR
+			LOWER(responsible_user_name) LIKE ?`,
+			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	query = ApplyCompanyFilter(ctx, query)
 	err := query.Order("updated_at DESC").Limit(limit).Find(&offers).Error
 	return offers, err
@@ -691,7 +692,7 @@ func (r *OfferRepository) GetDashboardPipelineStats(ctx context.Context, since *
 // GetDashboardWinRateStats returns win rate statistics for the dashboard
 // If since is nil, no date filter is applied (all time)
 // Won includes both order and completed phases
-func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since *time.Time) (*DashboardWinRateStats, error) {
+func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, fromDate, toDate *time.Time) (*DashboardWinRateStats, error) {
 	stats := &DashboardWinRateStats{}
 
 	// Get won count and value (order + completed phases)
@@ -700,8 +701,11 @@ func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since *t
 			domain.OfferPhaseOrder,
 			domain.OfferPhaseCompleted,
 		})
-	if since != nil {
-		wonQuery = wonQuery.Where("created_at >= ?", *since)
+	if fromDate != nil {
+		wonQuery = wonQuery.Where("created_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		wonQuery = wonQuery.Where("created_at <= ?", *toDate)
 	}
 	wonQuery = ApplyCompanyFilter(ctx, wonQuery)
 
@@ -718,8 +722,11 @@ func (r *OfferRepository) GetDashboardWinRateStats(ctx context.Context, since *t
 	// Get lost count and value
 	lostQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
 		Where("phase = ?", domain.OfferPhaseLost)
-	if since != nil {
-		lostQuery = lostQuery.Where("created_at >= ?", *since)
+	if fromDate != nil {
+		lostQuery = lostQuery.Where("created_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		lostQuery = lostQuery.Where("created_at <= ?", *toDate)
 	}
 	lostQuery = ApplyCompanyFilter(ctx, lostQuery)
 
@@ -1275,11 +1282,11 @@ type AggregatedPipelineStats struct {
 // This solves the double-counting problem by using MAX(value) per project per phase
 // If since is nil, no date filter is applied (queries the pre-computed view)
 // Note: The view only includes valid phases (excludes draft and expired)
-func (r *OfferRepository) GetAggregatedPipelineStats(ctx context.Context, since *time.Time) ([]AggregatedPipelineStats, error) {
+func (r *OfferRepository) GetAggregatedPipelineStats(ctx context.Context, fromDate, toDate *time.Time) ([]AggregatedPipelineStats, error) {
 	// If we have a date filter, we need to fall back to raw query
 	// because the view doesn't have date-based aggregation
-	if since != nil {
-		return r.getAggregatedPipelineStatsWithDateFilter(ctx, since)
+	if fromDate != nil || toDate != nil {
+		return r.getAggregatedPipelineStatsWithDateFilter(ctx, fromDate, toDate)
 	}
 
 	// Query the pre-computed view
@@ -1318,7 +1325,7 @@ func (r *OfferRepository) GetAggregatedPipelineStats(ctx context.Context, since 
 
 // getAggregatedPipelineStatsWithDateFilter computes aggregated stats with a date filter
 // This is needed because the view doesn't support date filtering
-func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.Context, since *time.Time) ([]AggregatedPipelineStats, error) {
+func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.Context, fromDate, toDate *time.Time) ([]AggregatedPipelineStats, error) {
 	// Valid phases (excludes draft and expired)
 	validPhases := []domain.OfferPhase{
 		domain.OfferPhaseInProgress,
@@ -1339,11 +1346,42 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 	// Apply company filter
 	companyID := auth.GetEffectiveCompanyFilter(ctx)
 
+	// Build date filter conditions
+	dateConditions := []string{}
+	dateArgs := []interface{}{}
+	argIndex := 1
+
+	if fromDate != nil {
+		dateConditions = append(dateConditions, fmt.Sprintf("o.created_at >= $%d", argIndex))
+		dateArgs = append(dateArgs, *fromDate)
+		argIndex++
+	}
+	if toDate != nil {
+		dateConditions = append(dateConditions, fmt.Sprintf("o.created_at <= $%d", argIndex))
+		dateArgs = append(dateArgs, *toDate)
+		argIndex++
+	}
+
+	dateFilter := "TRUE"
+	if len(dateConditions) > 0 {
+		dateFilter = strings.Join(dateConditions, " AND ")
+	}
+
+	// Build inner date filter for subqueries (same conditions but for o2/o3)
+	innerDateFilter := strings.ReplaceAll(dateFilter, "o.", "o2.")
+	innerDateFilter3 := strings.ReplaceAll(dateFilter, "o.", "o3.")
+
 	var results []aggregatedResult
 	var query *gorm.DB
 
+	// Phase placeholders start after date args
+	phaseStartIdx := argIndex
+	allArgs := append(dateArgs, validPhases[0], validPhases[1], validPhases[2], validPhases[3], validPhases[4])
+
 	if companyID != nil {
-		query = r.db.WithContext(ctx).Raw(`
+		companyIdx := phaseStartIdx + 5
+		allArgs = append(allArgs, *companyID)
+		query = r.db.WithContext(ctx).Raw(fmt.Sprintf(`
 			WITH
 			project_best_offers AS (
 				SELECT
@@ -1357,16 +1395,16 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 						WHERE o2.project_id = o.project_id
 						  AND o2.phase = o.phase
 						  AND o2.company_id = o.company_id
-						  AND o2.value = (SELECT MAX(o3.value) FROM offers o3 WHERE o3.project_id = o.project_id AND o3.phase = o.phase AND o3.company_id = o.company_id AND o3.created_at >= $1)
-						  AND o2.created_at >= $1
+						  AND o2.value = (SELECT MAX(o3.value) FROM offers o3 WHERE o3.project_id = o.project_id AND o3.phase = o.phase AND o3.company_id = o.company_id AND %s)
+						  AND %s
 						LIMIT 1
 					) AS best_probability,
 					COUNT(*) AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NOT NULL
-				  AND o.phase IN ($2, $3, $4, $5, $6)
-				  AND o.created_at >= $1
-				  AND o.company_id = $7
+				  AND o.phase IN ($%d, $%d, $%d, $%d, $%d)
+				  AND %s
+				  AND o.company_id = $%d
 				GROUP BY o.company_id, o.phase, o.project_id
 			),
 			orphan_offers AS (
@@ -1378,9 +1416,9 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 					1 AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NULL
-				  AND o.phase IN ($2, $3, $4, $5, $6)
-				  AND o.created_at >= $1
-				  AND o.company_id = $7
+				  AND o.phase IN ($%d, $%d, $%d, $%d, $%d)
+				  AND %s
+				  AND o.company_id = $%d
 			),
 			combined_metrics AS (
 				SELECT
@@ -1413,9 +1451,11 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 				COALESCE(SUM(value * COALESCE(probability, 0) / 100.0), 0) AS weighted_value
 			FROM combined_metrics
 			GROUP BY phase
-		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3], validPhases[4], *companyID)
+		`, innerDateFilter3, innerDateFilter,
+			phaseStartIdx, phaseStartIdx+1, phaseStartIdx+2, phaseStartIdx+3, phaseStartIdx+4, dateFilter, companyIdx,
+			phaseStartIdx, phaseStartIdx+1, phaseStartIdx+2, phaseStartIdx+3, phaseStartIdx+4, dateFilter, companyIdx), allArgs...)
 	} else {
-		query = r.db.WithContext(ctx).Raw(`
+		query = r.db.WithContext(ctx).Raw(fmt.Sprintf(`
 			WITH
 			project_best_offers AS (
 				SELECT
@@ -1429,15 +1469,15 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 						WHERE o2.project_id = o.project_id
 						  AND o2.phase = o.phase
 						  AND o2.company_id = o.company_id
-						  AND o2.value = (SELECT MAX(o3.value) FROM offers o3 WHERE o3.project_id = o.project_id AND o3.phase = o.phase AND o3.company_id = o.company_id AND o3.created_at >= $1)
-						  AND o2.created_at >= $1
+						  AND o2.value = (SELECT MAX(o3.value) FROM offers o3 WHERE o3.project_id = o.project_id AND o3.phase = o.phase AND o3.company_id = o.company_id AND %s)
+						  AND %s
 						LIMIT 1
 					) AS best_probability,
 					COUNT(*) AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NOT NULL
-				  AND o.phase IN ($2, $3, $4, $5, $6)
-				  AND o.created_at >= $1
+				  AND o.phase IN ($%d, $%d, $%d, $%d, $%d)
+				  AND %s
 				GROUP BY o.company_id, o.phase, o.project_id
 			),
 			orphan_offers AS (
@@ -1449,8 +1489,8 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 					1 AS offer_count
 				FROM offers o
 				WHERE o.project_id IS NULL
-				  AND o.phase IN ($2, $3, $4, $5, $6)
-				  AND o.created_at >= $1
+				  AND o.phase IN ($%d, $%d, $%d, $%d, $%d)
+				  AND %s
 			),
 			combined_metrics AS (
 				SELECT
@@ -1483,7 +1523,9 @@ func (r *OfferRepository) getAggregatedPipelineStatsWithDateFilter(ctx context.C
 				COALESCE(SUM(value * COALESCE(probability, 0) / 100.0), 0) AS weighted_value
 			FROM combined_metrics
 			GROUP BY phase
-		`, since, validPhases[0], validPhases[1], validPhases[2], validPhases[3], validPhases[4])
+		`, innerDateFilter3, innerDateFilter,
+			phaseStartIdx, phaseStartIdx+1, phaseStartIdx+2, phaseStartIdx+3, phaseStartIdx+4, dateFilter,
+			phaseStartIdx, phaseStartIdx+1, phaseStartIdx+2, phaseStartIdx+3, phaseStartIdx+4, dateFilter), allArgs...)
 	}
 
 	if err := query.Scan(&results).Error; err != nil {
@@ -1516,11 +1558,11 @@ type AggregatedOfferStats struct {
 
 // GetAggregatedOfferStats returns offer statistics using aggregation logic
 // This avoids double-counting by using MAX(value) per project
-func (r *OfferRepository) GetAggregatedOfferStats(ctx context.Context, since *time.Time) (*AggregatedOfferStats, error) {
+func (r *OfferRepository) GetAggregatedOfferStats(ctx context.Context, fromDate, toDate *time.Time) (*AggregatedOfferStats, error) {
 	stats := &AggregatedOfferStats{}
 
 	// Get aggregated pipeline stats
-	pipelineStats, err := r.GetAggregatedPipelineStats(ctx, since)
+	pipelineStats, err := r.GetAggregatedPipelineStats(ctx, fromDate, toDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get aggregated pipeline stats: %w", err)
 	}
@@ -1545,8 +1587,11 @@ func (r *OfferRepository) GetAggregatedOfferStats(ctx context.Context, since *ti
 	}
 	avgProbQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).
 		Where("phase IN ?", activePhases)
-	if since != nil {
-		avgProbQuery = avgProbQuery.Where("created_at >= ?", *since)
+	if fromDate != nil {
+		avgProbQuery = avgProbQuery.Where("created_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		avgProbQuery = avgProbQuery.Where("created_at <= ?", *toDate)
 	}
 	avgProbQuery = ApplyCompanyFilter(ctx, avgProbQuery)
 	if err := avgProbQuery.Select("COALESCE(AVG(probability), 0)").Scan(&stats.AverageProbability).Error; err != nil {
@@ -1734,7 +1779,7 @@ type OrderStats struct {
 }
 
 // GetOrderStats returns statistics for offers in order/completed phases
-func (r *OfferRepository) GetOrderStats(ctx context.Context, companyID *domain.CompanyID) (*OrderStats, error) {
+func (r *OfferRepository) GetOrderStats(ctx context.Context, companyID *domain.CompanyID, fromDate, toDate *time.Time) (*OrderStats, error) {
 	stats := &OrderStats{
 		ByHealth: make(map[domain.OfferHealth]int),
 	}
@@ -1745,6 +1790,13 @@ func (r *OfferRepository) GetOrderStats(ctx context.Context, companyID *domain.C
 		baseQuery = baseQuery.Where("company_id = ?", *companyID)
 	} else {
 		baseQuery = ApplyCompanyFilter(ctx, baseQuery)
+	}
+	// Apply date filters
+	if fromDate != nil {
+		baseQuery = baseQuery.Where("created_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		baseQuery = baseQuery.Where("created_at <= ?", *toDate)
 	}
 
 	// Count offers in order phase
@@ -1787,7 +1839,7 @@ func (r *OfferRepository) GetOrderStats(ctx context.Context, companyID *domain.C
 	stats.AvgCompletion = aggregates.AvgCompletion
 
 	// Count by health status
-	healthCounts, err := r.CountByHealthStatus(ctx, companyID)
+	healthCounts, err := r.CountByHealthStatus(ctx, companyID, fromDate, toDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count by health: %w", err)
 	}
@@ -1798,7 +1850,7 @@ func (r *OfferRepository) GetOrderStats(ctx context.Context, companyID *domain.C
 
 // CountByHealthStatus returns count of offers grouped by health status
 // Only counts offers in order phase (active execution)
-func (r *OfferRepository) CountByHealthStatus(ctx context.Context, companyID *domain.CompanyID) (map[domain.OfferHealth]int, error) {
+func (r *OfferRepository) CountByHealthStatus(ctx context.Context, companyID *domain.CompanyID, fromDate, toDate *time.Time) (map[domain.OfferHealth]int, error) {
 	type healthCount struct {
 		Health domain.OfferHealth
 		Count  int
@@ -1817,6 +1869,13 @@ func (r *OfferRepository) CountByHealthStatus(ctx context.Context, companyID *do
 		query = query.Where("company_id = ?", *companyID)
 	} else {
 		query = ApplyCompanyFilter(ctx, query)
+	}
+	// Apply date filters
+	if fromDate != nil {
+		query = query.Where("created_at >= ?", *fromDate)
+	}
+	if toDate != nil {
+		query = query.Where("created_at <= ?", *toDate)
 	}
 
 	if err := query.Scan(&results).Error; err != nil {

@@ -95,3 +95,25 @@ func (r *UserRepository) Upsert(ctx context.Context, user *domain.User) error {
 
 	return r.db.WithContext(ctx).Model(&domain.User{}).Where("id = ?", existing.ID).Updates(updates).Error
 }
+
+// ListByCompanyAccess returns users that the requesting user has access to see.
+// Super admins and gruppen users can see all active users.
+// Regular users can only see active users from their own company.
+func (r *UserRepository) ListByCompanyAccess(ctx context.Context, companyFilter *domain.CompanyID) ([]domain.User, error) {
+	var users []domain.User
+
+	query := r.db.WithContext(ctx).Where("is_active = ?", true)
+
+	// If a company filter is provided, only return users from that company
+	if companyFilter != nil {
+		query = query.Where("company_id = ?", *companyFilter)
+	}
+
+	// Order by display name for consistent ordering
+	err := query.Order("name ASC").Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}

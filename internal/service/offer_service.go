@@ -24,6 +24,7 @@ type OfferService struct {
 	budgetItemRepo   *repository.BudgetItemRepository
 	fileRepo         *repository.FileRepository
 	activityRepo     *repository.ActivityRepository
+	userRepo         *repository.UserRepository
 	companyService   *CompanyService
 	numberSeqService *NumberSequenceService
 	logger           *zap.Logger
@@ -38,6 +39,7 @@ func NewOfferService(
 	budgetItemRepo *repository.BudgetItemRepository,
 	fileRepo *repository.FileRepository,
 	activityRepo *repository.ActivityRepository,
+	userRepo *repository.UserRepository,
 	companyService *CompanyService,
 	numberSeqService *NumberSequenceService,
 	logger *zap.Logger,
@@ -51,6 +53,7 @@ func NewOfferService(
 		budgetItemRepo:   budgetItemRepo,
 		fileRepo:         fileRepo,
 		activityRepo:     activityRepo,
+		userRepo:         userRepo,
 		companyService:   companyService,
 		numberSeqService: numberSeqService,
 		logger:           logger,
@@ -606,7 +609,7 @@ func (s *OfferService) SendOffer(ctx context.Context, id uuid.UUID) (*domain.Off
 
 	// Log activity
 	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud sendt",
-		fmt.Sprintf("Tilbudet '%s' ble sendt til kunde (fase: %s -> sendt)", offer.Title, oldPhase))
+		fmt.Sprintf("Tilbudet '%s' ble sendt til kunde (fase: %s -> %s)", offer.Title, oldPhase, offer.Phase))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1101,6 +1104,49 @@ func (s *OfferService) ExpireOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	// Log activity
 	activityBody := fmt.Sprintf("Tilbudet '%s' ble markert som utløpt (fase: %s -> utløpt)", offer.Title, oldPhase)
 	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud utløpt", activityBody)
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// ReopenOffer transitions a completed offer back to order phase
+// This allows additional work to be done on a completed order.
+func (s *OfferService) ReopenOffer(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Can only reopen completed offers
+	if offer.Phase != domain.OfferPhaseCompleted {
+		return nil, fmt.Errorf("can only reopen completed offers (current phase: %s)", offer.Phase)
+	}
+
+	oldPhase := offer.Phase
+	offer.Phase = domain.OfferPhaseOrder
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offer.UpdatedByID = userCtx.UserID.String()
+		offer.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.Update(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to update offer: %w", err)
+	}
+
+	// Reload with relations
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after reopen", zap.Error(err))
+	}
+
+	// Log activity
+	s.logActivity(ctx, offer.ID, offer.Title, "Ordre gjenåpnet",
+		fmt.Sprintf("Ordren '%s' ble gjenåpnet fra %s til order", offer.Title, oldPhase))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1852,7 +1898,8 @@ func (s *OfferService) UpdateTitle(ctx context.Context, id uuid.UUID, title stri
 	return &dto, nil
 }
 
-// UpdateResponsible updates only the responsible user field of an offer
+// UpdateResponsible updates only the responsible user field of an offer.
+// Responsible user can be edited regardless of offer phase.
 func (s *OfferService) UpdateResponsible(ctx context.Context, id uuid.UUID, responsibleUserID string) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -1862,15 +1909,27 @@ func (s *OfferService) UpdateResponsible(ctx context.Context, id uuid.UUID, resp
 		return nil, fmt.Errorf("failed to get offer: %w", err)
 	}
 
-	if s.isClosedPhase(offer.Phase) {
-		return nil, ErrOfferAlreadyClosed
-	}
+	oldResponsibleName := offer.ResponsibleUserName
 
-	oldResponsible := offer.ResponsibleUserID
+	// Look up the user to get their display name
+	var responsibleUserName string
+	if responsibleUserID != "" {
+		user, err := s.userRepo.GetByStringID(ctx, responsibleUserID)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("failed to look up user: %w", err)
+			}
+			// User not found in database, use ID as fallback
+			responsibleUserName = responsibleUserID
+		} else {
+			responsibleUserName = user.DisplayName
+		}
+	}
 
 	// Build updates including user tracking fields
 	updates := map[string]interface{}{
-		"responsible_user_id": responsibleUserID,
+		"responsible_user_id":   responsibleUserID,
+		"responsible_user_name": responsibleUserName,
 	}
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		updates["updated_by_id"] = userCtx.UserID.String()
@@ -1887,7 +1946,7 @@ func (s *OfferService) UpdateResponsible(ctx context.Context, id uuid.UUID, resp
 	}
 
 	s.logActivity(ctx, id, offer.Title, "Tilbudsansvarlig oppdatert",
-		fmt.Sprintf("Ansvarlig endret fra '%s' til '%s'", oldResponsible, responsibleUserID))
+		fmt.Sprintf("Ansvarlig endret fra '%s' til '%s'", oldResponsibleName, responsibleUserName))
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2140,18 +2199,15 @@ func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, e
 	return &dto, nil
 }
 
-// UpdateDescription updates only the description field of an offer
+// UpdateDescription updates only the description field of an offer.
+// Description can be edited regardless of offer phase.
 func (s *OfferService) UpdateDescription(ctx context.Context, id uuid.UUID, description string) (*domain.OfferDTO, error) {
-	offer, err := s.offerRepo.GetByID(ctx, id)
+	_, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOfferNotFound
 		}
 		return nil, fmt.Errorf("failed to get offer: %w", err)
-	}
-
-	if s.isClosedPhase(offer.Phase) {
-		return nil, ErrOfferAlreadyClosed
 	}
 
 	// Build updates including user tracking fields
@@ -2167,12 +2223,50 @@ func (s *OfferService) UpdateDescription(ctx context.Context, id uuid.UUID, desc
 	}
 
 	// Reload and return
-	offer, err = s.offerRepo.GetByID(ctx, id)
+	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
 	s.logActivity(ctx, id, offer.Title, "Tilbudsbeskrivelse oppdatert", "Beskrivelsen ble oppdatert")
+
+	dto := mapper.ToOfferDTO(offer)
+	return &dto, nil
+}
+
+// UpdateNotes updates only the notes field of an offer
+func (s *OfferService) UpdateNotes(ctx context.Context, id uuid.UUID, notes string) (*domain.OfferDTO, error) {
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if s.isClosedPhase(offer.Phase) {
+		return nil, ErrOfferAlreadyClosed
+	}
+
+	// Build updates including user tracking fields
+	updates := map[string]interface{}{
+		"notes": notes,
+	}
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		updates["updated_by_id"] = userCtx.UserID.String()
+		updates["updated_by_name"] = userCtx.DisplayName
+	}
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update notes: %w", err)
+	}
+
+	// Reload and return
+	offer, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload offer: %w", err)
+	}
+
+	s.logActivity(ctx, id, offer.Title, "Tilbudsnotater oppdatert", "Notatene ble oppdatert")
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil

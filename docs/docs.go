@@ -7128,6 +7128,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/notes": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates only the notes field of an offer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer notes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Notes data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferNotesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or offer closed",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/offer-number": {
             "put": {
                 "security": [
@@ -7491,6 +7558,61 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid offer ID, request body, or offer not in sent phase",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/reopen": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Transitions an offer from completed phase back to order phase. Allows additional work on a finished order.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Reopen a completed offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reopened offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID or offer not in completed phase",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -8921,7 +9043,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of users (currently only returns the authenticated user)",
+                "description": "Returns a list of active users. Super admins and gruppen users see all users. Regular users see only users from their company.",
                 "produces": [
                     "application/json"
                 ],
@@ -8937,6 +9059,12 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/domain.UserDTO"
                             }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
                         }
                     }
                 }
@@ -10727,7 +10855,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "pipeline": {
-                    "description": "Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)\nUses aggregation: for projects with multiple offers, only the highest value per phase is counted",
+                    "description": "Pipeline Data (phases: in_progress, sent, order, lost - excludes draft and expired)\nUses aggregation: for projects with multiple offers, only the highest value per phase is counted",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.PipelinePhaseData"
@@ -12648,6 +12776,15 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferNotesRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "type": "string",
+                    "maxLength": 10000
+                }
+            }
+        },
         "domain.UpdateOfferNumberRequest": {
             "type": "object",
             "required": [
@@ -12838,7 +12975,7 @@ const docTemplate = `{
                     "enum": [
                         "tilbud",
                         "working",
-                        "active",
+                        "on_hold",
                         "completed",
                         "cancelled"
                     ],

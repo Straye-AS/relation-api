@@ -42,6 +42,8 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 	companyService := service.NewCompanyService(logger)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
+	userRepo := repository.NewUserRepository(db)
+
 	offerService := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
@@ -50,6 +52,7 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 		budgetItemRepo,
 		fileRepo,
 		activityRepo,
+		userRepo,
 		companyService,
 		numberSequenceService,
 		logger,

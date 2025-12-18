@@ -1364,6 +1364,11 @@ type UpdateOfferDescriptionRequest struct {
 	Description string `json:"description" validate:"max=10000"`
 }
 
+// UpdateOfferNotesRequest for updating offer notes
+type UpdateOfferNotesRequest struct {
+	Notes string `json:"notes" validate:"max=10000"`
+}
+
 // UpdateOfferProjectRequest for linking offer to a project
 type UpdateOfferProjectRequest struct {
 	ProjectID uuid.UUID `json:"projectId" validate:"required"`
