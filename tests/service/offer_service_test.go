@@ -76,6 +76,7 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 		budgetItemRepo,
 		fileRepo,
 		activityRepo,
+		userRepo,
 		companyService,
 		numberSequenceService,
 		log,

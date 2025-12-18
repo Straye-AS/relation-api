@@ -302,6 +302,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/spent", rt.offerHandler.UpdateOfferSpent)       // Update spent amount
 				r.Put("/{id}/invoiced", rt.offerHandler.UpdateOfferInvoiced) // Update invoiced amount
 				r.Post("/{id}/complete", rt.offerHandler.CompleteOffer)      // Transition to completed phase
+				r.Post("/{id}/reopen", rt.offerHandler.ReopenOffer)          // Reopen completed offer back to order
 
 				// Individual property update endpoints
 				r.Put("/{id}/probability", rt.offerHandler.UpdateProbability)
@@ -313,6 +314,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/due-date", rt.offerHandler.UpdateDueDate)
 				r.Put("/{id}/expiration-date", rt.offerHandler.UpdateExpirationDate)
 				r.Put("/{id}/description", rt.offerHandler.UpdateDescription)
+				r.Put("/{id}/notes", rt.offerHandler.UpdateNotes)
 				r.Put("/{id}/project", rt.offerHandler.LinkToProject)
 				r.Delete("/{id}/project", rt.offerHandler.UnlinkFromProject)
 				r.Put("/{id}/customer-has-won-project", rt.offerHandler.UpdateCustomerHasWonProject)

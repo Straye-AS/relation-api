@@ -42,6 +42,8 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
 
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, logger)
+	userRepo := repository.NewUserRepository(db)
+
 	offerService := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
@@ -50,6 +52,7 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 		budgetItemRepo,
 		fileRepo,
 		activityRepo,
+		userRepo,
 		companyService,
 		numberSequenceService,
 		logger,

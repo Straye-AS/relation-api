@@ -1210,7 +1210,7 @@ definitions:
         type: number
       pipeline:
         description: |-
-          Pipeline Data (phases: in_progress, sent, won, lost - excludes draft and expired)
+          Pipeline Data (phases: in_progress, sent, order, lost - excludes draft and expired)
           Uses aggregation: for projects with multiple offers, only the highest value per phase is counted
         items:
           $ref: '#/definitions/domain.PipelinePhaseData'
@@ -2537,6 +2537,12 @@ definitions:
         minimum: 0
         type: number
     type: object
+  domain.UpdateOfferNotesRequest:
+    properties:
+      notes:
+        maxLength: 10000
+        type: string
+    type: object
   domain.UpdateOfferNumberRequest:
     properties:
       offerNumber:
@@ -2668,7 +2674,7 @@ definitions:
         enum:
         - tilbud
         - working
-        - active
+        - on_hold
         - completed
         - cancelled
     required:
@@ -7520,6 +7526,48 @@ paths:
       summary: Add offer item
       tags:
       - Offers
+  /offers/{id}/notes:
+    put:
+      consumes:
+      - application/json
+      description: Updates only the notes field of an offer
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Notes data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferNotesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer notes
+      tags:
+      - Offers
   /offers/{id}/offer-number:
     put:
       consumes:
@@ -7759,6 +7807,41 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Reject offer
+      tags:
+      - Offers
+  /offers/{id}/reopen:
+    post:
+      description: Transitions an offer from completed phase back to order phase.
+        Allows additional work on a finished order.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reopened offer
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid offer ID or offer not in completed phase
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Reopen a completed offer
       tags:
       - Offers
   /offers/{id}/responsible:
@@ -8694,8 +8777,8 @@ paths:
       - Search
   /users:
     get:
-      description: Returns a list of users (currently only returns the authenticated
-        user)
+      description: Returns a list of active users. Super admins and gruppen users
+        see all users. Regular users see only users from their company.
       produces:
       - application/json
       responses:
@@ -8705,6 +8788,10 @@ paths:
             items:
               $ref: '#/definitions/domain.UserDTO'
             type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []

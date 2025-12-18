@@ -93,7 +93,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 
 	// Get aggregated offer statistics (using aggregation to avoid double-counting)
 	// This replaces the old GetDashboardOfferStats method
-	aggregatedStats, err := s.offerRepo.GetAggregatedOfferStats(ctx, since)
+	aggregatedStats, err := s.offerRepo.GetAggregatedOfferStats(ctx, fromDate, toDate)
 	if err != nil {
 		s.logger.Warn("failed to get aggregated offer stats", zap.Error(err))
 	} else {
@@ -106,7 +106,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 
 	// Get aggregated pipeline statistics by phase (using aggregation to avoid double-counting)
 	// This replaces the old GetDashboardPipelineStats method
-	aggregatedPipelineStats, err := s.offerRepo.GetAggregatedPipelineStats(ctx, since)
+	aggregatedPipelineStats, err := s.offerRepo.GetAggregatedPipelineStats(ctx, fromDate, toDate)
 	if err != nil {
 		s.logger.Warn("failed to get aggregated pipeline stats", zap.Error(err))
 	} else {
@@ -122,7 +122,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 	}
 
 	// Get win rate statistics
-	winRateStats, err := s.offerRepo.GetDashboardWinRateStats(ctx, since)
+	winRateStats, err := s.offerRepo.GetDashboardWinRateStats(ctx, fromDate, toDate)
 	if err != nil {
 		s.logger.Warn("failed to get dashboard win rate stats", zap.Error(err))
 	} else {
@@ -138,7 +138,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 
 	// Order Metrics (from offers in order/completed phases)
 	// Economic tracking has moved from projects to offers
-	orderStats, err := s.offerRepo.GetOrderStats(ctx, nil)
+	orderStats, err := s.offerRepo.GetOrderStats(ctx, nil, fromDate, toDate)
 	if err != nil {
 		s.logger.Warn("failed to get order stats", zap.Error(err))
 	} else {

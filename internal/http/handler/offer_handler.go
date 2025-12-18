@@ -1110,6 +1110,49 @@ func (h *OfferHandler) UpdateDescription(w http.ResponseWriter, r *http.Request)
 	respondJSON(w, http.StatusOK, offer)
 }
 
+// UpdateNotes godoc
+// @Summary Update offer notes
+// @Description Updates only the notes field of an offer
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.UpdateOfferNotesRequest true "Notes data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID or offer closed"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/notes [put]
+func (h *OfferHandler) UpdateNotes(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferNotesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	offer, err := h.offerService.UpdateNotes(r.Context(), id, req.Notes)
+	if err != nil {
+		h.logger.Error("failed to update offer notes", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
 // LinkToProject godoc
 // @Summary Link offer to project
 // @Description Links an offer to an existing project
@@ -1508,6 +1551,36 @@ func (h *OfferHandler) CompleteOffer(w http.ResponseWriter, r *http.Request) {
 	offer, err := h.offerService.CompleteOffer(r.Context(), id)
 	if err != nil {
 		h.logger.Error("failed to complete offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// ReopenOffer godoc
+// @Summary Reopen a completed offer
+// @Description Transitions an offer from completed phase back to order phase. Allows additional work on a finished order.
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferDTO "Reopened offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or offer not in completed phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/reopen [post]
+func (h *OfferHandler) ReopenOffer(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	offer, err := h.offerService.ReopenOffer(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to reopen offer", zap.Error(err), zap.String("offer_id", id.String()))
 		h.handleOfferError(w, err)
 		return
 	}

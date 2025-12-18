@@ -18,6 +18,7 @@ import (
 type UserRepository interface {
 	Upsert(ctx context.Context, user *domain.User) error
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
+	ListByCompanyAccess(ctx context.Context, companyFilter *domain.CompanyID) ([]domain.User, error)
 }
 
 // PermissionServiceInterface for dependency injection
@@ -258,22 +259,39 @@ func (h *AuthHandler) Permissions(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers godoc
 // @Summary List users
-// @Description Returns a list of users (currently only returns the authenticated user)
+// @Description Returns a list of active users. Super admins and gruppen users see all users. Regular users see only users from their company.
 // @Tags Users
 // @Produce json
 // @Success 200 {array} domain.UserDTO
+// @Failure 500 {object} domain.ErrorResponse
 // @Security BearerAuth
 // @Security ApiKeyAuth
 // @Router /users [get]
 func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	userCtx := auth.MustFromContext(r.Context())
 
-	dto := []domain.UserDTO{{
-		ID:    userCtx.UserID.String(),
-		Name:  userCtx.DisplayName,
-		Email: userCtx.Email,
-		Roles: userCtx.RolesAsStrings(),
-	}}
+	// Get company filter based on user's access level
+	companyFilter := userCtx.GetCompanyFilter()
 
-	respondJSON(w, http.StatusOK, dto)
+	users, err := h.userRepo.ListByCompanyAccess(r.Context(), companyFilter)
+	if err != nil {
+		h.logger.Error("failed to list users", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "Failed to retrieve users")
+		return
+	}
+
+	// Convert to DTOs
+	dtos := make([]domain.UserDTO, 0, len(users))
+	for _, user := range users {
+		dtos = append(dtos, domain.UserDTO{
+			ID:         user.ID,
+			Name:       user.DisplayName,
+			Email:      user.Email,
+			Roles:      user.Roles,
+			Department: user.Department,
+			Avatar:     user.Avatar,
+		})
+	}
+
+	respondJSON(w, http.StatusOK, dtos)
 }
