@@ -263,10 +263,20 @@ func Load() (*Config, error) {
 	}
 
 	// Check for DATAWAREHOUSE_ENABLED env var override
-	// Note: Warehouse credentials (URL, username, password) are only available via Key Vault,
-	// not environment variables. The connection will only work when Key Vault is enabled.
 	if v.GetBool("DATAWAREHOUSE_ENABLED") {
 		cfg.DataWarehouse.Enabled = true
+	}
+
+	// Load data warehouse credentials from environment variables
+	// This allows the data warehouse to connect in any environment when credentials are present
+	if cfg.DataWarehouse.URL == "" {
+		cfg.DataWarehouse.URL = v.GetString("WAREHOUSE_URL")
+	}
+	if cfg.DataWarehouse.User == "" {
+		cfg.DataWarehouse.User = v.GetString("WAREHOUSE_USERNAME")
+	}
+	if cfg.DataWarehouse.Password == "" {
+		cfg.DataWarehouse.Password = v.GetString("WAREHOUSE_PASSWORD")
 	}
 
 	return &cfg, nil
@@ -380,29 +390,29 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		cfg.Storage.CloudConnectionString = connStr
 	}
 
-	// Data warehouse secrets (optional - only loaded from Key Vault, no env var fallback)
-	// These credentials only exist in Azure Key Vault, not as environment variables
+	// Data warehouse secrets (optional - loaded from Key Vault with env var fallback)
+	// This allows the data warehouse to connect in any environment when credentials are present
 	if cfg.DataWarehouse.Enabled {
-		if url, err := provider.GetSecret(ctx, "WAREHOUSE-URL"); err == nil && url != "" {
+		if url, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-URL", "WAREHOUSE_URL"); err == nil && url != "" {
 			cfg.DataWarehouse.URL = url
 		}
-		if user, err := provider.GetSecret(ctx, "WAREHOUSE-USERNAME"); err == nil && user != "" {
+		if user, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-USERNAME", "WAREHOUSE_USERNAME"); err == nil && user != "" {
 			cfg.DataWarehouse.User = user
 		}
-		if password, err := provider.GetSecret(ctx, "WAREHOUSE-PASSWORD"); err == nil && password != "" {
+		if password, err := provider.GetSecretOrEnv(ctx, "WAREHOUSE-PASSWORD", "WAREHOUSE_PASSWORD"); err == nil && password != "" {
 			cfg.DataWarehouse.Password = password
 		}
 
 		// Log whether credentials were loaded (without exposing values)
 		hasCredentials := cfg.DataWarehouse.URL != "" && cfg.DataWarehouse.User != "" && cfg.DataWarehouse.Password != ""
 		if !hasCredentials {
-			logger.Warn("Data warehouse enabled but credentials not available in Key Vault",
+			logger.Warn("Data warehouse enabled but credentials not available",
 				zap.Bool("url_present", cfg.DataWarehouse.URL != ""),
 				zap.Bool("user_present", cfg.DataWarehouse.User != ""),
 				zap.Bool("password_present", cfg.DataWarehouse.Password != ""),
 			)
 		} else {
-			logger.Info("Data warehouse credentials loaded from Key Vault")
+			logger.Info("Data warehouse credentials loaded successfully")
 		}
 	}
 
