@@ -82,11 +82,11 @@ func (s *DashboardService) GetMetrics(ctx context.Context, timeRange domain.Time
 	// Set date range in response for custom ranges
 	if timeRange == domain.TimeRangeCustom && dateRange != nil {
 		if dateRange.FromDate != nil {
-			fromStr := dateRange.FromDate.Format("2006-01-02T15:04:05Z")
+			fromStr := dateRange.FromDate.UTC().Format(time.RFC3339)
 			metrics.FromDate = &fromStr
 		}
 		if dateRange.ToDate != nil {
-			toStr := dateRange.ToDate.Format("2006-01-02T15:04:05Z")
+			toStr := dateRange.ToDate.UTC().Format(time.RFC3339)
 			metrics.ToDate = &toStr
 		}
 	}

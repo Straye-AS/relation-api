@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/datawarehouse"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
@@ -1672,4 +1673,56 @@ func (h *OfferHandler) GetExternalSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, response)
+}
+
+// TriggerBulkDWSync godoc
+// @Summary Trigger bulk data warehouse sync (Admin only)
+// @Description Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).
+// @Description This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.
+// @Tags Offers
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Sync results with synced/failed counts"
+// @Failure 403 {object} domain.ErrorResponse "Forbidden - requires super admin"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/admin/trigger-dw-sync [post]
+func (h *OfferHandler) TriggerBulkDWSync(w http.ResponseWriter, r *http.Request) {
+	userCtx, ok := auth.FromContext(r.Context())
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Only super admins can trigger bulk sync
+	if !userCtx.IsSuperAdmin() {
+		respondWithError(w, http.StatusForbidden, "Forbidden: requires super admin role")
+		return
+	}
+
+	h.logger.Info("admin triggered bulk DW sync",
+		zap.String("user_id", userCtx.UserID.String()),
+		zap.String("user_email", userCtx.Email))
+
+	// Call the service to sync all offers
+	synced, failed, err := h.offerService.SyncAllOffersFromDataWarehouse(r.Context())
+	if err != nil {
+		h.logger.Error("bulk DW sync failed",
+			zap.Error(err),
+			zap.String("triggered_by", userCtx.Email))
+		respondWithError(w, http.StatusInternalServerError, "Failed to run bulk sync: "+err.Error())
+		return
+	}
+
+	h.logger.Info("bulk DW sync completed",
+		zap.Int("synced", synced),
+		zap.Int("failed", failed),
+		zap.String("triggered_by", userCtx.Email))
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Bulk data warehouse sync completed",
+		"synced":  synced,
+		"failed":  failed,
+		"total":   synced + failed,
+	})
 }

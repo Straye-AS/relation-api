@@ -37,7 +37,7 @@ func createTestConfig(jwksURL, apiKey string) *config.Config {
 func createTestMiddleware(t *testing.T, jwksURL, apiKey string) *auth.Middleware {
 	cfg := createTestConfig(jwksURL, apiKey)
 	logger := zap.NewNop()
-	return auth.NewMiddleware(cfg, logger)
+	return auth.NewMiddleware(cfg, nil, logger) // nil userLookup for tests
 }
 
 func TestMiddleware_Authenticate_WithAPIKey(t *testing.T) {

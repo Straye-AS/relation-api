@@ -63,7 +63,7 @@ func (s *InquiryService) Create(ctx context.Context, req *domain.CreateInquiryRe
 	// Create inquiry (offer in draft phase) with minimal required fields
 	inquiry := &domain.Offer{
 		Title:        req.Title,
-		CustomerID:   req.CustomerID,
+		CustomerID:   &req.CustomerID,
 		CustomerName: customer.Name,
 		CompanyID:    companyID,
 		Phase:        domain.OfferPhaseDraft, // Always draft for inquiries
@@ -165,9 +165,11 @@ func (s *InquiryService) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("failed to delete inquiry: %w", err)
 	}
 
-	// Log activity on customer since inquiry is deleted
-	s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, inquiry.CustomerID,
-		"Inquiry deleted", fmt.Sprintf("Inquiry '%s' was deleted", inquiry.Title))
+	// Log activity on customer since inquiry is deleted (only if customer exists)
+	if inquiry.CustomerID != nil {
+		s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, *inquiry.CustomerID,
+			"Inquiry deleted", fmt.Sprintf("Inquiry '%s' was deleted", inquiry.Title))
+	}
 
 	return nil
 }

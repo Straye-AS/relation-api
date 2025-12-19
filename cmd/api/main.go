@@ -161,6 +161,10 @@ func run() error {
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
+	// Inject data warehouse client into customer service for ERP sync functionality
+	if dwClient != nil {
+		customerService.SetDataWarehouseClient(&customerDWAdapter{client: dwClient})
+	}
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, log, db)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, log, db)
@@ -179,7 +183,7 @@ func run() error {
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
 
 	// Initialize middleware
-	authMiddleware := auth.NewMiddleware(cfg, log)
+	authMiddleware := auth.NewMiddleware(cfg, userRepo, log)
 	companyFilterMiddleware := middleware.NewCompanyFilterMiddleware(log)
 	rateLimiter := middleware.NewRateLimiter(&cfg.RateLimit, log)
 	auditMiddleware := middleware.NewAuditMiddleware(auditLogService, nil, log)
@@ -233,12 +237,14 @@ func run() error {
 		scheduler = jobs.NewScheduler(log)
 
 		// Register the data warehouse sync job
+		// runStartupSync=true will sync stale offers (null or > 1 hour old) immediately
 		if err := jobs.RegisterDWSyncJob(
 			scheduler,
 			offerService,
 			log,
 			cfg.DataWarehouse.PeriodicSyncCron,
 			cfg.DataWarehouse.PeriodicSyncTimeoutDuration(),
+			true, // run startup sync for stale offers
 		); err != nil {
 			log.Error("Failed to register DW sync job", zap.Error(err))
 		} else {
@@ -308,4 +314,31 @@ func run() error {
 	}
 
 	return nil
+}
+
+// customerDWAdapter adapts the datawarehouse.Client to the service.DataWarehouseClient interface
+// This allows the customer service to use the data warehouse client without depending directly on it
+type customerDWAdapter struct {
+	client *datawarehouse.Client
+}
+
+func (a *customerDWAdapter) IsEnabled() bool {
+	return a.client != nil && a.client.IsEnabled()
+}
+
+func (a *customerDWAdapter) GetERPCustomers(ctx context.Context) ([]service.DataWarehouseERPCustomer, error) {
+	erpCustomers, err := a.client.GetERPCustomers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert datawarehouse.ERPCustomer to service.DataWarehouseERPCustomer
+	result := make([]service.DataWarehouseERPCustomer, len(erpCustomers))
+	for i, c := range erpCustomers {
+		result[i] = service.DataWarehouseERPCustomer{
+			OrganizationNumber: c.OrganizationNumber,
+			Name:               c.Name,
+		}
+	}
+	return result, nil
 }

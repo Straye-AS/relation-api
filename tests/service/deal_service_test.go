@@ -819,7 +819,7 @@ func TestDealService_CreateOfferFromDealWithTemplate(t *testing.T) {
 		// Create a template offer with budget dimensions
 		templateOffer := &domain.Offer{
 			Title:             "Template Offer",
-			CustomerID:        customer.ID,
+			CustomerID:        &customer.ID,
 			CustomerName:      customer.Name,
 			CompanyID:         domain.CompanyStalbygg,
 			Phase:             domain.OfferPhaseDraft,

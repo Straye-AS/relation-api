@@ -90,37 +90,13 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 	}
 
 	var customer *domain.Customer
-	var customerID uuid.UUID
+	var customerID *uuid.UUID
 	var customerName string
 	var err error
 
-	// Scenario B: ProjectID only - inherit customer from project
-	if req.CustomerID == nil && req.ProjectID != nil {
-		project, err := s.projectRepo.GetByID(ctx, *req.ProjectID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrProjectNotFound
-			}
-			return nil, fmt.Errorf("failed to get project for customer inheritance: %w", err)
-		}
-
-		// Project must have a customer to inherit from
-		if project.CustomerID == nil {
-			return nil, ErrProjectHasNoCustomer
-		}
-
-		// Fetch the customer to get full details
-		customer, err = s.customerRepo.GetByID(ctx, *project.CustomerID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrCustomerNotFound
-			}
-			return nil, fmt.Errorf("failed to get customer from project: %w", err)
-		}
-		customerID = customer.ID
-		customerName = customer.Name
-	} else {
-		// Scenario A or C: CustomerID is provided
+	// Handle customer - any combination is valid as long as at least one of customerID or projectID is provided
+	if req.CustomerID != nil {
+		// CustomerID is provided - validate and use it
 		customer, err = s.customerRepo.GetByID(ctx, *req.CustomerID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -128,9 +104,11 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 			}
 			return nil, fmt.Errorf("failed to verify customer: %w", err)
 		}
-		customerID = customer.ID
+		customerID = &customer.ID
 		customerName = customer.Name
 	}
+	// Note: If only ProjectID is provided (no CustomerID), offer will have no customer
+	// The project and customer don't need to be related - any combination is valid
 
 	// Calculate value from items (if provided)
 	totalValue := 0.0
@@ -151,7 +129,7 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 
 	// Set defaults for optional fields
 	companyID := req.CompanyID
-	if companyID == "" && customer.CompanyID != nil {
+	if companyID == "" && customer != nil && customer.CompanyID != nil {
 		companyID = *customer.CompanyID
 	}
 	if companyID == "" {
@@ -337,8 +315,8 @@ func (s *OfferService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Offer
 		Probability:         offer.Probability,
 		Value:               offer.Value,
 		Status:              offer.Status,
-		CreatedAt:           offer.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:           offer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:           offer.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:           offer.UpdatedAt.UTC().Format(time.RFC3339),
 		ResponsibleUserID:   offer.ResponsibleUserID,
 		ResponsibleUserName: offer.ResponsibleUserName,
 		Items:               items,
@@ -517,26 +495,54 @@ func (s *OfferService) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("failed to get offer: %w", err)
 	}
 
-	// Store project ID before deletion for customer sync
+	// Store project ID and name before deletion
 	projectID := offer.ProjectID
+	projectName := offer.ProjectName
 
 	if err := s.offerRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete offer: %w", err)
 	}
 
-	// Sync project customer if offer was linked to a project
+	// If offer was linked to a project, check if project should be deleted
 	if projectID != nil {
-		if err := s.syncProjectCustomer(ctx, *projectID); err != nil {
-			s.logger.Warn("failed to sync project customer after offer deletion",
-				zap.String("offerID", id.String()),
+		// Check if there are any remaining offers in the project
+		remainingOffers, err := s.offerRepo.ListByProject(ctx, *projectID)
+		if err != nil {
+			s.logger.Warn("failed to check remaining offers in project",
 				zap.String("projectID", projectID.String()),
 				zap.Error(err))
+		} else if len(remainingOffers) == 0 {
+			// No remaining offers - delete the project
+			if err := s.projectRepo.Delete(ctx, *projectID); err != nil {
+				s.logger.Warn("failed to delete empty project after last offer deletion",
+					zap.String("projectID", projectID.String()),
+					zap.Error(err))
+			} else {
+				s.logger.Info("deleted empty project after last offer was deleted",
+					zap.String("projectID", projectID.String()),
+					zap.String("projectName", projectName))
+				// Log activity for project deletion (only if customer exists)
+				if offer.CustomerID != nil {
+					s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, *offer.CustomerID, offer.CustomerName,
+						"Prosjekt slettet", fmt.Sprintf("Prosjektet '%s' ble slettet (ingen gjenværende tilbud)", projectName))
+				}
+			}
+		} else {
+			// Still has offers - sync project customer
+			if err := s.syncProjectCustomer(ctx, *projectID); err != nil {
+				s.logger.Warn("failed to sync project customer after offer deletion",
+					zap.String("offerID", id.String()),
+					zap.String("projectID", projectID.String()),
+					zap.Error(err))
+			}
 		}
 	}
 
-	// Log activity (on customer since offer is deleted)
-	s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, offer.CustomerID, offer.CustomerName,
-		"Tilbud slettet", fmt.Sprintf("Tilbudet '%s' ble slettet", offer.Title))
+	// Log activity (on customer since offer is deleted, only if customer exists)
+	if offer.CustomerID != nil {
+		s.logActivityOnTarget(ctx, domain.ActivityTargetCustomer, *offer.CustomerID, offer.CustomerName,
+			"Tilbud slettet", fmt.Sprintf("Tilbudet '%s' ble slettet", offer.Title))
+	}
 
 	return nil
 }
@@ -683,10 +689,9 @@ func (s *OfferService) AcceptOffer(ctx context.Context, id uuid.UUID, req *domai
 
 	// Create project (as a folder/container for offers)
 	// Projects are now simplified - no manager or company fields
-	customerID := offer.CustomerID
 	project := &domain.Project{
 		Name:          projectName,
-		CustomerID:    &customerID,
+		CustomerID:    offer.CustomerID, // Already a pointer, use directly
 		CustomerName:  offer.CustomerName,
 		Phase:         domain.ProjectPhaseTilbud,
 		StartDate:     time.Now(),
@@ -800,6 +805,16 @@ func (s *OfferService) AcceptOrder(ctx context.Context, id uuid.UUID, req *domai
 	}
 	s.logActivity(ctx, offer.ID, offer.Title, "Ordre akseptert", activityBody)
 
+	// Sync project phase if offer is linked to a project
+	if offer.ProjectID != nil {
+		if err := s.syncProjectPhase(ctx, *offer.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project phase after accept order",
+				zap.String("offerID", id.String()),
+				zap.String("projectID", offer.ProjectID.String()),
+				zap.Error(err))
+		}
+	}
+
 	offerDTO := mapper.ToOfferDTO(offer)
 	return &domain.AcceptOrderResponse{
 		Offer: &offerDTO,
@@ -860,88 +875,16 @@ func (s *OfferService) UpdateOfferHealth(ctx context.Context, id uuid.UUID, req 
 	return &dto, nil
 }
 
-// UpdateOfferSpent updates the spent amount for an offer in order phase
+// UpdateOfferSpent is deprecated - spent field is now read-only and managed by data warehouse sync.
+// This method now returns an error indicating the field cannot be manually edited.
 func (s *OfferService) UpdateOfferSpent(ctx context.Context, id uuid.UUID, req *domain.UpdateOfferSpentRequest) (*domain.OfferDTO, error) {
-	offer, err := s.offerRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrOfferNotFound
-		}
-		return nil, fmt.Errorf("failed to get offer: %w", err)
-	}
-
-	// Validate phase - must be in order phase
-	if offer.Phase != domain.OfferPhaseOrder {
-		return nil, ErrOfferNotInOrderPhase
-	}
-
-	oldSpent := offer.Spent
-
-	// Build updates including user tracking fields
-	updates := map[string]interface{}{
-		"spent": req.Spent,
-	}
-	if userCtx, ok := auth.FromContext(ctx); ok {
-		updates["updated_by_id"] = userCtx.UserID.String()
-		updates["updated_by_name"] = userCtx.DisplayName
-	}
-	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
-		return nil, fmt.Errorf("failed to update spent: %w", err)
-	}
-
-	// Reload and return
-	offer, err = s.offerRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reload offer: %w", err)
-	}
-
-	s.logActivity(ctx, id, offer.Title, "Tilbudsforbruk oppdatert",
-		fmt.Sprintf("Forbruk endret fra %.2f til %.2f", oldSpent, req.Spent))
-
-	dto := mapper.ToOfferDTO(offer)
-	return &dto, nil
+	return nil, ErrOfferFinancialFieldReadOnly
 }
 
-// UpdateOfferInvoiced updates the invoiced amount for an offer in order phase
+// UpdateOfferInvoiced is deprecated - invoiced field is now read-only and managed by data warehouse sync.
+// This method now returns an error indicating the field cannot be manually edited.
 func (s *OfferService) UpdateOfferInvoiced(ctx context.Context, id uuid.UUID, req *domain.UpdateOfferInvoicedRequest) (*domain.OfferDTO, error) {
-	offer, err := s.offerRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrOfferNotFound
-		}
-		return nil, fmt.Errorf("failed to get offer: %w", err)
-	}
-
-	// Validate phase - must be in order phase
-	if offer.Phase != domain.OfferPhaseOrder {
-		return nil, ErrOfferNotInOrderPhase
-	}
-
-	oldInvoiced := offer.Invoiced
-
-	// Build updates including user tracking fields
-	updates := map[string]interface{}{
-		"invoiced": req.Invoiced,
-	}
-	if userCtx, ok := auth.FromContext(ctx); ok {
-		updates["updated_by_id"] = userCtx.UserID.String()
-		updates["updated_by_name"] = userCtx.DisplayName
-	}
-	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
-		return nil, fmt.Errorf("failed to update invoiced: %w", err)
-	}
-
-	// Reload and return
-	offer, err = s.offerRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reload offer: %w", err)
-	}
-
-	s.logActivity(ctx, id, offer.Title, "Tilbud fakturering oppdatert",
-		fmt.Sprintf("Fakturert endret fra %.2f til %.2f", oldInvoiced, req.Invoiced))
-
-	dto := mapper.ToOfferDTO(offer)
-	return &dto, nil
+	return nil, ErrOfferFinancialFieldReadOnly
 }
 
 // CompleteOffer transitions an order offer to completed phase
@@ -980,7 +923,17 @@ func (s *OfferService) CompleteOffer(ctx context.Context, id uuid.UUID) (*domain
 
 	// Log activity
 	s.logActivity(ctx, offer.ID, offer.Title, "Tilbud fullført",
-		fmt.Sprintf("Tilbudet '%s' ble fullført (fase: %s -> fullført)", offer.Title, oldPhase))
+		fmt.Sprintf("Tilbudet '%s' ble fullført (fase: %s -> completed)", offer.Title, oldPhase))
+
+	// Sync project phase if offer is linked to a project
+	if offer.ProjectID != nil {
+		if err := s.syncProjectPhase(ctx, *offer.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project phase after complete offer",
+				zap.String("offerID", id.String()),
+				zap.String("projectID", offer.ProjectID.String()),
+				zap.Error(err))
+		}
+	}
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1177,6 +1130,16 @@ func (s *OfferService) ReopenOffer(ctx context.Context, id uuid.UUID) (*domain.O
 	// Log activity
 	s.logActivity(ctx, offer.ID, offer.Title, "Ordre gjenåpnet",
 		fmt.Sprintf("Ordren '%s' ble gjenåpnet fra %s til order", offer.Title, oldPhase))
+
+	// Sync project phase if offer is linked to a project
+	if offer.ProjectID != nil {
+		if err := s.syncProjectPhase(ctx, *offer.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project phase after reopen offer",
+				zap.String("offerID", id.String()),
+				zap.String("projectID", offer.ProjectID.String()),
+				zap.Error(err))
+		}
+	}
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -1692,11 +1655,18 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		// Projects are now cross-company, so no company validation needed
 
 		// Log when linking offer with different customer for audit purposes
-		offerCustomerMatches := project.CustomerID != nil && *project.CustomerID == offer.CustomerID
+		// Check if both have the same customer (both nil or both point to same ID)
+		offerCustomerMatches := (project.CustomerID == nil && offer.CustomerID == nil) ||
+			(project.CustomerID != nil && offer.CustomerID != nil && *project.CustomerID == *offer.CustomerID)
 		if !offerCustomerMatches {
 			s.logger.Info("linking offer to project with different customer",
 				zap.String("offerID", offer.ID.String()),
-				zap.String("offerCustomerID", offer.CustomerID.String()),
+				zap.String("offerCustomerID", func() string {
+					if offer.CustomerID != nil {
+						return offer.CustomerID.String()
+					}
+					return "nil"
+				}()),
 				zap.String("offerCustomerName", offer.CustomerName),
 				zap.String("projectID", project.ID.String()),
 				zap.String("projectCustomerID", func() string {
@@ -1728,10 +1698,9 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 
 	// Auto-create project (as a folder/container for offers)
 	// Projects are now simplified - no manager or company fields
-	customerID := offer.CustomerID
 	project := &domain.Project{
 		Name:          fmt.Sprintf("[AUTO] %s", offer.Title),
-		CustomerID:    &customerID,
+		CustomerID:    offer.CustomerID, // Already a pointer, use directly
 		CustomerName:  offer.CustomerName,
 		Phase:         domain.ProjectPhaseTilbud,
 		StartDate:     time.Now(),
@@ -2545,6 +2514,8 @@ func (s *OfferService) UpdateExternalReference(ctx context.Context, offerID uuid
 	}
 
 	oldRef := offer.ExternalReference
+	externalRefChanged := oldRef != externalReference
+
 	offer.ExternalReference = externalReference
 
 	// Set updated by fields (never modify created by)
@@ -2557,6 +2528,38 @@ func (s *OfferService) UpdateExternalReference(ctx context.Context, offerID uuid
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
+	// Handle DW financial data based on external_reference change
+	if externalRefChanged {
+		if externalReference == "" {
+			// Clearing external_reference - reset all DW financial fields to 0
+			if err := s.offerRepo.ClearDWFinancials(ctx, offerID); err != nil {
+				s.logger.Error("failed to clear DW financials after removing external reference",
+					zap.Error(err),
+					zap.String("offer_id", offerID.String()))
+				// Don't fail the request, just log the error
+			}
+		} else {
+			// Setting or changing external_reference - sync from DW if available
+			if s.dwClient != nil && s.dwClient.IsEnabled() {
+				// Trigger async sync in background so we don't block the response
+				go func() {
+					syncCtx := context.Background()
+					_, syncErr := s.SyncFromDataWarehouse(syncCtx, offerID)
+					if syncErr != nil {
+						s.logger.Error("failed to sync from DW after external reference change",
+							zap.Error(syncErr),
+							zap.String("offer_id", offerID.String()),
+							zap.String("new_external_reference", externalReference))
+					} else {
+						s.logger.Info("synced from DW after external reference change",
+							zap.String("offer_id", offerID.String()),
+							zap.String("new_external_reference", externalReference))
+					}
+				}()
+			}
+		}
+	}
+
 	var activityBody string
 	if externalReference == "" {
 		activityBody = fmt.Sprintf("Fjernet ekstern referanse '%s'", oldRef)
@@ -2566,6 +2569,12 @@ func (s *OfferService) UpdateExternalReference(ctx context.Context, offerID uuid
 		activityBody = fmt.Sprintf("Endret ekstern referanse fra '%s' til '%s'", oldRef, externalReference)
 	}
 	s.logActivity(ctx, offerID, offer.Title, "Ekstern referanse oppdatert", activityBody)
+
+	// Reload offer to get updated values (especially after ClearDWFinancials)
+	offer, err = s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		s.logger.Warn("failed to reload offer after external reference update", zap.Error(err))
+	}
 
 	dto := mapper.ToOfferDTO(offer)
 	return &dto, nil
@@ -2637,6 +2646,86 @@ func (s *OfferService) syncProjectCustomer(ctx context.Context, projectID uuid.U
 	// Update the project's customer
 	if err := s.projectRepo.UpdateCustomer(ctx, projectID, customerID, customerName); err != nil {
 		return fmt.Errorf("failed to update project customer: %w", err)
+	}
+
+	return nil
+}
+
+// syncProjectPhase updates the project's phase based on its offers' phases.
+// Logic:
+//   - If any offer is in "order" phase -> project should be "working"
+//   - If all offers are "completed" -> project should be "completed"
+//   - If offers are only in pre-order phases (draft/in_progress/sent) -> project stays in "tilbud"
+//
+// This should be called whenever:
+//   - An offer transitions to order phase (AcceptOrder)
+//   - An offer transitions to completed phase (CompleteOffer)
+//   - An offer is reopened from completed to order (ReopenOffer)
+func (s *OfferService) syncProjectPhase(ctx context.Context, projectID uuid.UUID) error {
+	// Get the project
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Don't modify cancelled projects
+	if project.Phase == domain.ProjectPhaseCancelled {
+		return nil
+	}
+
+	// Get all offers for this project
+	offers, err := s.offerRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to get offers for project: %w", err)
+	}
+
+	if len(offers) == 0 {
+		return nil // No offers, don't change phase
+	}
+
+	// Determine target phase based on offers
+	var targetPhase domain.ProjectPhase
+	hasOrderPhase := false
+	allCompleted := true
+	hasAnyOffer := false
+
+	for _, offer := range offers {
+		// Skip lost/expired offers when determining phase
+		if offer.Phase == domain.OfferPhaseLost || offer.Phase == domain.OfferPhaseExpired {
+			continue
+		}
+		hasAnyOffer = true
+
+		if offer.Phase == domain.OfferPhaseOrder {
+			hasOrderPhase = true
+			allCompleted = false
+		} else if offer.Phase != domain.OfferPhaseCompleted {
+			allCompleted = false
+		}
+	}
+
+	if !hasAnyOffer {
+		return nil // Only lost/expired offers, don't change phase
+	}
+
+	if hasOrderPhase {
+		targetPhase = domain.ProjectPhaseWorking
+	} else if allCompleted {
+		targetPhase = domain.ProjectPhaseCompleted
+	} else {
+		targetPhase = domain.ProjectPhaseTilbud
+	}
+
+	// Only update if phase is different and transition is valid
+	if project.Phase != targetPhase && project.Phase.CanTransitionTo(targetPhase) {
+		s.logger.Info("syncing project phase based on offers",
+			zap.String("projectID", projectID.String()),
+			zap.String("oldPhase", string(project.Phase)),
+			zap.String("newPhase", string(targetPhase)))
+
+		if err := s.projectRepo.UpdatePhase(ctx, projectID, targetPhase); err != nil {
+			return fmt.Errorf("failed to update project phase: %w", err)
+		}
 	}
 
 	return nil
@@ -2716,7 +2805,8 @@ func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) 
 		NetResult:     financials.NetResult,
 	}
 
-	if err := s.offerRepo.UpdateDWFinancials(ctx, id, dwFinancials); err != nil {
+	updatedOffer, err := s.offerRepo.UpdateDWFinancials(ctx, id, dwFinancials)
+	if err != nil {
 		s.logger.Error("failed to update offer with DW financials",
 			zap.Error(err),
 			zap.String("offer_id", id.String()))
@@ -2732,8 +2822,8 @@ func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) 
 		return response, nil
 	}
 
-	// Get the synced timestamp
-	now := time.Now().Format("2006-01-02T15:04:05Z")
+	// Get the synced timestamp in UTC with proper timezone
+	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Log activity for the sync
 	activity := &domain.Activity{
@@ -2741,7 +2831,7 @@ func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) 
 		TargetID:     offer.ID,
 		TargetName:   offer.Title,
 		Title:        "Finansdata synkronisert",
-		Body:         fmt.Sprintf("Finansdata synkronisert fra datavarehus. Inntekt: %.2f, Kostnader: %.2f, Resultat: %.2f", financials.TotalIncome, financials.MaterialCosts+financials.EmployeeCosts+financials.OtherCosts, financials.NetResult),
+		Body:         "Finansdata synkronisert fra datavarehus",
 		ActivityType: domain.ActivityTypeSystem,
 		Status:       domain.ActivityStatusCompleted,
 		OccurredAt:   time.Now(),
@@ -2765,7 +2855,7 @@ func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) 
 		zap.Float64("other_costs", financials.OtherCosts),
 		zap.Float64("net_result", financials.NetResult))
 
-	// Return success response
+	// Return success response with updated offer values
 	response.DataWarehouse = &domain.DataWarehouseFinancialsDTO{
 		TotalIncome:   financials.TotalIncome,
 		MaterialCosts: financials.MaterialCosts,
@@ -2776,6 +2866,15 @@ func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) 
 	}
 	response.SyncedAt = &now
 	response.Persisted = true
+
+	// Include the persisted DW values and updated Spent/Invoiced from the offer
+	response.DWTotalIncome = updatedOffer.DWTotalIncome
+	response.DWMaterialCosts = updatedOffer.DWMaterialCosts
+	response.DWEmployeeCosts = updatedOffer.DWEmployeeCosts
+	response.DWOtherCosts = updatedOffer.DWOtherCosts
+	response.DWNetResult = updatedOffer.DWNetResult
+	response.Spent = updatedOffer.Spent
+	response.Invoiced = updatedOffer.Invoiced
 
 	return response, nil
 }
@@ -2790,8 +2889,10 @@ func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (sync
 		return 0, 0, ErrDataWarehouseNotAvailable
 	}
 
-	// Get all offers with external_reference
-	offers, err := s.offerRepo.GetOffersForDWSync(ctx)
+	// Get ALL offers with external_reference (regardless of phase) that need syncing
+	// Only sync offers not synced in the last hour (DW only updates hourly)
+	maxAge := time.Hour
+	offers, err := s.offerRepo.GetAllOffersWithExternalReference(ctx, maxAge)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get offers for DW sync: %w", err)
 	}
@@ -2820,7 +2921,7 @@ func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (sync
 			NetResult:     financials.NetResult,
 		}
 
-		if err := s.offerRepo.UpdateDWFinancials(ctx, offer.ID, dwFinancials); err != nil {
+		if _, err := s.offerRepo.UpdateDWFinancials(ctx, offer.ID, dwFinancials); err != nil {
 			s.logger.Warn("failed to update offer with DW financials",
 				zap.Error(err),
 				zap.String("offer_id", offer.ID.String()))
@@ -2842,4 +2943,69 @@ func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (sync
 // GetOffersForDWSync returns all offers that have an external_reference and can be synced.
 func (s *OfferService) GetOffersForDWSync(ctx context.Context) ([]domain.Offer, error) {
 	return s.offerRepo.GetOffersForDWSync(ctx)
+}
+
+// SyncStaleOffersFromDataWarehouse syncs only offers that are stale (never synced or older than maxAge).
+// This is used for startup sync to catch up on offers that haven't been synced recently.
+// Returns counts for successfully synced and failed offers.
+func (s *OfferService) SyncStaleOffersFromDataWarehouse(ctx context.Context, maxAge time.Duration) (synced int, failed int, err error) {
+	// Check if data warehouse client is available
+	if s.dwClient == nil || !s.dwClient.IsEnabled() {
+		s.logger.Info("data warehouse not available, skipping stale sync")
+		return 0, 0, ErrDataWarehouseNotAvailable
+	}
+
+	// Get offers that need syncing (null or older than maxAge)
+	offers, err := s.offerRepo.GetOffersNeedingDWSync(ctx, maxAge)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get offers needing DW sync: %w", err)
+	}
+
+	if len(offers) == 0 {
+		s.logger.Info("no stale offers to sync")
+		return 0, 0, nil
+	}
+
+	s.logger.Info("starting stale offer DW sync",
+		zap.Int("offer_count", len(offers)),
+		zap.Duration("max_age", maxAge))
+
+	for _, offer := range offers {
+		// Query the data warehouse for project financials
+		financials, err := s.dwClient.GetProjectFinancials(ctx, string(offer.CompanyID), offer.ExternalReference)
+		if err != nil {
+			s.logger.Warn("failed to query DW for stale offer",
+				zap.Error(err),
+				zap.String("offer_id", offer.ID.String()),
+				zap.String("external_reference", offer.ExternalReference))
+			failed++
+			continue
+		}
+
+		// Update the offer with DW financials
+		dwFinancials := &repository.DWFinancials{
+			TotalIncome:   financials.TotalIncome,
+			MaterialCosts: financials.MaterialCosts,
+			EmployeeCosts: financials.EmployeeCosts,
+			OtherCosts:    financials.OtherCosts,
+			NetResult:     financials.NetResult,
+		}
+
+		if _, err := s.offerRepo.UpdateDWFinancials(ctx, offer.ID, dwFinancials); err != nil {
+			s.logger.Warn("failed to update stale offer with DW financials",
+				zap.Error(err),
+				zap.String("offer_id", offer.ID.String()))
+			failed++
+			continue
+		}
+
+		synced++
+	}
+
+	s.logger.Info("completed stale offer DW sync",
+		zap.Int("synced", synced),
+		zap.Int("failed", failed),
+		zap.Int("total", len(offers)))
+
+	return synced, failed, nil
 }

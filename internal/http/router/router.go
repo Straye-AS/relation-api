@@ -275,6 +275,7 @@ func (rt *Router) Setup() http.Handler {
 			r.Route("/customers", func(r chi.Router) {
 				r.Get("/", rt.customerHandler.List)
 				r.Post("/", rt.customerHandler.Create)
+				r.Get("/erp-differences", rt.customerHandler.GetERPDifferences) // ERP sync endpoint
 				r.Get("/{id}", rt.customerHandler.GetByID)
 				r.Put("/{id}", rt.customerHandler.Update)
 				r.Delete("/{id}", rt.customerHandler.Delete)
@@ -400,6 +401,9 @@ func (rt *Router) Setup() http.Handler {
 
 				// Data warehouse sync (POC)
 				r.Get("/{id}/external-sync", rt.offerHandler.GetExternalSync)
+
+				// Admin endpoints
+				r.Post("/admin/trigger-dw-sync", rt.offerHandler.TriggerBulkDWSync)
 			})
 
 			// Deals

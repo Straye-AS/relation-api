@@ -2216,6 +2216,49 @@
                 }
             }
         },
+        "/customers/erp-differences": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Compare customers in the ERP data warehouse with customers in our database. Returns customers that exist in ERP but not in our local database, and customers that exist locally but not in ERP. For organizations, matching is done by organization number. For private persons (no org number), matching is done by name.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Get differences between ERP and local customers",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerERPDifferencesResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers/search": {
             "get": {
                 "description": "Find the single best matching customer for a query using fuzzy matching (handles typos, abbreviations, partial matches). Use q=all to get all customers. Returns minimal customer data (id and name only). Also supports email domain matching (e.g., 'hauk@straye.no' matches 'Straye').",
@@ -2405,7 +2448,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft delete a customer. Cannot delete customers with active projects, deals, or offers.",
+                "description": "Soft delete a customer. The customer is hidden from lists but preserved for historical reference. Related projects and offers keep their customer reference.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2444,12 +2487,6 @@
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Customer has active dependencies",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -5427,6 +5464,47 @@
                 }
             }
         },
+        "/offers/admin/trigger-dw-sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).\nThis is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Trigger bulk data warehouse sync (Admin only)",
+                "responses": {
+                    "200": {
+                        "description": "Sync results with synced/failed counts",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - requires super admin",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/next-number": {
             "get": {
                 "security": [
@@ -6874,14 +6952,14 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves financial data from the data warehouse for the given offer.\nThis is a read-only POC endpoint to verify data warehouse connectivity.\nThe offer must have an external_reference to be matched in the data warehouse.",
+                "description": "Syncs financial data from the data warehouse for the given offer and persists it.\nThe offer must have an external_reference to be matched in the data warehouse.\nThis endpoint queries the DW, persists the financial data to the offer, and returns the result.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Offers"
                 ],
-                "summary": "Get data warehouse financials for an offer (POC)",
+                "summary": "Sync data warehouse financials for an offer",
                 "parameters": [
                     {
                         "type": "string",
@@ -6893,13 +6971,13 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Data warehouse financials",
+                        "description": "Data warehouse financials with sync status",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferExternalSyncResponse"
                         }
                     },
                     "400": {
-                        "description": "Invalid offer ID or offer has no external reference",
+                        "description": "Invalid offer ID",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -10633,6 +10711,41 @@
                 }
             }
         },
+        "domain.CustomerERPDifferencesResponse": {
+            "type": "object",
+            "properties": {
+                "dataWarehouseEnabled": {
+                    "description": "Whether data warehouse is available",
+                    "type": "boolean"
+                },
+                "erpCustomerCount": {
+                    "description": "Total customers in ERP",
+                    "type": "integer"
+                },
+                "localCustomerCount": {
+                    "description": "Total customers in our DB",
+                    "type": "integer"
+                },
+                "missingInERP": {
+                    "description": "Customers in local DB but not in ERP",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.LocalCustomerDTO"
+                    }
+                },
+                "missingInLocal": {
+                    "description": "Customers in ERP but not in local DB",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ERPCustomerDTO"
+                    }
+                },
+                "syncedAt": {
+                    "description": "ISO 8601 - When the comparison was performed",
+                    "type": "string"
+                }
+            }
+        },
         "domain.CustomerIndustry": {
             "type": "string",
             "enum": [
@@ -10991,12 +11104,20 @@
                     "description": "Whether data warehouse connection was successful",
                     "type": "boolean"
                 },
-                "netResult": {
-                    "description": "totalIncome - totalCosts",
+                "employeeCosts": {
+                    "description": "Sum of employee cost accounts (5000-5999)",
                     "type": "number"
                 },
-                "totalCosts": {
-                    "description": "Sum of cost accounts (all other)",
+                "materialCosts": {
+                    "description": "Sum of material cost accounts (4000-4999)",
+                    "type": "number"
+                },
+                "netResult": {
+                    "description": "totalIncome - all costs",
+                    "type": "number"
+                },
+                "otherCosts": {
+                    "description": "Sum of other cost accounts (\u003e=6000)",
                     "type": "number"
                 },
                 "totalIncome": {
@@ -11124,6 +11245,17 @@
                 }
             }
         },
+        "domain.ERPCustomerDTO": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "organizationNumber": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -11206,6 +11338,20 @@
                 "overBudget": {
                     "description": "Over budget offers",
                     "type": "integer"
+                }
+            }
+        },
+        "domain.LocalCustomerDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "organizationNumber": {
+                    "type": "string"
                 }
             }
         },
@@ -11337,6 +11483,7 @@
                     "type": "boolean"
                 },
                 "customerId": {
+                    "description": "Optional - offer can exist without customer",
                     "type": "string"
                 },
                 "customerName": {
@@ -11348,6 +11495,30 @@
                 "dueDate": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "dwEmployeeCosts": {
+                    "description": "Employee costs from data warehouse",
+                    "type": "number"
+                },
+                "dwLastSyncedAt": {
+                    "description": "ISO 8601 - Last sync timestamp",
+                    "type": "string"
+                },
+                "dwMaterialCosts": {
+                    "description": "Material costs from data warehouse",
+                    "type": "number"
+                },
+                "dwNetResult": {
+                    "description": "Net result from data warehouse",
+                    "type": "number"
+                },
+                "dwOtherCosts": {
+                    "description": "Other costs from data warehouse",
+                    "type": "number"
+                },
+                "dwTotalIncome": {
+                    "description": "Data Warehouse synced fields",
+                    "type": "number"
                 },
                 "endDate": {
                     "description": "ISO 8601 - Planned end date",
@@ -11508,6 +11679,7 @@
                     "type": "boolean"
                 },
                 "customerId": {
+                    "description": "Optional - offer can exist without customer",
                     "type": "string"
                 },
                 "customerName": {
@@ -11519,6 +11691,30 @@
                 "dueDate": {
                     "description": "ISO 8601",
                     "type": "string"
+                },
+                "dwEmployeeCosts": {
+                    "description": "Employee costs from data warehouse",
+                    "type": "number"
+                },
+                "dwLastSyncedAt": {
+                    "description": "ISO 8601 - Last sync timestamp",
+                    "type": "string"
+                },
+                "dwMaterialCosts": {
+                    "description": "Material costs from data warehouse",
+                    "type": "number"
+                },
+                "dwNetResult": {
+                    "description": "Net result from data warehouse",
+                    "type": "number"
+                },
+                "dwOtherCosts": {
+                    "description": "Other costs from data warehouse",
+                    "type": "number"
+                },
+                "dwTotalIncome": {
+                    "description": "Data Warehouse synced fields",
+                    "type": "number"
                 },
                 "endDate": {
                     "description": "ISO 8601 - Planned end date",
@@ -11652,10 +11848,46 @@
                 "dataWarehouse": {
                     "$ref": "#/definitions/domain.DataWarehouseFinancialsDTO"
                 },
+                "dwEmployeeCosts": {
+                    "description": "Persisted DW employee costs",
+                    "type": "number"
+                },
+                "dwMaterialCosts": {
+                    "description": "Persisted DW material costs",
+                    "type": "number"
+                },
+                "dwNetResult": {
+                    "description": "Persisted DW net result",
+                    "type": "number"
+                },
+                "dwOtherCosts": {
+                    "description": "Persisted DW other costs",
+                    "type": "number"
+                },
+                "dwTotalIncome": {
+                    "description": "Current offer financial values after sync",
+                    "type": "number"
+                },
                 "externalReference": {
                     "type": "string"
                 },
+                "invoiced": {
+                    "description": "Updated if was 0, otherwise unchanged",
+                    "type": "number"
+                },
                 "offerId": {
+                    "type": "string"
+                },
+                "persisted": {
+                    "description": "Whether data was persisted to the offer",
+                    "type": "boolean"
+                },
+                "spent": {
+                    "description": "Updated if was 0, otherwise unchanged",
+                    "type": "number"
+                },
+                "syncedAt": {
+                    "description": "ISO 8601 - When the sync was performed",
                     "type": "string"
                 }
             }
@@ -11761,6 +11993,7 @@
                     "type": "string"
                 },
                 "customerId": {
+                    "description": "Optional - offer can exist without customer",
                     "type": "string"
                 },
                 "customerName": {

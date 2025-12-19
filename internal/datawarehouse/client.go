@@ -27,10 +27,13 @@ const (
 	defaultHealthCheckTimeout = 5 * time.Second
 
 	// Account number ranges for classifying general ledger entries.
-	// Income/Revenue accounts fall within the 3000-3999 range.
-	// All other account numbers are considered cost accounts.
 	IncomeAccountMin = 3000
 	IncomeAccountMax = 3999
+	MaterialCostMin  = 4000
+	MaterialCostMax  = 4999
+	EmployeeCostMin  = 5000
+	EmployeeCostMax  = 5999
+	OtherCostMin     = 6000
 )
 
 // CompanyMapping maps Straye company identifiers to data warehouse table name prefixes
@@ -170,8 +173,8 @@ func buildConnectionString(cfg *config.DataWarehouseConfig) (string, error) {
 	// Parse URL format: host:port/database or host:port
 	urlParts := strings.SplitN(urlStr, "/", 2)
 	hostPort := urlParts[0]
-	database := ""
-	if len(urlParts) > 1 {
+	database := "STR_BI" // Default database for Straye data warehouse
+	if len(urlParts) > 1 && urlParts[1] != "" {
 		database = urlParts[1]
 	}
 
@@ -414,7 +417,7 @@ func GetGeneralLedgerTableName(companyID string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unknown company ID: %s", companyID)
 	}
-	return fmt.Sprintf("dbo.nxt_%s_generalledgertransaction", prefix), nil
+	return fmt.Sprintf("nxt_%s_generalledgertransaction", prefix), nil
 }
 
 // IsEnabled returns true if the client is initialized and ready for queries.
@@ -437,7 +440,9 @@ func IsCostAccount(accountNo int) bool {
 type ProjectFinancials struct {
 	ExternalReference string  `json:"externalReference"`
 	TotalIncome       float64 `json:"totalIncome"`
-	TotalCosts        float64 `json:"totalCosts"`
+	MaterialCosts     float64 `json:"materialCosts"`
+	EmployeeCosts     float64 `json:"employeeCosts"`
+	OtherCosts        float64 `json:"otherCosts"`
 	NetResult         float64 `json:"netResult"`
 }
 
@@ -457,7 +462,7 @@ func (c *Client) GetProjectIncome(ctx context.Context, companyID, externalRef st
 	query := fmt.Sprintf(`
 		SELECT COALESCE(SUM(PostedAmountDomestic), 0) as total_income
 		FROM %s
-		WHERE OrgUnit2 = @p1
+		WHERE OrgUnit8 = @p1
 		  AND AccountNo >= @p2
 		  AND AccountNo <= @p3
 	`, tableName)
@@ -476,7 +481,8 @@ func (c *Client) GetProjectIncome(ctx context.Context, companyID, externalRef st
 		return 0, fmt.Errorf("parse income result: %w", err)
 	}
 
-	return totalIncome, nil
+	// Income is stored as negative (credit) in accounting, so negate to show as positive
+	return -totalIncome, nil
 }
 
 // GetProjectCosts queries the general ledger for total costs (accounts outside 3000-3999) for a project.
@@ -495,7 +501,7 @@ func (c *Client) GetProjectCosts(ctx context.Context, companyID, externalRef str
 	query := fmt.Sprintf(`
 		SELECT COALESCE(SUM(PostedAmountDomestic), 0) as total_costs
 		FROM %s
-		WHERE OrgUnit2 = @p1
+		WHERE OrgUnit8 = @p1
 		  AND (AccountNo < @p2 OR AccountNo > @p3)
 	`, tableName)
 
@@ -516,8 +522,13 @@ func (c *Client) GetProjectCosts(ctx context.Context, companyID, externalRef str
 	return totalCosts, nil
 }
 
-// GetProjectFinancials queries the general ledger for both income and costs for a project.
-// Returns aggregated financials including income (3000-3999), costs (all other accounts), and net result.
+// GetProjectFinancials queries the general ledger for income and costs for a project.
+// Returns aggregated financials including:
+// - Income (3000-3999)
+// - Material costs (4000-4999)
+// - Employee costs (5000-5999)
+// - Other costs (>=6000)
+// - Net result (income - all costs)
 func (c *Client) GetProjectFinancials(ctx context.Context, companyID, externalRef string) (*ProjectFinancials, error) {
 	if c == nil || c.db == nil {
 		return nil, fmt.Errorf("data warehouse client not initialized")
@@ -531,12 +542,18 @@ func (c *Client) GetProjectFinancials(ctx context.Context, companyID, externalRe
 	query := fmt.Sprintf(`
 		SELECT
 			COALESCE(SUM(CASE WHEN AccountNo >= @p2 AND AccountNo <= @p3 THEN PostedAmountDomestic ELSE 0 END), 0) as total_income,
-			COALESCE(SUM(CASE WHEN AccountNo < @p2 OR AccountNo > @p3 THEN PostedAmountDomestic ELSE 0 END), 0) as total_costs
+			COALESCE(SUM(CASE WHEN AccountNo >= @p4 AND AccountNo <= @p5 THEN PostedAmountDomestic ELSE 0 END), 0) as material_costs,
+			COALESCE(SUM(CASE WHEN AccountNo >= @p6 AND AccountNo <= @p7 THEN PostedAmountDomestic ELSE 0 END), 0) as employee_costs,
+			COALESCE(SUM(CASE WHEN AccountNo >= @p8 THEN PostedAmountDomestic ELSE 0 END), 0) as other_costs
 		FROM %s
-		WHERE OrgUnit2 = @p1
+		WHERE OrgUnit8 = @p1
 	`, tableName)
 
-	row, err := c.QueryRow(ctx, query, externalRef, IncomeAccountMin, IncomeAccountMax)
+	row, err := c.QueryRow(ctx, query, externalRef,
+		IncomeAccountMin, IncomeAccountMax,
+		MaterialCostMin, MaterialCostMax,
+		EmployeeCostMin, EmployeeCostMax,
+		OtherCostMin)
 	if err != nil {
 		return nil, fmt.Errorf("query project financials: %w", err)
 	}
@@ -545,7 +562,9 @@ func (c *Client) GetProjectFinancials(ctx context.Context, companyID, externalRe
 		return &ProjectFinancials{
 			ExternalReference: externalRef,
 			TotalIncome:       0,
-			TotalCosts:        0,
+			MaterialCosts:     0,
+			EmployeeCosts:     0,
+			OtherCosts:        0,
 			NetResult:         0,
 		}, nil
 	}
@@ -555,16 +574,30 @@ func (c *Client) GetProjectFinancials(ctx context.Context, companyID, externalRe
 		return nil, fmt.Errorf("parse income result: %w", err)
 	}
 
-	totalCosts, err := parseFloat64(row["total_costs"])
+	materialCosts, err := parseFloat64(row["material_costs"])
 	if err != nil {
-		return nil, fmt.Errorf("parse costs result: %w", err)
+		return nil, fmt.Errorf("parse material costs result: %w", err)
 	}
 
+	employeeCosts, err := parseFloat64(row["employee_costs"])
+	if err != nil {
+		return nil, fmt.Errorf("parse employee costs result: %w", err)
+	}
+
+	otherCosts, err := parseFloat64(row["other_costs"])
+	if err != nil {
+		return nil, fmt.Errorf("parse other costs result: %w", err)
+	}
+
+	// Income is stored as negative (credit) in accounting, so negate to show as positive
+	// Costs are stored as positive (debit), so keep as-is
 	return &ProjectFinancials{
 		ExternalReference: externalRef,
-		TotalIncome:       totalIncome,
-		TotalCosts:        totalCosts,
-		NetResult:         totalIncome - totalCosts,
+		TotalIncome:       -totalIncome,
+		MaterialCosts:     materialCosts,
+		EmployeeCosts:     employeeCosts,
+		OtherCosts:        otherCosts,
+		NetResult:         -totalIncome - materialCosts - employeeCosts - otherCosts,
 	}, nil
 }
 
@@ -603,4 +636,66 @@ func truncateQuery(query string, maxLen int) string {
 		return query
 	}
 	return query[:maxLen] + "..."
+}
+
+// ERPCustomer represents a customer record from the ERP data warehouse.
+type ERPCustomer struct {
+	OrganizationNumber string `json:"organizationNumber"`
+	Name               string `json:"name"`
+}
+
+// GetERPCustomers retrieves all customers from the ERP data warehouse.
+// Uses the table dbo.Kunde which contains customers across all companies.
+// Returns customers with their organization numbers and names for matching.
+func (c *Client) GetERPCustomers(ctx context.Context) ([]ERPCustomer, error) {
+	if c == nil || c.db == nil {
+		return nil, fmt.Errorf("data warehouse client not initialized")
+	}
+
+	// Query all customers from dbo.Kunde
+	// Columns: Firmanr, KundeId, Kundenr, Kundenavn, Organisasjonsnr
+	query := `
+		SELECT
+			ISNULL(Organisasjonsnr, '') as Organisasjonsnr,
+			ISNULL(Kundenavn, '') as Kundenavn
+		FROM dbo.Kunde
+	`
+
+	c.logger.Debug("Querying ERP customers from dbo.Kunde")
+
+	rows, err := c.ExecuteQuery(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query ERP customers: %w", err)
+	}
+
+	customers := make([]ERPCustomer, 0, len(rows))
+	for _, row := range rows {
+		customer := ERPCustomer{
+			OrganizationNumber: parseString(row["Organisasjonsnr"]),
+			Name:               parseString(row["Kundenavn"]),
+		}
+		customers = append(customers, customer)
+	}
+
+	c.logger.Info("Retrieved ERP customers",
+		zap.Int("count", len(customers)),
+	)
+
+	return customers, nil
+}
+
+// parseString safely extracts a string from a database result value.
+func parseString(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+
+	switch v := val.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []byte:
+		return strings.TrimSpace(string(v))
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", v))
+	}
 }

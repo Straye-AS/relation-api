@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 // Base model with common fields
@@ -88,8 +89,11 @@ type Company struct {
 }
 
 // Customer represents an organization in the CRM
+// Supports soft delete - deleted customers are hidden but their data is preserved
+// for historical reference in related projects and offers.
 type Customer struct {
 	BaseModel
+	DeletedAt     gorm.DeletedAt   `gorm:"index"` // Soft delete support
 	Name          string           `gorm:"type:varchar(200);not null;index"`
 	OrgNumber     string           `gorm:"type:varchar(20);unique;index"`
 	Email         string           `gorm:"type:varchar(255);not null"`
@@ -117,10 +121,10 @@ type Customer struct {
 	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
 	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
 	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
-	// Relations
-	Contacts []Contact `gorm:"foreignKey:PrimaryCustomerID;constraint:OnDelete:CASCADE"`
-	Projects []Project `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
-	Offers   []Offer   `gorm:"foreignKey:CustomerID;constraint:OnDelete:CASCADE"`
+	// Relations - no cascade delete, projects/offers are preserved when customer is soft deleted
+	Contacts []Contact `gorm:"foreignKey:PrimaryCustomerID"`
+	Projects []Project `gorm:"foreignKey:CustomerID"`
+	Offers   []Offer   `gorm:"foreignKey:CustomerID"`
 }
 
 // ContactType represents the classification of a contact
@@ -522,7 +526,7 @@ type Offer struct {
 	Title                 string      `gorm:"type:varchar(200);not null;index"`
 	OfferNumber           string      `gorm:"type:varchar(50);column:offer_number;index"`  // Internal number, e.g., "TK-2025-001"
 	ExternalReference     string      `gorm:"type:varchar(100);column:external_reference"` // External/customer reference number
-	CustomerID            uuid.UUID   `gorm:"type:uuid;not null;index"`
+	CustomerID            *uuid.UUID  `gorm:"type:uuid;index"`                             // Optional - offer can exist without customer when linked to project
 	Customer              *Customer   `gorm:"foreignKey:CustomerID"`
 	CustomerName          string      `gorm:"type:varchar(200)"`
 	ProjectID             *uuid.UUID  `gorm:"type:uuid;index;column:project_id"` // Nullable - offer can exist without project

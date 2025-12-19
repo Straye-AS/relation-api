@@ -120,7 +120,7 @@ func (f *offerTestFixtures) createTestOffer(t *testing.T, ctx context.Context, t
 
 	offer := &domain.Offer{
 		Title:             title,
-		CustomerID:        customer.ID,
+		CustomerID:        &customer.ID,
 		CustomerName:      customer.Name,
 		CompanyID:         domain.CompanyStalbygg,
 		Phase:             phase,

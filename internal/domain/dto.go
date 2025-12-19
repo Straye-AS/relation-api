@@ -169,7 +169,7 @@ type OfferDTO struct {
 	Title                 string         `json:"title"`
 	OfferNumber           string         `json:"offerNumber,omitempty"`       // Internal number, e.g., "TK-2025-001"
 	ExternalReference     string         `json:"externalReference,omitempty"` // External/customer reference number
-	CustomerID            uuid.UUID      `json:"customerId"`
+	CustomerID            *uuid.UUID     `json:"customerId,omitempty"`        // Optional - offer can exist without customer
 	CustomerName          string         `json:"customerName,omitempty"`
 	ProjectID             *uuid.UUID     `json:"projectId,omitempty"` // Link to project (nullable)
 	ProjectName           string         `json:"projectName,omitempty"`
@@ -883,7 +883,7 @@ type OfferWithItemsDTO struct {
 	Title               string         `json:"title"`
 	OfferNumber         string         `json:"offerNumber,omitempty"`       // Internal number, e.g., "TK-2025-001"
 	ExternalReference   string         `json:"externalReference,omitempty"` // External/customer reference number
-	CustomerID          uuid.UUID      `json:"customerId"`
+	CustomerID          *uuid.UUID     `json:"customerId,omitempty"`        // Optional - offer can exist without customer
 	CustomerName        string         `json:"customerName,omitempty"`
 	CompanyID           CompanyID      `json:"companyId"`
 	Phase               OfferPhase     `json:"phase"`
@@ -1578,4 +1578,40 @@ type OfferExternalSyncResponse struct {
 	DataWarehouse     *DataWarehouseFinancialsDTO `json:"dataWarehouse"`
 	SyncedAt          *string                     `json:"syncedAt,omitempty"` // ISO 8601 - When the sync was performed
 	Persisted         bool                        `json:"persisted"`          // Whether data was persisted to the offer
+
+	// Current offer financial values after sync
+	DWTotalIncome   float64 `json:"dwTotalIncome"`   // Persisted DW total income
+	DWMaterialCosts float64 `json:"dwMaterialCosts"` // Persisted DW material costs
+	DWEmployeeCosts float64 `json:"dwEmployeeCosts"` // Persisted DW employee costs
+	DWOtherCosts    float64 `json:"dwOtherCosts"`    // Persisted DW other costs
+	DWNetResult     float64 `json:"dwNetResult"`     // Persisted DW net result
+	Spent           float64 `json:"spent"`           // Updated if was 0, otherwise unchanged
+	Invoiced        float64 `json:"invoiced"`        // Updated if was 0, otherwise unchanged
+}
+
+// ============================================================================
+// Customer ERP Sync DTOs
+// ============================================================================
+
+// ERPCustomerDTO represents a customer from the ERP data warehouse
+type ERPCustomerDTO struct {
+	OrganizationNumber string `json:"organizationNumber"`
+	Name               string `json:"name"`
+}
+
+// LocalCustomerDTO represents a customer from our local database (minimal fields for comparison)
+type LocalCustomerDTO struct {
+	ID                 uuid.UUID `json:"id"`
+	OrganizationNumber string    `json:"organizationNumber"`
+	Name               string    `json:"name"`
+}
+
+// CustomerERPDifferencesResponse contains the differences between ERP and local database customers
+type CustomerERPDifferencesResponse struct {
+	ERPCustomerCount     int                `json:"erpCustomerCount"`     // Total customers in ERP
+	LocalCustomerCount   int                `json:"localCustomerCount"`   // Total customers in our DB
+	MissingInLocal       []ERPCustomerDTO   `json:"missingInLocal"`       // Customers in ERP but not in local DB
+	MissingInERP         []LocalCustomerDTO `json:"missingInERP"`         // Customers in local DB but not in ERP
+	SyncedAt             string             `json:"syncedAt"`             // ISO 8601 - When the comparison was performed
+	DataWarehouseEnabled bool               `json:"dataWarehouseEnabled"` // Whether data warehouse is available
 }

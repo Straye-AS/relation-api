@@ -80,7 +80,7 @@ func createTestOffer(t *testing.T, db *gorm.DB, customer *domain.Customer, phase
 
 	offer := &domain.Offer{
 		Title:        "Test Offer",
-		CustomerID:   customer.ID,
+		CustomerID:   &customer.ID,
 		CustomerName: customer.Name,
 		CompanyID:    domain.CompanyStalbygg,
 		Phase:        phase,

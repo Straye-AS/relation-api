@@ -326,7 +326,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete godoc
 // @Summary Delete customer
-// @Description Soft delete a customer. Cannot delete customers with active projects, deals, or offers.
+// @Description Soft delete a customer. The customer is hidden from lists but preserved for historical reference. Related projects and offers keep their customer reference.
 // @Tags Customers
 // @Accept json
 // @Produce json
@@ -335,7 +335,6 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} domain.ErrorResponse
 // @Failure 401 {object} domain.ErrorResponse
 // @Failure 404 {object} domain.ErrorResponse
-// @Failure 409 {object} domain.ErrorResponse "Customer has active dependencies"
 // @Failure 500 {object} domain.ErrorResponse
 // @Security BearerAuth
 // @Security ApiKeyAuth
@@ -355,13 +354,6 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusNotFound, domain.ErrorResponse{
 				Error:   "Not Found",
 				Message: "Customer not found",
-			})
-			return
-		}
-		if errors.Is(err, service.ErrCustomerHasActiveDependencies) {
-			respondJSON(w, http.StatusConflict, domain.ErrorResponse{
-				Error:   "Conflict",
-				Message: err.Error(),
 			})
 			return
 		}
@@ -1314,6 +1306,32 @@ func (h *CustomerHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
 			Error:   "Internal Server Error",
 			Message: "Failed to list projects",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// GetERPDifferences godoc
+// @Summary Get differences between ERP and local customers
+// @Description Compare customers in the ERP data warehouse with customers in our database. Returns customers that exist in ERP but not in our local database, and customers that exist locally but not in ERP. For organizations, matching is done by organization number. For private persons (no org number), matching is done by name.
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Success 200 {object} domain.CustomerERPDifferencesResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /customers/erp-differences [get]
+func (h *CustomerHandler) GetERPDifferences(w http.ResponseWriter, r *http.Request) {
+	result, err := h.customerService.GetERPDifferences(r.Context())
+	if err != nil {
+		h.logger.Error("failed to get ERP differences", zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to get ERP differences",
 		})
 		return
 	}

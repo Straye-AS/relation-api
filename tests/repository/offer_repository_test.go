@@ -59,7 +59,7 @@ func createOfferTestOffer(t *testing.T, db *gorm.DB, title string, phase domain.
 
 	offer := &domain.Offer{
 		Title:             title,
-		CustomerID:        customer.ID,
+		CustomerID:        &customer.ID,
 		CustomerName:      customer.Name,
 		CompanyID:         domain.CompanyStalbygg,
 		Phase:             phase,
@@ -115,7 +115,7 @@ func TestOfferRepository_Create(t *testing.T) {
 	t.Run("create offer successfully", func(t *testing.T) {
 		offer := &domain.Offer{
 			Title:             "Test Offer Create",
-			CustomerID:        customer.ID,
+			CustomerID:        &customer.ID,
 			CustomerName:      customer.Name,
 			CompanyID:         domain.CompanyStalbygg,
 			Phase:             domain.OfferPhaseDraft,
@@ -700,7 +700,7 @@ func createOfferTestProject(t *testing.T, db *gorm.DB, name string, customerID u
 func createOfferWithProject(t *testing.T, db *gorm.DB, title string, phase domain.OfferPhase, customerID uuid.UUID, customerName string, projectID uuid.UUID, value float64) *domain.Offer {
 	offer := &domain.Offer{
 		Title:             title,
-		CustomerID:        customerID,
+		CustomerID:        &customerID,
 		CustomerName:      customerName,
 		ProjectID:         &projectID,
 		CompanyID:         domain.CompanyStalbygg,
