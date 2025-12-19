@@ -150,7 +150,7 @@ func TestOfferRepository_GetByID(t *testing.T) {
 		assert.NotNil(t, found)
 		assert.Equal(t, offer.ID, found.ID)
 		assert.NotNil(t, found.Customer)
-		assert.Equal(t, offer.CustomerID, found.Customer.ID)
+		assert.Equal(t, *offer.CustomerID, found.Customer.ID)
 	})
 
 	t.Run("found with files preloaded", func(t *testing.T) {
