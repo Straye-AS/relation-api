@@ -325,7 +325,9 @@ jobs:
               "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" \
               "AZURE_CLIENT_ID=secretref:azure-client-id" \
               "AZURE_CLIENT_SECRET=secretref:azure-client-secret" \
-              "CORS_ALLOWEDORIGINS=https://straye-relation-portal-staging.proudsmoke-10281cc0.norwayeast.azurecontainerapps.io"
+              "CORS_ALLOWEDORIGINS=https://straye-relation-portal-staging.proudsmoke-10281cc0.norwayeast.azurecontainerapps.io,https://strayerelation.no,https://www.strayerelation.no" \
+              "DATAWAREHOUSE_ENABLED=true" \
+              "DATAWAREHOUSE_PERIODIC_SYNC_ENABLED=true"
 
       - name: Verify deployment
         run: |
