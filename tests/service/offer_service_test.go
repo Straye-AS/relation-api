@@ -1241,7 +1241,10 @@ func TestOfferService_UpdateOfferSpent(t *testing.T) {
 
 	ctx := createOfferTestContext()
 
-	t.Run("update spent in order phase", func(t *testing.T) {
+	// All UpdateOfferSpent calls should now return ErrOfferFinancialFieldReadOnly
+	// as spent/invoiced fields are now managed by data warehouse sync
+
+	t.Run("spent field is read-only - returns error", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Update Spent Order", domain.OfferPhaseOrder)
 
 		req := &domain.UpdateOfferSpentRequest{
@@ -1249,33 +1252,9 @@ func TestOfferService_UpdateOfferSpent(t *testing.T) {
 		}
 
 		result, err := svc.UpdateOfferSpent(ctx, offer.ID, req)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, 25000.50, result.Spent)
-	})
-
-	t.Run("cannot update spent in non-order phase", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Update Spent Sent", domain.OfferPhaseSent)
-
-		req := &domain.UpdateOfferSpentRequest{
-			Spent: 5000,
-		}
-
-		result, err := svc.UpdateOfferSpent(ctx, offer.ID, req)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
-	})
-
-	t.Run("not found", func(t *testing.T) {
-		req := &domain.UpdateOfferSpentRequest{
-			Spent: 1000,
-		}
-
-		result, err := svc.UpdateOfferSpent(ctx, uuid.New(), req)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+		assert.ErrorIs(t, err, service.ErrOfferFinancialFieldReadOnly)
 	})
 }
 
@@ -1286,7 +1265,10 @@ func TestOfferService_UpdateOfferInvoiced(t *testing.T) {
 
 	ctx := createOfferTestContext()
 
-	t.Run("update invoiced in order phase", func(t *testing.T) {
+	// All UpdateOfferInvoiced calls should now return ErrOfferFinancialFieldReadOnly
+	// as spent/invoiced fields are now managed by data warehouse sync
+
+	t.Run("invoiced field is read-only - returns error", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Update Invoiced Order", domain.OfferPhaseOrder)
 
 		req := &domain.UpdateOfferInvoicedRequest{
@@ -1294,33 +1276,9 @@ func TestOfferService_UpdateOfferInvoiced(t *testing.T) {
 		}
 
 		result, err := svc.UpdateOfferInvoiced(ctx, offer.ID, req)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, 50000.0, result.Invoiced)
-	})
-
-	t.Run("cannot update invoiced in non-order phase", func(t *testing.T) {
-		offer := fixtures.createTestOffer(t, ctx, "Test Update Invoiced Draft", domain.OfferPhaseDraft)
-
-		req := &domain.UpdateOfferInvoicedRequest{
-			Invoiced: 10000,
-		}
-
-		result, err := svc.UpdateOfferInvoiced(ctx, offer.ID, req)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrOfferNotInOrderPhase)
-	})
-
-	t.Run("not found", func(t *testing.T) {
-		req := &domain.UpdateOfferInvoicedRequest{
-			Invoiced: 1000,
-		}
-
-		result, err := svc.UpdateOfferInvoiced(ctx, uuid.New(), req)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+		assert.ErrorIs(t, err, service.ErrOfferFinancialFieldReadOnly)
 	})
 }
 
