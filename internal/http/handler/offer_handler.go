@@ -728,6 +728,8 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Offer is already in order phase")
 	case errors.Is(err, service.ErrOfferAlreadyCompleted):
 		respondWithError(w, http.StatusBadRequest, "Offer is already completed")
+	case errors.Is(err, service.ErrOfferFinancialFieldReadOnly):
+		respondWithError(w, http.StatusBadRequest, "Spent and invoiced fields are read-only and managed by data warehouse sync")
 	default:
 		respondWithError(w, http.StatusInternalServerError, "Internal server error")
 	}

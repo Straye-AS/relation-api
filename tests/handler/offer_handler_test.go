@@ -1033,13 +1033,14 @@ func TestOfferHandler_UpdateOfferHealth(t *testing.T) {
 }
 
 // TestOfferHandler_UpdateOfferSpent tests the UpdateOfferSpent endpoint
+// Note: Spent field is now read-only and managed by data warehouse sync
 func TestOfferHandler_UpdateOfferSpent(t *testing.T) {
 	db := setupOfferHandlerTestDB(t)
 	h := createOfferHandler(t, db)
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
 	ctx := createOfferTestContext()
 
-	t.Run("update spent for order phase offer", func(t *testing.T) {
+	t.Run("spent field is read-only returns bad request", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
 
 		reqBody := domain.UpdateOfferSpentRequest{
@@ -1054,54 +1055,20 @@ func TestOfferHandler_UpdateOfferSpent(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.UpdateOfferSpent(rr, req)
 
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		var result domain.OfferDTO
-		err := json.Unmarshal(rr.Body.Bytes(), &result)
-		assert.NoError(t, err)
-		assert.Equal(t, 25000.50, result.Spent)
-	})
-
-	t.Run("update spent for non-order phase fails", func(t *testing.T) {
-		offer := createTestOffer(t, db, customer, domain.OfferPhaseSent)
-
-		reqBody := domain.UpdateOfferSpentRequest{
-			Spent: 5000,
-		}
-		body, _ := json.Marshal(reqBody)
-
-		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/spent", bytes.NewReader(body))
-		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
-		req.Header.Set("Content-Type", "application/json")
-
-		rr := httptest.NewRecorder()
-		h.UpdateOfferSpent(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("update spent with invalid body", func(t *testing.T) {
-		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
-
-		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/spent", bytes.NewReader([]byte("invalid")))
-		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
-		req.Header.Set("Content-Type", "application/json")
-
-		rr := httptest.NewRecorder()
-		h.UpdateOfferSpent(rr, req)
-
+		// Spent is now read-only, managed by data warehouse sync
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }
 
 // TestOfferHandler_UpdateOfferInvoiced tests the UpdateOfferInvoiced endpoint
+// Note: Invoiced field is now read-only and managed by data warehouse sync
 func TestOfferHandler_UpdateOfferInvoiced(t *testing.T) {
 	db := setupOfferHandlerTestDB(t)
 	h := createOfferHandler(t, db)
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
 	ctx := createOfferTestContext()
 
-	t.Run("update invoiced for order phase offer", func(t *testing.T) {
+	t.Run("invoiced field is read-only returns bad request", func(t *testing.T) {
 		offer := createTestOffer(t, db, customer, domain.OfferPhaseOrder)
 
 		reqBody := domain.UpdateOfferInvoicedRequest{
@@ -1116,29 +1083,7 @@ func TestOfferHandler_UpdateOfferInvoiced(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.UpdateOfferInvoiced(rr, req)
 
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		var result domain.OfferDTO
-		err := json.Unmarshal(rr.Body.Bytes(), &result)
-		assert.NoError(t, err)
-		assert.Equal(t, 50000.0, result.Invoiced)
-	})
-
-	t.Run("update invoiced for non-order phase fails", func(t *testing.T) {
-		offer := createTestOffer(t, db, customer, domain.OfferPhaseDraft)
-
-		reqBody := domain.UpdateOfferInvoicedRequest{
-			Invoiced: 10000,
-		}
-		body, _ := json.Marshal(reqBody)
-
-		req := httptest.NewRequest(http.MethodPut, "/offers/"+offer.ID.String()+"/invoiced", bytes.NewReader(body))
-		req = req.WithContext(withChiContext(ctx, map[string]string{"id": offer.ID.String()}))
-		req.Header.Set("Content-Type", "application/json")
-
-		rr := httptest.NewRecorder()
-		h.UpdateOfferInvoiced(rr, req)
-
+		// Invoiced is now read-only, managed by data warehouse sync
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }

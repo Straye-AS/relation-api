@@ -357,6 +357,13 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		if errors.Is(err, service.ErrCustomerHasActiveDependencies) {
+			respondJSON(w, http.StatusConflict, domain.ErrorResponse{
+				Error:   "Conflict",
+				Message: err.Error(),
+			})
+			return
+		}
 		h.logger.Error("failed to delete customer", zap.Error(err))
 		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
 			Error:   "Internal Server Error",

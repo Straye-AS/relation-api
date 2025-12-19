@@ -30,6 +30,7 @@ func setupCustomerHandlerTestDB(t *testing.T) *gorm.DB {
 func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 	logger := zap.NewNop()
 	customerRepo := repository.NewCustomerRepository(db)
+	dealRepo := repository.NewDealRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	offerRepo := repository.NewOfferRepository(db)
@@ -41,7 +42,7 @@ func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 	userRepo := repository.NewUserRepository(db)
 	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
-	customerService := service.NewCustomerService(customerRepo, activityRepo, logger)
+	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, activityRepo, logger)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, logger)
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, logger)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)

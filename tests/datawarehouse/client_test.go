@@ -97,31 +97,31 @@ func TestGetGeneralLedgerTableName(t *testing.T) {
 		{
 			name:      "tak company",
 			companyID: "tak",
-			wantTable: "dbo.nxt_strayetak_generalledgertransaction",
+			wantTable: "nxt_strayetak_generalledgertransaction",
 			wantErr:   false,
 		},
 		{
 			name:      "stalbygg company",
 			companyID: "stalbygg",
-			wantTable: "dbo.nxt_strayestaal_generalledgertransaction",
+			wantTable: "nxt_strayestaal_generalledgertransaction",
 			wantErr:   false,
 		},
 		{
 			name:      "montasje company",
 			companyID: "montasje",
-			wantTable: "dbo.nxt_strayemontage_generalledgertransaction",
+			wantTable: "nxt_strayemontasje_generalledgertransaction",
 			wantErr:   false,
 		},
 		{
 			name:      "hybridbygg company",
 			companyID: "hybridbygg",
-			wantTable: "dbo.nxt_strayehybridbygg_generalledgertransaction",
+			wantTable: "nxt_strayehybridbygg_generalledgertransaction",
 			wantErr:   false,
 		},
 		{
 			name:      "industri company",
 			companyID: "industri",
-			wantTable: "dbo.nxt_strayeindustri_generalledgertransaction",
+			wantTable: "nxt_strayeindustri_generalledgertransaction",
 			wantErr:   false,
 		},
 		{
@@ -158,7 +158,7 @@ func TestCompanyMapping(t *testing.T) {
 	expectedMappings := map[string]string{
 		"tak":        "strayetak",
 		"stalbygg":   "strayestaal",
-		"montasje":   "strayemontage",
+		"montasje":   "strayemontasje",
 		"hybridbygg": "strayehybridbygg",
 		"industri":   "strayeindustri",
 	}
