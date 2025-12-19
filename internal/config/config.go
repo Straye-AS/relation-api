@@ -66,6 +66,14 @@ type DataWarehouseConfig struct {
 	ConnMaxLifetime int
 	// QueryTimeout is the default timeout for queries (seconds)
 	QueryTimeout int
+	// PeriodicSyncEnabled controls whether the periodic sync job runs
+	PeriodicSyncEnabled bool
+	// PeriodicSyncCron is the cron expression for the periodic sync job
+	// Format: "seconds minutes hours day-of-month month day-of-week" or standard 5-field format
+	// Default: "0 15 * * * *" (at minute 15 of every hour)
+	PeriodicSyncCron string
+	// PeriodicSyncTimeout is the timeout for the periodic sync job (seconds)
+	PeriodicSyncTimeout int
 }
 
 type AzureAdConfig struct {
@@ -205,6 +213,11 @@ func (d *DataWarehouseConfig) QueryTimeoutDuration() time.Duration {
 	return time.Duration(d.QueryTimeout) * time.Second
 }
 
+// PeriodicSyncTimeoutDuration returns the periodic sync timeout as duration
+func (d *DataWarehouseConfig) PeriodicSyncTimeoutDuration() time.Duration {
+	return time.Duration(d.PeriodicSyncTimeout) * time.Second
+}
+
 // Load loads configuration from file and environment variables
 // This is a basic load that doesn't fetch secrets from vault
 // Use LoadWithSecrets for full secret resolution
@@ -265,6 +278,11 @@ func Load() (*Config, error) {
 	// Check for DATAWAREHOUSE_ENABLED env var override
 	if v.GetBool("DATAWAREHOUSE_ENABLED") {
 		cfg.DataWarehouse.Enabled = true
+	}
+
+	// Check for DATAWAREHOUSE_PERIODIC_SYNC_ENABLED env var override
+	if v.GetBool("DATAWAREHOUSE_PERIODIC_SYNC_ENABLED") {
+		cfg.DataWarehouse.PeriodicSyncEnabled = true
 	}
 
 	// NOTE: Data warehouse credentials are ONLY loaded from Azure Key Vault
@@ -471,8 +489,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("dataWarehouse.enabled", false) // Disabled by default
 	v.SetDefault("dataWarehouse.maxOpenConns", 10)
 	v.SetDefault("dataWarehouse.maxIdleConns", 2)
-	v.SetDefault("dataWarehouse.connMaxLifetime", 300) // 5 minutes
-	v.SetDefault("dataWarehouse.queryTimeout", 30)     // 30 seconds default query timeout
+	v.SetDefault("dataWarehouse.connMaxLifetime", 300)             // 5 minutes
+	v.SetDefault("dataWarehouse.queryTimeout", 30)                 // 30 seconds default query timeout
+	v.SetDefault("dataWarehouse.periodicSyncEnabled", false)       // Disabled by default
+	v.SetDefault("dataWarehouse.periodicSyncCron", "0 15 * * * *") // At minute 15 of every hour (with seconds field)
+	v.SetDefault("dataWarehouse.periodicSyncTimeout", 300)         // 5 minutes timeout for sync job
 
 	// Secrets defaults
 	v.SetDefault("secrets.source", "auto")

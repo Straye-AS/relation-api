@@ -149,13 +149,15 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
 - `industri` -> `strayeindustri`
 
 **General Ledger Tables**: `dbo.nxt_<prefix>_generalledgertransaction`
-- Use `OrgUnit2` column to match against project `external_reference`
+- Use `OrgUnit8` column to match against project `external_reference`
 - `AccountNo` column identifies the account type
 - `PostedAmountDomestic` column contains the transaction amount
 
 **Account Number Ranges**:
 - `3000-3999`: Income/Revenue accounts
-- All other accounts: Cost accounts
+- `4000-4999`: Material cost accounts
+- `5000-5999`: Employee cost accounts
+- `>=6000`: Other cost accounts
 - Use `IsIncomeAccount(accountNo)` and `IsCostAccount(accountNo)` helper functions
 
 **Usage**:
@@ -177,6 +179,32 @@ financials, err := dwClient.GetProjectFinancials(ctx, "tak", "PROJECT-123")
 ```
 
 **Health Check**: `GET /health/datawarehouse` returns status, latency, and pool stats.
+
+**Offer Sync Feature**:
+The data warehouse sync feature persists financial data to offer records:
+
+- **Endpoint**: `GET /offers/{id}/external-sync` - Syncs DW data for a single offer and persists to the database
+- **Offer Fields**: `dw_total_income`, `dw_material_costs`, `dw_employee_costs`, `dw_other_costs`, `dw_net_result`, `dw_last_synced_at`
+- **Requirement**: Offer must have an `external_reference` that matches `OrgUnit8` in the GL table
+- **Activity Logging**: Each sync creates a system activity log entry
+
+**Periodic Sync Job**:
+A background job can automatically sync all offers with external_reference:
+
+- **Enable**: Set `DATAWAREHOUSE_PERIODIC_SYNC_ENABLED=true`
+- **Schedule**: Default cron `0 15 * * * *` (minute 15 of every hour)
+- **Configure**: `dataWarehouse.periodicSyncCron` in config or env var
+- **Timeout**: Default 5 minutes (`dataWarehouse.periodicSyncTimeout`)
+- **Behavior**: Continues on error for individual offers, logs failures
+
+**Service Methods**:
+```go
+// Sync single offer (used by endpoint)
+response, err := offerService.SyncFromDataWarehouse(ctx, offerID)
+
+// Sync all offers (used by cron job)
+synced, failed, err := offerService.SyncAllOffersFromDataWarehouse(ctx)
+```
 
 ## Configuration
 

@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
@@ -306,6 +307,13 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		CreatedByName: offer.CreatedByName,
 		UpdatedByID:   offer.UpdatedByID,
 		UpdatedByName: offer.UpdatedByName,
+		// Data Warehouse synced fields
+		DWTotalIncome:   offer.DWTotalIncome,
+		DWMaterialCosts: offer.DWMaterialCosts,
+		DWEmployeeCosts: offer.DWEmployeeCosts,
+		DWOtherCosts:    offer.DWOtherCosts,
+		DWNetResult:     offer.DWNetResult,
+		DWLastSyncedAt:  formatTimePointer(offer.DWLastSyncedAt),
 	}
 }
 
@@ -684,4 +692,13 @@ func ToCompanyDetailDTO(company *domain.Company) domain.CompanyDetailDTO {
 // FormatError creates a formatted error message
 func FormatError(entity, operation string, err error) error {
 	return fmt.Errorf("failed to %s %s: %w", operation, entity, err)
+}
+
+// formatTimePointer formats a time pointer to ISO 8601 string, returning nil if input is nil
+func formatTimePointer(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	formatted := t.Format("2006-01-02T15:04:05Z")
+	return &formatted
 }

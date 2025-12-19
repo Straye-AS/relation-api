@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/datawarehouse"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/mapper"
 	"github.com/straye-as/relation-api/internal/repository"
@@ -27,6 +28,7 @@ type OfferService struct {
 	userRepo         *repository.UserRepository
 	companyService   *CompanyService
 	numberSeqService *NumberSequenceService
+	dwClient         *datawarehouse.Client
 	logger           *zap.Logger
 	db               *gorm.DB
 }
@@ -59,6 +61,12 @@ func NewOfferService(
 		logger:           logger,
 		db:               db,
 	}
+}
+
+// SetDataWarehouseClient sets the data warehouse client for syncing financial data.
+// This is called after construction because the DW client is optional.
+func (s *OfferService) SetDataWarehouseClient(client *datawarehouse.Client) {
+	s.dwClient = client
 }
 
 // Create creates a new offer with initial items
@@ -2161,7 +2169,7 @@ func (s *OfferService) UpdateDueDate(ctx context.Context, id uuid.UUID, dueDate 
 }
 
 // UpdateExpirationDate updates only the expiration date field of an offer
-// If expirationDate is nil, defaults to 60 days after sent date
+// If expirationDate is nil, clears the expiration date
 func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, expirationDate *time.Time) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -2176,25 +2184,14 @@ func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, e
 		return nil, fmt.Errorf("only sent offers can have expiration dates")
 	}
 
-	// Determine the expiration date to set
-	var finalExpirationDate *time.Time
-	if expirationDate != nil {
-		// Validate expiration date is not before sent date
-		if offer.SentDate != nil && expirationDate.Before(*offer.SentDate) {
-			return nil, ErrExpirationDateBeforeSentDate
-		}
-		finalExpirationDate = expirationDate
-	} else {
-		// Default to 60 days after sent date
-		if offer.SentDate != nil {
-			expDate := offer.SentDate.AddDate(0, 0, 60)
-			finalExpirationDate = &expDate
-		}
+	// Validate expiration date is not before sent date (if provided)
+	if expirationDate != nil && offer.SentDate != nil && expirationDate.Before(*offer.SentDate) {
+		return nil, ErrExpirationDateBeforeSentDate
 	}
 
 	// Build updates including user tracking fields
 	updates := map[string]interface{}{
-		"expiration_date": finalExpirationDate,
+		"expiration_date": expirationDate,
 	}
 	if userCtx, ok := auth.FromContext(ctx); ok {
 		updates["updated_by_id"] = userCtx.UserID.String()
@@ -2210,7 +2207,7 @@ func (s *OfferService) UpdateExpirationDate(ctx context.Context, id uuid.UUID, e
 		return nil, fmt.Errorf("failed to reload offer: %w", err)
 	}
 
-	expirationDateStr := "60 dager fra sendedato (standard)"
+	expirationDateStr := "fjernet"
 	if expirationDate != nil {
 		expirationDateStr = expirationDate.Format("2006-01-02")
 	}
@@ -2643,4 +2640,206 @@ func (s *OfferService) syncProjectCustomer(ctx context.Context, projectID uuid.U
 	}
 
 	return nil
+}
+
+// ============================================================================
+// Data Warehouse Sync Methods
+// ============================================================================
+
+// ErrNoExternalReference indicates the offer has no external reference for DW sync
+var ErrNoExternalReference = errors.New("offer has no external reference")
+
+// ErrDataWarehouseNotAvailable indicates the data warehouse client is not available
+var ErrDataWarehouseNotAvailable = errors.New("data warehouse not available")
+
+// SyncFromDataWarehouse syncs financial data from the data warehouse for a single offer.
+// Returns the sync response with updated financials and sync status.
+// The offer must have an external_reference to be synced.
+func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) (*domain.OfferExternalSyncResponse, error) {
+	// Get the offer
+	offer, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Build base response
+	response := &domain.OfferExternalSyncResponse{
+		OfferID:           offer.ID,
+		ExternalReference: offer.ExternalReference,
+		CompanyID:         offer.CompanyID,
+		DataWarehouse: &domain.DataWarehouseFinancialsDTO{
+			TotalIncome:   0,
+			MaterialCosts: 0,
+			EmployeeCosts: 0,
+			OtherCosts:    0,
+			NetResult:     0,
+			Connected:     false,
+		},
+		Persisted: false,
+	}
+
+	// Validate external reference exists
+	if offer.ExternalReference == "" {
+		s.logger.Info("offer has no external reference, skipping DW sync",
+			zap.String("offer_id", id.String()))
+		return response, nil
+	}
+
+	// Check if data warehouse client is available
+	if s.dwClient == nil || !s.dwClient.IsEnabled() {
+		s.logger.Info("data warehouse not available, skipping sync",
+			zap.String("offer_id", id.String()))
+		return response, nil
+	}
+
+	// Query the data warehouse for project financials
+	financials, err := s.dwClient.GetProjectFinancials(ctx, string(offer.CompanyID), offer.ExternalReference)
+	if err != nil {
+		s.logger.Error("failed to query data warehouse",
+			zap.Error(err),
+			zap.String("offer_id", id.String()),
+			zap.String("external_reference", offer.ExternalReference),
+			zap.String("company_id", string(offer.CompanyID)))
+		// Return disconnected response on error (don't fail the request)
+		return response, nil
+	}
+
+	// Update the offer with DW financials
+	dwFinancials := &repository.DWFinancials{
+		TotalIncome:   financials.TotalIncome,
+		MaterialCosts: financials.MaterialCosts,
+		EmployeeCosts: financials.EmployeeCosts,
+		OtherCosts:    financials.OtherCosts,
+		NetResult:     financials.NetResult,
+	}
+
+	if err := s.offerRepo.UpdateDWFinancials(ctx, id, dwFinancials); err != nil {
+		s.logger.Error("failed to update offer with DW financials",
+			zap.Error(err),
+			zap.String("offer_id", id.String()))
+		// Still return the data even if persistence failed
+		response.DataWarehouse = &domain.DataWarehouseFinancialsDTO{
+			TotalIncome:   financials.TotalIncome,
+			MaterialCosts: financials.MaterialCosts,
+			EmployeeCosts: financials.EmployeeCosts,
+			OtherCosts:    financials.OtherCosts,
+			NetResult:     financials.NetResult,
+			Connected:     true,
+		}
+		return response, nil
+	}
+
+	// Get the synced timestamp
+	now := time.Now().Format("2006-01-02T15:04:05Z")
+
+	// Log activity for the sync
+	activity := &domain.Activity{
+		TargetType:   domain.ActivityTargetOffer,
+		TargetID:     offer.ID,
+		TargetName:   offer.Title,
+		Title:        "Finansdata synkronisert",
+		Body:         fmt.Sprintf("Finansdata synkronisert fra datavarehus. Inntekt: %.2f, Kostnader: %.2f, Resultat: %.2f", financials.TotalIncome, financials.MaterialCosts+financials.EmployeeCosts+financials.OtherCosts, financials.NetResult),
+		ActivityType: domain.ActivityTypeSystem,
+		Status:       domain.ActivityStatusCompleted,
+		OccurredAt:   time.Now(),
+		CreatorName:  "System",
+		CompanyID:    &offer.CompanyID,
+	}
+
+	if err := s.activityRepo.Create(ctx, activity); err != nil {
+		s.logger.Warn("failed to log DW sync activity",
+			zap.Error(err),
+			zap.String("offer_id", id.String()))
+		// Don't fail the sync for activity logging failure
+	}
+
+	s.logger.Info("successfully synced DW financials for offer",
+		zap.String("offer_id", id.String()),
+		zap.String("external_reference", offer.ExternalReference),
+		zap.Float64("total_income", financials.TotalIncome),
+		zap.Float64("material_costs", financials.MaterialCosts),
+		zap.Float64("employee_costs", financials.EmployeeCosts),
+		zap.Float64("other_costs", financials.OtherCosts),
+		zap.Float64("net_result", financials.NetResult))
+
+	// Return success response
+	response.DataWarehouse = &domain.DataWarehouseFinancialsDTO{
+		TotalIncome:   financials.TotalIncome,
+		MaterialCosts: financials.MaterialCosts,
+		EmployeeCosts: financials.EmployeeCosts,
+		OtherCosts:    financials.OtherCosts,
+		NetResult:     financials.NetResult,
+		Connected:     true,
+	}
+	response.SyncedAt = &now
+	response.Persisted = true
+
+	return response, nil
+}
+
+// SyncAllOffersFromDataWarehouse syncs financial data from the data warehouse for all offers
+// that have an external_reference. Continues on error for individual offers.
+// Returns counts for successfully synced and failed offers.
+func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (synced int, failed int, err error) {
+	// Check if data warehouse client is available
+	if s.dwClient == nil || !s.dwClient.IsEnabled() {
+		s.logger.Info("data warehouse not available, skipping bulk sync")
+		return 0, 0, ErrDataWarehouseNotAvailable
+	}
+
+	// Get all offers with external_reference
+	offers, err := s.offerRepo.GetOffersForDWSync(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get offers for DW sync: %w", err)
+	}
+
+	s.logger.Info("starting bulk DW sync",
+		zap.Int("offer_count", len(offers)))
+
+	for _, offer := range offers {
+		// Query the data warehouse for project financials
+		financials, err := s.dwClient.GetProjectFinancials(ctx, string(offer.CompanyID), offer.ExternalReference)
+		if err != nil {
+			s.logger.Warn("failed to query DW for offer",
+				zap.Error(err),
+				zap.String("offer_id", offer.ID.String()),
+				zap.String("external_reference", offer.ExternalReference))
+			failed++
+			continue
+		}
+
+		// Update the offer with DW financials
+		dwFinancials := &repository.DWFinancials{
+			TotalIncome:   financials.TotalIncome,
+			MaterialCosts: financials.MaterialCosts,
+			EmployeeCosts: financials.EmployeeCosts,
+			OtherCosts:    financials.OtherCosts,
+			NetResult:     financials.NetResult,
+		}
+
+		if err := s.offerRepo.UpdateDWFinancials(ctx, offer.ID, dwFinancials); err != nil {
+			s.logger.Warn("failed to update offer with DW financials",
+				zap.Error(err),
+				zap.String("offer_id", offer.ID.String()))
+			failed++
+			continue
+		}
+
+		synced++
+	}
+
+	s.logger.Info("completed bulk DW sync",
+		zap.Int("synced", synced),
+		zap.Int("failed", failed),
+		zap.Int("total", len(offers)))
+
+	return synced, failed, nil
+}
+
+// GetOffersForDWSync returns all offers that have an external_reference and can be synced.
+func (s *OfferService) GetOffersForDWSync(ctx context.Context) ([]domain.Offer, error) {
+	return s.offerRepo.GetOffersForDWSync(ctx)
 }

@@ -210,6 +210,13 @@ type OfferDTO struct {
 	CreatedByName string `json:"createdByName,omitempty"`
 	UpdatedByID   string `json:"updatedById,omitempty"`
 	UpdatedByName string `json:"updatedByName,omitempty"`
+	// Data Warehouse synced fields
+	DWTotalIncome   float64 `json:"dwTotalIncome"`            // Income from data warehouse
+	DWMaterialCosts float64 `json:"dwMaterialCosts"`          // Material costs from data warehouse
+	DWEmployeeCosts float64 `json:"dwEmployeeCosts"`          // Employee costs from data warehouse
+	DWOtherCosts    float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
+	DWNetResult     float64 `json:"dwNetResult"`              // Net result from data warehouse
+	DWLastSyncedAt  *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
 }
 
 type OfferItemDTO struct {
@@ -1555,16 +1562,20 @@ type ReopenProjectResponse struct {
 
 // DataWarehouseFinancialsDTO contains financial data retrieved from the data warehouse
 type DataWarehouseFinancialsDTO struct {
-	TotalIncome float64 `json:"totalIncome"` // Sum of income accounts (3000-3999)
-	TotalCosts  float64 `json:"totalCosts"`  // Sum of cost accounts (all other)
-	NetResult   float64 `json:"netResult"`   // totalIncome - totalCosts
-	Connected   bool    `json:"connected"`   // Whether data warehouse connection was successful
+	TotalIncome   float64 `json:"totalIncome"`   // Sum of income accounts (3000-3999)
+	MaterialCosts float64 `json:"materialCosts"` // Sum of material cost accounts (4000-4999)
+	EmployeeCosts float64 `json:"employeeCosts"` // Sum of employee cost accounts (5000-5999)
+	OtherCosts    float64 `json:"otherCosts"`    // Sum of other cost accounts (>=6000)
+	NetResult     float64 `json:"netResult"`     // totalIncome - all costs
+	Connected     bool    `json:"connected"`     // Whether data warehouse connection was successful
 }
 
-// OfferExternalSyncResponse contains the result of querying the data warehouse for an offer
+// OfferExternalSyncResponse contains the result of syncing data warehouse financials for an offer
 type OfferExternalSyncResponse struct {
 	OfferID           uuid.UUID                   `json:"offerId"`
 	ExternalReference string                      `json:"externalReference"`
 	CompanyID         CompanyID                   `json:"companyId"`
 	DataWarehouse     *DataWarehouseFinancialsDTO `json:"dataWarehouse"`
+	SyncedAt          *string                     `json:"syncedAt,omitempty"` // ISO 8601 - When the sync was performed
+	Persisted         bool                        `json:"persisted"`          // Whether data was persisted to the offer
 }

@@ -2013,3 +2013,60 @@ func (r *OfferRepository) GetUniqueCustomersForProject(ctx context.Context, proj
 
 	return customers, nil
 }
+
+// DWFinancials holds data warehouse financial data for updating an offer
+type DWFinancials struct {
+	TotalIncome   float64
+	MaterialCosts float64
+	EmployeeCosts float64
+	OtherCosts    float64
+	NetResult     float64
+}
+
+// UpdateDWFinancials updates the data warehouse synced financial fields on an offer.
+// This is called after successfully querying the data warehouse for project financials.
+func (r *OfferRepository) UpdateDWFinancials(ctx context.Context, id uuid.UUID, financials *DWFinancials) error {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"dw_total_income":   financials.TotalIncome,
+		"dw_material_costs": financials.MaterialCosts,
+		"dw_employee_costs": financials.EmployeeCosts,
+		"dw_other_costs":    financials.OtherCosts,
+		"dw_net_result":     financials.NetResult,
+		"dw_last_synced_at": now,
+		"updated_at":        now,
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id).
+		Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update DW financials: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("offer not found: %s", id)
+	}
+
+	return nil
+}
+
+// GetOffersForDWSync returns all offers that have an external_reference set.
+// These are offers that can be synced with the data warehouse.
+// Returns offers regardless of phase since financial data is relevant for all phases.
+func (r *OfferRepository) GetOffersForDWSync(ctx context.Context) ([]domain.Offer, error) {
+	var offers []domain.Offer
+
+	err := r.db.WithContext(ctx).
+		Where("external_reference IS NOT NULL").
+		Where("external_reference != ''").
+		Find(&offers).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get offers for DW sync: %w", err)
+	}
+
+	return offers, nil
+}

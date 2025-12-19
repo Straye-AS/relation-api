@@ -561,6 +561,13 @@ type Offer struct {
 	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
 	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
 	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
+	// Data Warehouse synced fields - populated by periodic sync from external ERP system
+	DWTotalIncome   float64    `gorm:"column:dw_total_income;default:0"`   // Income from DW (accounts 3000-3999)
+	DWMaterialCosts float64    `gorm:"column:dw_material_costs;default:0"` // Material costs (accounts 4000-4999)
+	DWEmployeeCosts float64    `gorm:"column:dw_employee_costs;default:0"` // Employee costs (accounts 5000-5999)
+	DWOtherCosts    float64    `gorm:"column:dw_other_costs;default:0"`    // Other costs (accounts >= 6000)
+	DWNetResult     float64    `gorm:"column:dw_net_result;default:0"`     // Net result (income - costs)
+	DWLastSyncedAt  *time.Time `gorm:"column:dw_last_synced_at"`           // Last successful sync timestamp
 	// Relations
 	Items []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
 	Files []File      `gorm:"foreignKey:OfferID"`

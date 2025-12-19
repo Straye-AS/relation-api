@@ -17,6 +17,7 @@ import (
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/http/middleware"
 	"github.com/straye-as/relation-api/internal/http/router"
+	"github.com/straye-as/relation-api/internal/jobs"
 	"github.com/straye-as/relation-api/internal/logger"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
@@ -163,6 +164,10 @@ func run() error {
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, log, db)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, log, db)
+	// Inject data warehouse client into offer service for DW sync functionality
+	if dwClient != nil {
+		offerService.SetDataWarehouseClient(dwClient)
+	}
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
@@ -222,6 +227,35 @@ func run() error {
 		activityHandler,
 	)
 
+	// Initialize and start scheduler for background jobs
+	var scheduler *jobs.Scheduler
+	if cfg.DataWarehouse.Enabled && cfg.DataWarehouse.PeriodicSyncEnabled && dwClient != nil {
+		scheduler = jobs.NewScheduler(log)
+
+		// Register the data warehouse sync job
+		if err := jobs.RegisterDWSyncJob(
+			scheduler,
+			offerService,
+			log,
+			cfg.DataWarehouse.PeriodicSyncCron,
+			cfg.DataWarehouse.PeriodicSyncTimeoutDuration(),
+		); err != nil {
+			log.Error("Failed to register DW sync job", zap.Error(err))
+		} else {
+			scheduler.Start()
+			log.Info("Scheduler started with DW sync job",
+				zap.String("cron_expr", cfg.DataWarehouse.PeriodicSyncCron),
+				zap.Duration("timeout", cfg.DataWarehouse.PeriodicSyncTimeoutDuration()),
+			)
+		}
+	} else {
+		log.Info("DW periodic sync disabled",
+			zap.Bool("dw_enabled", cfg.DataWarehouse.Enabled),
+			zap.Bool("periodic_sync_enabled", cfg.DataWarehouse.PeriodicSyncEnabled),
+			zap.Bool("dw_client_available", dwClient != nil),
+		)
+	}
+
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.App.Port),
@@ -246,6 +280,13 @@ func run() error {
 		return fmt.Errorf("server error: %w", err)
 	case sig := <-shutdown:
 		log.Info("Shutdown signal received", zap.String("signal", sig.String()))
+
+		// Stop scheduler if running
+		if scheduler != nil {
+			ctx := scheduler.Stop()
+			<-ctx.Done()
+			log.Info("Scheduler stopped")
+		}
 
 		// Graceful shutdown with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
