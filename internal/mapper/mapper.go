@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
@@ -31,8 +32,8 @@ func ToCustomerDTO(customer *domain.Customer, totalValueActive float64, totalVal
 		IsInternal:       customer.IsInternal,
 		Municipality:     customer.Municipality,
 		County:           customer.County,
-		CreatedAt:        customer.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:        customer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:        customer.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:        customer.UpdatedAt.UTC().Format(time.RFC3339),
 		TotalValueActive: totalValueActive,
 		TotalValueWon:    totalValueWon,
 		ActiveOffers:     activeOffers,
@@ -65,8 +66,8 @@ func ToContactDTO(contact *domain.Contact) domain.ContactDTO {
 		PreferredContactMethod: contact.PreferredContactMethod,
 		Notes:                  contact.Notes,
 		IsActive:               contact.IsActive,
-		CreatedAt:              contact.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:              contact.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:              contact.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:              contact.UpdatedAt.UTC().Format(time.RFC3339),
 		CreatedByID:            contact.CreatedByID,
 		CreatedByName:          contact.CreatedByName,
 		UpdatedByID:            contact.UpdatedByID,
@@ -93,7 +94,7 @@ func ToContactRelationshipDTO(rel *domain.ContactRelationship) domain.ContactRel
 		EntityID:   rel.EntityID,
 		Role:       rel.Role,
 		IsPrimary:  rel.IsPrimary,
-		CreatedAt:  rel.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:  rel.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -118,8 +119,8 @@ func ToDealDTO(deal *domain.Deal) domain.DealDTO {
 		LostReason:         deal.LostReason,
 		LossReasonCategory: deal.LossReasonCategory,
 		OfferID:            deal.OfferID,
-		CreatedAt:          deal.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:          deal.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:          deal.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:          deal.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 
 	if deal.ExpectedCloseDate != nil {
@@ -144,7 +145,7 @@ func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHis
 		ChangedByID:   history.ChangedByID,
 		ChangedByName: history.ChangedByName,
 		Notes:         history.Notes,
-		ChangedAt:     history.ChangedAt.Format("2006-01-02T15:04:05Z"),
+		ChangedAt:     history.ChangedAt.UTC().Format(time.RFC3339),
 	}
 
 	if history.FromStage != nil {
@@ -179,8 +180,8 @@ func ToProjectDTOWithOfferCount(project *domain.Project, offerCount int) domain.
 		CustomerName:      project.CustomerName,
 		Phase:             phase,
 		Location:          project.Location,
-		CreatedAt:         project.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:         project.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:         project.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:         project.UpdatedAt.UTC().Format(time.RFC3339),
 		DealID:            project.DealID,
 		ExternalReference: project.ExternalReference,
 		OfferCount:        offerCount,
@@ -191,11 +192,11 @@ func ToProjectDTOWithOfferCount(project *domain.Project, offerCount int) domain.
 	}
 
 	if !project.StartDate.IsZero() {
-		dto.StartDate = project.StartDate.Format("2006-01-02T15:04:05Z")
+		dto.StartDate = project.StartDate.UTC().Format(time.RFC3339)
 	}
 
 	if project.EndDate != nil {
-		dto.EndDate = project.EndDate.Format("2006-01-02T15:04:05Z")
+		dto.EndDate = project.EndDate.UTC().Format(time.RFC3339)
 	}
 
 	return dto
@@ -210,19 +211,19 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 
 	var dueDate *string
 	if offer.DueDate != nil {
-		formatted := offer.DueDate.Format("2006-01-02T15:04:05Z")
+		formatted := offer.DueDate.UTC().Format(time.RFC3339)
 		dueDate = &formatted
 	}
 
 	var sentDate *string
 	if offer.SentDate != nil {
-		formatted := offer.SentDate.Format("2006-01-02T15:04:05Z")
+		formatted := offer.SentDate.UTC().Format(time.RFC3339)
 		sentDate = &formatted
 	}
 
 	var expirationDate *string
 	if offer.ExpirationDate != nil {
-		formatted := offer.ExpirationDate.Format("2006-01-02T15:04:05Z")
+		formatted := offer.ExpirationDate.UTC().Format(time.RFC3339)
 		expirationDate = &formatted
 	}
 
@@ -238,13 +239,13 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 
 	var startDate *string
 	if offer.StartDate != nil {
-		formatted := offer.StartDate.Format("2006-01-02T15:04:05Z")
+		formatted := offer.StartDate.UTC().Format(time.RFC3339)
 		startDate = &formatted
 	}
 
 	var endDate *string
 	if offer.EndDate != nil {
-		formatted := offer.EndDate.Format("2006-01-02T15:04:05Z")
+		formatted := offer.EndDate.UTC().Format(time.RFC3339)
 		endDate = &formatted
 	}
 
@@ -274,8 +275,8 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		Probability:           offer.Probability,
 		Value:                 offer.Value,
 		Status:                offer.Status,
-		CreatedAt:             offer.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:             offer.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:             offer.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:             offer.UpdatedAt.UTC().Format(time.RFC3339),
 		ResponsibleUserID:     offer.ResponsibleUserID,
 		ResponsibleUserName:   offer.ResponsibleUserName,
 		Items:                 items,
@@ -306,6 +307,13 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		CreatedByName: offer.CreatedByName,
 		UpdatedByID:   offer.UpdatedByID,
 		UpdatedByName: offer.UpdatedByName,
+		// Data Warehouse synced fields
+		DWTotalIncome:   offer.DWTotalIncome,
+		DWMaterialCosts: offer.DWMaterialCosts,
+		DWEmployeeCosts: offer.DWEmployeeCosts,
+		DWOtherCosts:    offer.DWOtherCosts,
+		DWNetResult:     offer.DWNetResult,
+		DWLastSyncedAt:  formatTimePointer(offer.DWLastSyncedAt),
 	}
 }
 
@@ -338,8 +346,8 @@ func ToBudgetItemDTO(item *domain.BudgetItem) domain.BudgetItemDTO {
 		PricePerItem:    item.PricePerItem,
 		Description:     item.Description,
 		DisplayOrder:    item.DisplayOrder,
-		CreatedAt:       item.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:       item.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:       item.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:       item.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -388,8 +396,8 @@ func ToProjectActualCostDTO(cost *domain.ProjectActualCost) domain.ProjectActual
 		IsApproved:       cost.IsApproved,
 		ApprovedByID:     cost.ApprovedByID,
 		Notes:            cost.Notes,
-		CreatedAt:        cost.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:        cost.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:        cost.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:        cost.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 
 	if cost.PostingDate != nil {
@@ -397,11 +405,11 @@ func ToProjectActualCostDTO(cost *domain.ProjectActualCost) domain.ProjectActual
 	}
 
 	if cost.ERPSyncedAt != nil {
-		dto.ERPSyncedAt = cost.ERPSyncedAt.Format("2006-01-02T15:04:05Z")
+		dto.ERPSyncedAt = cost.ERPSyncedAt.UTC().Format(time.RFC3339)
 	}
 
 	if cost.ApprovedAt != nil {
-		dto.ApprovedAt = cost.ApprovedAt.Format("2006-01-02T15:04:05Z")
+		dto.ApprovedAt = cost.ApprovedAt.UTC().Format(time.RFC3339)
 	}
 
 	return dto
@@ -455,7 +463,7 @@ func ToNotificationDTO(notification *domain.Notification) domain.NotificationDTO
 		Title:      notification.Title,
 		Message:    notification.Message,
 		Read:       notification.Read,
-		CreatedAt:  notification.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:  notification.CreatedAt.UTC().Format(time.RFC3339),
 		EntityID:   notification.EntityID,
 		EntityType: notification.EntityType,
 	}
@@ -504,7 +512,7 @@ func ToFileDTO(file *domain.File) domain.FileDTO {
 		ContentType: file.ContentType,
 		Size:        file.Size,
 		OfferID:     file.OfferID,
-		CreatedAt:   file.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:   file.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -517,9 +525,9 @@ func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
 		TargetName:       activity.TargetName,
 		Title:            activity.Title,
 		Body:             activity.Body,
-		OccurredAt:       activity.OccurredAt.Format("2006-01-02T15:04:05Z"),
+		OccurredAt:       activity.OccurredAt.UTC().Format(time.RFC3339),
 		CreatorName:      activity.CreatorName,
-		CreatedAt:        activity.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:        activity.CreatedAt.UTC().Format(time.RFC3339),
 		ActivityType:     activity.ActivityType,
 		Status:           activity.Status,
 		DurationMinutes:  activity.DurationMinutes,
@@ -537,7 +545,7 @@ func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
 	}
 
 	if activity.ScheduledAt != nil {
-		dto.ScheduledAt = activity.ScheduledAt.Format("2006-01-02T15:04:05Z")
+		dto.ScheduledAt = activity.ScheduledAt.UTC().Format(time.RFC3339)
 	}
 
 	if activity.DueDate != nil {
@@ -545,7 +553,7 @@ func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
 	}
 
 	if activity.CompletedAt != nil {
-		dto.CompletedAt = activity.CompletedAt.Format("2006-01-02T15:04:05Z")
+		dto.CompletedAt = activity.CompletedAt.UTC().Format(time.RFC3339)
 	}
 
 	return dto
@@ -559,12 +567,12 @@ func ToUserRoleDTO(role *domain.UserRole) domain.UserRoleDTO {
 		Role:      role.Role,
 		CompanyID: role.CompanyID,
 		GrantedBy: role.GrantedBy,
-		GrantedAt: role.GrantedAt.Format("2006-01-02T15:04:05Z"),
+		GrantedAt: role.GrantedAt.UTC().Format(time.RFC3339),
 		IsActive:  role.IsActive,
 	}
 
 	if role.ExpiresAt != nil {
-		dto.ExpiresAt = role.ExpiresAt.Format("2006-01-02T15:04:05Z")
+		dto.ExpiresAt = role.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 
 	return dto
@@ -579,12 +587,12 @@ func ToUserPermissionDTO(perm *domain.UserPermission) domain.UserPermissionDTO {
 		CompanyID:  perm.CompanyID,
 		IsGranted:  perm.IsGranted,
 		GrantedBy:  perm.GrantedBy,
-		GrantedAt:  perm.GrantedAt.Format("2006-01-02T15:04:05Z"),
+		GrantedAt:  perm.GrantedAt.UTC().Format(time.RFC3339),
 		Reason:     perm.Reason,
 	}
 
 	if perm.ExpiresAt != nil {
-		dto.ExpiresAt = perm.ExpiresAt.Format("2006-01-02T15:04:05Z")
+		dto.ExpiresAt = perm.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 
 	return dto
@@ -608,7 +616,7 @@ func ToAuditLogDTO(log *domain.AuditLog) domain.AuditLogDTO {
 		IPAddress:   log.IPAddress,
 		UserAgent:   log.UserAgent,
 		RequestID:   log.RequestID,
-		PerformedAt: log.PerformedAt.Format("2006-01-02T15:04:05Z"),
+		PerformedAt: log.PerformedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -676,12 +684,22 @@ func ToCompanyDetailDTO(company *domain.Company) domain.CompanyDetailDTO {
 		IsActive:                    company.IsActive,
 		DefaultOfferResponsibleID:   company.DefaultOfferResponsibleID,
 		DefaultProjectResponsibleID: company.DefaultProjectResponsibleID,
-		CreatedAt:                   company.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:                   company.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:                   company.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:                   company.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
 // FormatError creates a formatted error message
 func FormatError(entity, operation string, err error) error {
 	return fmt.Errorf("failed to %s %s: %w", operation, entity, err)
+}
+
+// formatTimePointer formats a time pointer to ISO 8601 string in UTC, returning nil if input is nil
+func formatTimePointer(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	// Convert to UTC before formatting to ensure correct timezone representation
+	formatted := t.UTC().Format(time.RFC3339)
+	return &formatted
 }

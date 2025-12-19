@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -91,6 +92,10 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 				Error:   "Unauthorized",
 				Message: "Authentication required",
 			})
+			return
+		}
+		// Don't log context cancellation as error - client just disconnected
+		if errors.Is(err, context.Canceled) {
 			return
 		}
 		h.logger.Error("failed to list notifications", zap.Error(err))

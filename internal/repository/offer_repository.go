@@ -2013,3 +2013,149 @@ func (r *OfferRepository) GetUniqueCustomersForProject(ctx context.Context, proj
 
 	return customers, nil
 }
+
+// DWFinancials holds data warehouse financial data for updating an offer
+type DWFinancials struct {
+	TotalIncome   float64
+	MaterialCosts float64
+	EmployeeCosts float64
+	OtherCosts    float64
+	NetResult     float64
+}
+
+// UpdateDWFinancials updates the data warehouse synced financial fields on an offer.
+// This is called after successfully querying the data warehouse for project financials.
+// Always updates Spent (total costs) and Invoiced (total income) - these fields are read-only from the API.
+// Returns the updated offer.
+func (r *OfferRepository) UpdateDWFinancials(ctx context.Context, id uuid.UUID, financials *DWFinancials) (*domain.Offer, error) {
+	now := time.Now()
+
+	// Calculate total costs
+	totalCosts := financials.MaterialCosts + financials.EmployeeCosts + financials.OtherCosts
+
+	updates := map[string]interface{}{
+		"dw_total_income":   financials.TotalIncome,
+		"dw_material_costs": financials.MaterialCosts,
+		"dw_employee_costs": financials.EmployeeCosts,
+		"dw_other_costs":    financials.OtherCosts,
+		"dw_net_result":     financials.NetResult,
+		"dw_last_synced_at": now,
+		"spent":             totalCosts,             // Always sync from DW
+		"invoiced":          financials.TotalIncome, // Always sync from DW
+		"updated_at":        now,
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id).
+		Updates(updates)
+
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to update DW financials: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return nil, fmt.Errorf("offer not found: %s", id)
+	}
+
+	// Fetch and return the updated offer
+	var offer domain.Offer
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&offer).Error; err != nil {
+		return nil, fmt.Errorf("failed to get updated offer: %w", err)
+	}
+
+	return &offer, nil
+}
+
+// ClearDWFinancials resets all data warehouse financial fields to zero.
+// Called when external_reference is cleared or changed.
+func (r *OfferRepository) ClearDWFinancials(ctx context.Context, id uuid.UUID) error {
+	now := time.Now()
+
+	updates := map[string]interface{}{
+		"dw_total_income":   0,
+		"dw_material_costs": 0,
+		"dw_employee_costs": 0,
+		"dw_other_costs":    0,
+		"dw_net_result":     0,
+		"dw_last_synced_at": nil,
+		"spent":             0,
+		"invoiced":          0,
+		"updated_at":        now,
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Where("id = ?", id).
+		Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to clear DW financials: %w", result.Error)
+	}
+
+	return nil
+}
+
+// GetOffersForDWSync returns all offers in "order" phase that have an external_reference set.
+// Only "order" phase offers are synced automatically; other phases require manual sync.
+func (r *OfferRepository) GetOffersForDWSync(ctx context.Context) ([]domain.Offer, error) {
+	var offers []domain.Offer
+
+	err := r.db.WithContext(ctx).
+		Where("external_reference IS NOT NULL").
+		Where("external_reference != ''").
+		Where("phase = ?", domain.OfferPhaseOrder).
+		Find(&offers).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get offers for DW sync: %w", err)
+	}
+
+	return offers, nil
+}
+
+// GetAllOffersWithExternalReference returns ALL offers that have an external_reference set
+// and need syncing (not synced within maxAge), regardless of phase.
+// Used for admin bulk sync operations.
+func (r *OfferRepository) GetAllOffersWithExternalReference(ctx context.Context, maxAge time.Duration) ([]domain.Offer, error) {
+	var offers []domain.Offer
+
+	cutoff := time.Now().Add(-maxAge)
+
+	err := r.db.WithContext(ctx).
+		Where("external_reference IS NOT NULL").
+		Where("external_reference != ''").
+		Where("dw_last_synced_at IS NULL OR dw_last_synced_at < ?", cutoff).
+		Find(&offers).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all offers with external reference: %w", err)
+	}
+
+	return offers, nil
+}
+
+// GetOffersNeedingDWSync returns offers in "order" phase that need syncing from the data warehouse.
+// This includes offers where:
+// - phase is "order" AND
+// - external_reference is set AND
+// - dw_last_synced_at is NULL (never synced) OR older than the given maxAge
+// Only "order" phase offers are synced automatically; other phases require manual sync.
+func (r *OfferRepository) GetOffersNeedingDWSync(ctx context.Context, maxAge time.Duration) ([]domain.Offer, error) {
+	var offers []domain.Offer
+
+	cutoff := time.Now().Add(-maxAge)
+
+	err := r.db.WithContext(ctx).
+		Where("external_reference IS NOT NULL").
+		Where("external_reference != ''").
+		Where("phase = ?", domain.OfferPhaseOrder).
+		Where("dw_last_synced_at IS NULL OR dw_last_synced_at < ?", cutoff).
+		Find(&offers).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get offers needing DW sync: %w", err)
+	}
+
+	return offers, nil
+}

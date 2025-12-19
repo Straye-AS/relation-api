@@ -13,9 +13,11 @@ import (
 	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/database"
+	"github.com/straye-as/relation-api/internal/datawarehouse"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/http/middleware"
 	"github.com/straye-as/relation-api/internal/http/router"
+	"github.com/straye-as/relation-api/internal/jobs"
 	"github.com/straye-as/relation-api/internal/logger"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
@@ -110,6 +112,28 @@ func run() error {
 
 	log.Info("Storage initialized", zap.String("mode", cfg.Storage.Mode))
 
+	// Initialize data warehouse connection (optional - for reporting)
+	// This connection is read-only and the app continues without it if not configured
+	var dwClient *datawarehouse.Client
+	if cfg.DataWarehouse.Enabled {
+		dwClient, err = datawarehouse.NewClient(&cfg.DataWarehouse, log)
+		if err != nil {
+			// Log error but don't fail - data warehouse is optional
+			log.Warn("Data warehouse connection failed, continuing without it",
+				zap.Error(err),
+			)
+		} else if dwClient != nil {
+			log.Info("Data warehouse connected successfully",
+				zap.Int("max_open_conns", cfg.DataWarehouse.MaxOpenConns),
+				zap.Int("query_timeout_seconds", cfg.DataWarehouse.QueryTimeout),
+			)
+		}
+	} else {
+		log.Info("Data warehouse not configured, skipping",
+			zap.Bool("enabled", cfg.DataWarehouse.Enabled),
+		)
+	}
+
 	// Initialize repositories
 	customerRepo := repository.NewCustomerRepository(db)
 	contactRepo := repository.NewContactRepository(db)
@@ -137,9 +161,17 @@ func run() error {
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
 	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
+	// Inject data warehouse client into customer service for ERP sync functionality
+	if dwClient != nil {
+		customerService.SetDataWarehouseClient(&customerDWAdapter{client: dwClient})
+	}
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
 	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, log, db)
 	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, log, db)
+	// Inject data warehouse client into offer service for DW sync functionality
+	if dwClient != nil {
+		offerService.SetDataWarehouseClient(dwClient)
+	}
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
 	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
@@ -151,7 +183,7 @@ func run() error {
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
 
 	// Initialize middleware
-	authMiddleware := auth.NewMiddleware(cfg, log)
+	authMiddleware := auth.NewMiddleware(cfg, userRepo, log)
 	companyFilterMiddleware := middleware.NewCompanyFilterMiddleware(log)
 	rateLimiter := middleware.NewRateLimiter(&cfg.RateLimit, log)
 	auditMiddleware := middleware.NewAuditMiddleware(auditLogService, nil, log)
@@ -160,7 +192,7 @@ func run() error {
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, offerService, projectService, log)
 	contactHandler := handler.NewContactHandler(contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, offerService, log)
-	offerHandler := handler.NewOfferHandler(offerService, log)
+	offerHandler := handler.NewOfferHandler(offerService, dwClient, log)
 	inquiryHandler := handler.NewInquiryHandler(inquiryService, log)
 	dealHandler := handler.NewDealHandler(dealService, log)
 	fileHandler := handler.NewFileHandler(fileService, cfg.Storage.MaxUploadSizeMB, log)
@@ -178,6 +210,7 @@ func run() error {
 		cfg,
 		log,
 		db,
+		dwClient,
 		authMiddleware,
 		companyFilterMiddleware,
 		rateLimiter,
@@ -197,6 +230,37 @@ func run() error {
 		notificationHandler,
 		activityHandler,
 	)
+
+	// Initialize and start scheduler for background jobs
+	var scheduler *jobs.Scheduler
+	if cfg.DataWarehouse.Enabled && cfg.DataWarehouse.PeriodicSyncEnabled && dwClient != nil {
+		scheduler = jobs.NewScheduler(log)
+
+		// Register the data warehouse sync job
+		// runStartupSync=true will sync stale offers (null or > 1 hour old) immediately
+		if err := jobs.RegisterDWSyncJob(
+			scheduler,
+			offerService,
+			log,
+			cfg.DataWarehouse.PeriodicSyncCron,
+			cfg.DataWarehouse.PeriodicSyncTimeoutDuration(),
+			true, // run startup sync for stale offers
+		); err != nil {
+			log.Error("Failed to register DW sync job", zap.Error(err))
+		} else {
+			scheduler.Start()
+			log.Info("Scheduler started with DW sync job",
+				zap.String("cron_expr", cfg.DataWarehouse.PeriodicSyncCron),
+				zap.Duration("timeout", cfg.DataWarehouse.PeriodicSyncTimeoutDuration()),
+			)
+		}
+	} else {
+		log.Info("DW periodic sync disabled",
+			zap.Bool("dw_enabled", cfg.DataWarehouse.Enabled),
+			zap.Bool("periodic_sync_enabled", cfg.DataWarehouse.PeriodicSyncEnabled),
+			zap.Bool("dw_client_available", dwClient != nil),
+		)
+	}
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -223,6 +287,13 @@ func run() error {
 	case sig := <-shutdown:
 		log.Info("Shutdown signal received", zap.String("signal", sig.String()))
 
+		// Stop scheduler if running
+		if scheduler != nil {
+			ctx := scheduler.Stop()
+			<-ctx.Done()
+			log.Info("Scheduler stopped")
+		}
+
 		// Graceful shutdown with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -232,8 +303,42 @@ func run() error {
 			return err
 		}
 
+		// Close data warehouse connection if initialized
+		if dwClient != nil {
+			if err := dwClient.Close(); err != nil {
+				log.Warn("Error closing data warehouse connection", zap.Error(err))
+			}
+		}
+
 		log.Info("Server stopped gracefully")
 	}
 
 	return nil
+}
+
+// customerDWAdapter adapts the datawarehouse.Client to the service.DataWarehouseClient interface
+// This allows the customer service to use the data warehouse client without depending directly on it
+type customerDWAdapter struct {
+	client *datawarehouse.Client
+}
+
+func (a *customerDWAdapter) IsEnabled() bool {
+	return a.client != nil && a.client.IsEnabled()
+}
+
+func (a *customerDWAdapter) GetERPCustomers(ctx context.Context) ([]service.DataWarehouseERPCustomer, error) {
+	erpCustomers, err := a.client.GetERPCustomers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert datawarehouse.ERPCustomer to service.DataWarehouseERPCustomer
+	result := make([]service.DataWarehouseERPCustomer, len(erpCustomers))
+	for i, c := range erpCustomers {
+		result[i] = service.DataWarehouseERPCustomer{
+			OrganizationNumber: c.OrganizationNumber,
+			Name:               c.Name,
+		}
+	}
+	return result, nil
 }

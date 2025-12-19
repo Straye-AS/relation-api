@@ -122,6 +122,90 @@ HTTP Request → Handler → Service → Repository → Database
 
 **File Storage**: Abstracted in `internal/storage/storage.go`. Supports local filesystem or cloud (Azure Blob, S3). Files linked to Offers via `File.OfferID`.
 
+### Data Warehouse (internal/datawarehouse/)
+
+Read-only connectivity to the MS SQL Server data warehouse for reporting and financial data integration.
+
+**Architecture**:
+- Uses `database/sql` with `github.com/microsoft/go-mssqldb` driver (not GORM)
+- Separate from the main repository layer since it's read-only
+- Optional connection - app starts normally without it if not configured
+- Connection pooling with retry logic for transient failures
+
+**Configuration**:
+- Enable via `DATAWAREHOUSE_ENABLED=true` environment variable
+- Requires `AZURE_KEY_VAULT_NAME` to be configured for credential access
+- Credentials are ONLY loaded from Azure Key Vault (never from environment variables):
+  - `WAREHOUSE-URL`: Connection URL (host:port/database)
+  - `WAREHOUSE-USERNAME`: Database user
+  - `WAREHOUSE-PASSWORD`: Database password
+- Works in ANY environment (including development) when enabled and Key Vault is configured
+
+**Company Mapping** (Straye ID -> Table Prefix):
+- `tak` -> `strayetak`
+- `stalbygg` -> `strayestaal`
+- `montasje` -> `strayemontasje`
+- `hybridbygg` -> `strayehybridbygg`
+- `industri` -> `strayeindustri`
+
+**General Ledger Tables**: `dbo.nxt_<prefix>_generalledgertransaction`
+- Use `OrgUnit8` column to match against project `external_reference`
+- `AccountNo` column identifies the account type
+- `PostedAmountDomestic` column contains the transaction amount
+
+**Account Number Ranges**:
+- `3000-3999`: Income/Revenue accounts
+- `4000-4999`: Material cost accounts
+- `5000-5999`: Employee cost accounts
+- `>=6000`: Other cost accounts
+- Use `IsIncomeAccount(accountNo)` and `IsCostAccount(accountNo)` helper functions
+
+**Usage**:
+```go
+// Get client from main.go initialization
+results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM dbo.nxt_strayetak_generalledgertransaction WHERE OrgUnit2 = @ref", externalRef)
+
+// Get table name for a company
+tableName, err := datawarehouse.GetGeneralLedgerTableName("tak")
+// Returns: "dbo.nxt_strayetak_generalledgertransaction"
+
+// Query project income/costs using helper methods
+income, err := dwClient.GetProjectIncome(ctx, "tak", "PROJECT-123")
+costs, err := dwClient.GetProjectCosts(ctx, "tak", "PROJECT-123")
+
+// Or get all financials in one query
+financials, err := dwClient.GetProjectFinancials(ctx, "tak", "PROJECT-123")
+// Returns: ProjectFinancials{TotalIncome, TotalCosts, NetResult}
+```
+
+**Health Check**: `GET /health/datawarehouse` returns status, latency, and pool stats.
+
+**Offer Sync Feature**:
+The data warehouse sync feature persists financial data to offer records:
+
+- **Endpoint**: `GET /offers/{id}/external-sync` - Syncs DW data for a single offer and persists to the database
+- **Offer Fields**: `dw_total_income`, `dw_material_costs`, `dw_employee_costs`, `dw_other_costs`, `dw_net_result`, `dw_last_synced_at`
+- **Requirement**: Offer must have an `external_reference` that matches `OrgUnit8` in the GL table
+- **Activity Logging**: Each sync creates a system activity log entry
+
+**Periodic Sync Job**:
+A background job can automatically sync all offers with external_reference:
+
+- **Enable**: Set `DATAWAREHOUSE_PERIODIC_SYNC_ENABLED=true`
+- **Schedule**: Default cron `0 15 * * * *` (minute 15 of every hour)
+- **Configure**: `dataWarehouse.periodicSyncCron` in config or env var
+- **Timeout**: Default 5 minutes (`dataWarehouse.periodicSyncTimeout`)
+- **Behavior**: Continues on error for individual offers, logs failures
+
+**Service Methods**:
+```go
+// Sync single offer (used by endpoint)
+response, err := offerService.SyncFromDataWarehouse(ctx, offerID)
+
+// Sync all offers (used by cron job)
+synced, failed, err := offerService.SyncAllOffersFromDataWarehouse(ctx)
+```
+
 ## Configuration
 
 Hierarchy: Default values in config.go → config.json → Environment variables (highest priority)

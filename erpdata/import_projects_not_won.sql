@@ -1,14 +1,15 @@
 -- =============================================================================
--- Straye Tak Projects Import: NON-CLOSED Offers
+-- Straye Tak Projects Import: NON-CLOSED Offers + Single Completed Offers
 -- =============================================================================
--- Generated: 2025-12-17
+-- Generated: 2025-12-18
 --
 -- Creates projects from non-closed offers:
 --   - 'in_progress' offers -> project phase 'tilbud'
 --   - 'sent' offers -> project phase 'tilbud'
 --   - 'order' offers -> project phase 'working'
+--   - 'completed' offers (when only one offer exists for project) -> project phase 'completed'
 --
--- Closed offers (completed, lost, expired) do NOT get projects.
+-- Closed offers (lost, expired) do NOT get projects.
 --
 -- Project numbers: "PROJECT-YYYY-NNN" format, shared across all companies
 -- Numbers are assigned based on offer sent_date (earliest first).
@@ -18,6 +19,7 @@
 
 -- Create projects for non-closed offers with sequential project numbers
 -- Projects are numbered by year based on offer sent_date
+-- Also includes 'completed' offers that are the only offer for their project
 WITH numbered_offers AS (
     SELECT
         o.id as offer_id,
@@ -36,7 +38,7 @@ WITH numbered_offers AS (
         ) as seq_in_year
     FROM offers o
     WHERE o.company_id = 'tak'
-      AND o.phase IN ('in_progress', 'sent', 'order')
+      AND o.phase IN ('in_progress', 'sent', 'order', 'completed')
       AND o.project_id IS NULL
 )
 INSERT INTO projects (
@@ -64,6 +66,7 @@ SELECT
     no.customer_name,
     CASE
         WHEN no.offer_phase = 'order' THEN 'working'::project_phase
+        WHEN no.offer_phase = 'completed' THEN 'completed'::project_phase
         ELSE 'tilbud'::project_phase
     END as phase,
     COALESCE(no.sent_date::date, CURRENT_DATE) as start_date,
@@ -86,7 +89,7 @@ WHERE p.external_reference = o.external_reference
   AND p.customer_id = o.customer_id
   AND p.name = o.title
   AND o.company_id = 'tak'
-  AND o.phase IN ('in_progress', 'sent', 'order')
+  AND o.phase IN ('in_progress', 'sent', 'order', 'completed')
   AND o.project_id IS NULL;
 
 -- Re-enable trigger for normal operation
@@ -95,9 +98,10 @@ ALTER TABLE offers ENABLE TRIGGER update_offers_updated_at;
 -- =============================================================================
 -- Summary
 -- =============================================================================
--- Projects created from non-closed offers:
+-- Projects created from non-closed offers + single completed offers:
 --   - tilbud: from in_progress + sent offers
 --   - working: from order offers (active work)
+--   - completed: from completed offers (single offer per project)
 --
 -- Project numbers:
 --   - Format: PROJECT-YYYY-NNN (e.g., PROJECT-2024-001)
@@ -114,7 +118,8 @@ ALTER TABLE offers ENABLE TRIGGER update_offers_updated_at;
 --   - in_progress: 11 offers -> tilbud projects
 --   - sent: 265 offers -> tilbud projects
 --   - order: 32 offers -> working projects
---   - Total: 308 projects created
+--   - completed: X offers -> completed projects
+--   - Total: 308+ projects created
 --
 -- To run:
 -- docker exec -i relation-postgres psql -U relation_user -d relation < erpdata/import_projects_not_won.sql

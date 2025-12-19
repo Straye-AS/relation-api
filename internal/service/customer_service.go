@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -86,7 +87,20 @@ type CustomerService struct {
 	dealRepo     *repository.DealRepository
 	projectRepo  *repository.ProjectRepository
 	activityRepo *repository.ActivityRepository
+	dwClient     DataWarehouseClient
 	logger       *zap.Logger
+}
+
+// DataWarehouseClient interface for customer sync operations
+type DataWarehouseClient interface {
+	IsEnabled() bool
+	GetERPCustomers(ctx context.Context) ([]DataWarehouseERPCustomer, error)
+}
+
+// DataWarehouseERPCustomer represents a customer from the ERP data warehouse
+type DataWarehouseERPCustomer struct {
+	OrganizationNumber string
+	Name               string
 }
 
 func NewCustomerService(
@@ -116,6 +130,12 @@ func NewCustomerServiceWithDeps(
 		activityRepo: activityRepo,
 		logger:       logger,
 	}
+}
+
+// SetDataWarehouseClient sets the data warehouse client for ERP sync operations.
+// This is called after construction because the DW client is optional.
+func (s *CustomerService) SetDataWarehouseClient(client DataWarehouseClient) {
+	s.dwClient = client
 }
 
 func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomerRequest) (*domain.CustomerDTO, error) {
@@ -455,15 +475,34 @@ func (s *CustomerService) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	// Check for active relations
-	hasActive, reason, err := s.customerRepo.HasActiveRelations(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to check customer relations: %w", err)
-	}
-	if hasActive {
-		return fmt.Errorf("%w: %s", ErrCustomerHasActiveDependencies, reason)
+	// Check for active dependencies before allowing delete (only if repos are available)
+	if s.dealRepo != nil {
+		// Get all deals for this customer and count only active ones (not won or lost)
+		dealFilters := &repository.DealFilters{CustomerID: &id}
+		deals, _, err := s.dealRepo.List(ctx, 1, 100, dealFilters, repository.DealSortByCreatedDesc)
+		if err != nil {
+			return fmt.Errorf("failed to check customer deals: %w", err)
+		}
+		// Filter out won and lost deals - only count active deals
+		for _, deal := range deals {
+			if deal.Stage != domain.DealStageWon && deal.Stage != domain.DealStageLost {
+				return fmt.Errorf("%w: has active deals", ErrCustomerHasActiveDependencies)
+			}
+		}
 	}
 
+	if s.projectRepo != nil {
+		projects, _, err := s.projectRepo.List(ctx, 1, 1, &id, nil)
+		if err != nil {
+			return fmt.Errorf("failed to check customer projects: %w", err)
+		}
+		if len(projects) > 0 {
+			return fmt.Errorf("%w: has active projects", ErrCustomerHasActiveDependencies)
+		}
+	}
+
+	// Soft delete - customer is hidden but preserved for historical reference
+	// Related projects and offers keep their customer_id and customer_name
 	if err := s.customerRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete customer: %w", err)
 	}
@@ -1049,4 +1088,122 @@ func (s *CustomerService) logActivity(ctx context.Context, customerID uuid.UUID,
 		}
 		_ = s.activityRepo.Create(ctx, activity)
 	}
+}
+
+// GetERPDifferences compares customers in the ERP data warehouse with customers in our database.
+// Returns customers that exist in one place but not the other.
+// For organizations (with org numbers), we match by organization number.
+// For private persons (without org numbers), we match by name.
+func (s *CustomerService) GetERPDifferences(ctx context.Context) (*domain.CustomerERPDifferencesResponse, error) {
+	response := &domain.CustomerERPDifferencesResponse{
+		MissingInLocal:       []domain.ERPCustomerDTO{},
+		MissingInERP:         []domain.LocalCustomerDTO{},
+		SyncedAt:             time.Now().UTC().Format(time.RFC3339),
+		DataWarehouseEnabled: s.dwClient != nil && s.dwClient.IsEnabled(),
+	}
+
+	// Check if data warehouse is available
+	if s.dwClient == nil || !s.dwClient.IsEnabled() {
+		s.logger.Info("data warehouse not available, cannot get ERP differences")
+		return response, nil
+	}
+
+	// Get all customers from ERP
+	erpCustomers, err := s.dwClient.GetERPCustomers(ctx)
+	if err != nil {
+		s.logger.Error("failed to get ERP customers", zap.Error(err))
+		return nil, fmt.Errorf("failed to get ERP customers: %w", err)
+	}
+	response.ERPCustomerCount = len(erpCustomers)
+
+	// Get all local customers
+	localCustomers, total, err := s.customerRepo.ListWithSortConfig(ctx, 1, 10000, &repository.CustomerFilters{}, repository.DefaultSortConfig())
+	if err != nil {
+		s.logger.Error("failed to get local customers", zap.Error(err))
+		return nil, fmt.Errorf("failed to get local customers: %w", err)
+	}
+	response.LocalCustomerCount = int(total)
+
+	// Build lookup maps for local customers (by org number and name)
+	localByOrgNumber := make(map[string]*domain.Customer)
+	localByName := make(map[string]*domain.Customer)
+	for i := range localCustomers {
+		customer := &localCustomers[i]
+		if customer.OrgNumber != "" {
+			normalizedOrgNumber := normalizeOrgNumber(customer.OrgNumber)
+			localByOrgNumber[normalizedOrgNumber] = customer
+		}
+		normalizedName := strings.ToLower(strings.TrimSpace(customer.Name))
+		localByName[normalizedName] = customer
+	}
+
+	// Build lookup maps for ERP customers (by org number and name)
+	erpByOrgNumber := make(map[string]bool)
+	erpByName := make(map[string]bool)
+	for _, erpCustomer := range erpCustomers {
+		if erpCustomer.OrganizationNumber != "" {
+			normalizedOrgNumber := normalizeOrgNumber(erpCustomer.OrganizationNumber)
+			erpByOrgNumber[normalizedOrgNumber] = true
+		}
+		normalizedName := strings.ToLower(strings.TrimSpace(erpCustomer.Name))
+		erpByName[normalizedName] = true
+	}
+
+	// Find customers in ERP but not in local DB
+	for _, erpCustomer := range erpCustomers {
+		var found bool
+
+		normalizedOrgNumber := normalizeOrgNumber(erpCustomer.OrganizationNumber)
+		if normalizedOrgNumber != "" {
+			_, found = localByOrgNumber[normalizedOrgNumber]
+		} else if erpCustomer.Name != "" {
+			normalizedName := strings.ToLower(strings.TrimSpace(erpCustomer.Name))
+			_, found = localByName[normalizedName]
+		}
+
+		if !found && (normalizedOrgNumber != "" || erpCustomer.Name != "") {
+			response.MissingInLocal = append(response.MissingInLocal, domain.ERPCustomerDTO{
+				OrganizationNumber: erpCustomer.OrganizationNumber,
+				Name:               erpCustomer.Name,
+			})
+		}
+	}
+
+	// Find customers in local DB but not in ERP
+	for _, localCustomer := range localCustomers {
+		var found bool
+
+		normalizedOrgNumber := normalizeOrgNumber(localCustomer.OrgNumber)
+		if normalizedOrgNumber != "" {
+			found = erpByOrgNumber[normalizedOrgNumber]
+		} else if localCustomer.Name != "" {
+			normalizedName := strings.ToLower(strings.TrimSpace(localCustomer.Name))
+			found = erpByName[normalizedName]
+		}
+
+		if !found && (normalizedOrgNumber != "" || localCustomer.Name != "") {
+			response.MissingInERP = append(response.MissingInERP, domain.LocalCustomerDTO{
+				ID:                 localCustomer.ID,
+				OrganizationNumber: localCustomer.OrgNumber,
+				Name:               localCustomer.Name,
+			})
+		}
+	}
+
+	s.logger.Info("completed ERP difference check",
+		zap.Int("erpCount", response.ERPCustomerCount),
+		zap.Int("localCount", response.LocalCustomerCount),
+		zap.Int("missingInLocal", len(response.MissingInLocal)),
+		zap.Int("missingInERP", len(response.MissingInERP)),
+	)
+
+	return response, nil
+}
+
+// normalizeOrgNumber removes spaces and dashes from organization numbers for comparison
+func normalizeOrgNumber(orgNumber string) string {
+	result := strings.TrimSpace(orgNumber)
+	result = strings.ReplaceAll(result, " ", "")
+	result = strings.ReplaceAll(result, "-", "")
+	return result
 }

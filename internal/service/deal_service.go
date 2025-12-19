@@ -665,7 +665,7 @@ func (s *DealService) GetPipelineAnalytics(ctx context.Context, filters *domain.
 	analytics := &domain.PipelineAnalyticsDTO{
 		Summary:         make([]domain.StageSummaryDTO, 0),
 		ConversionRates: make([]domain.ConversionRateDTO, 0),
-		GeneratedAt:     time.Now().Format("2006-01-02T15:04:05Z"),
+		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Extract filter values
@@ -812,7 +812,7 @@ func (s *DealService) CreateOfferFromDeal(ctx context.Context, dealID uuid.UUID,
 		// Create the offer
 		createdOffer = &domain.Offer{
 			Title:               offerTitle,
-			CustomerID:          deal.CustomerID,
+			CustomerID:          &deal.CustomerID,
 			CustomerName:        deal.CustomerName,
 			CompanyID:           deal.CompanyID,
 			Phase:               domain.OfferPhaseDraft,

@@ -104,7 +104,7 @@ VALUES
 ('a9a739eb-ce6c-4087-a0f6-85aa9af30b12', 'PARELIUSVEIEN 2 SAMEIE', '996734781', 'barbros1@getmail.com', '+47 92454400', 'c/o Obos Eiendomsforvaltning as, Hammersborg torg 1', '0179', 'OSLO', 'Norway', 'PARELIUSVEIEN 2 SAMEIE', 'active', 'bronze', '', false, 'OSLO', 'OSLO'),
 ('5fe75c17-ba11-4750-81ec-076f38144d3d', 'PARKETTEKSPERTEN AS', '818037562', '', '', 'Strykerveien 22B', '1658', 'TORP', 'Norge', '', 'active', 'bronze', '', false, '', ''),
 ('1b2a860f-e551-430a-ab31-ddf4c16c82be', 'PEAB BYGG AS', '943672520', '', '', 'Hjalmar Johansens gate 25', '9007', 'TROMSØ', 'Norge', '', 'active', 'bronze', '', false, '', ''),
-('1f48be94-23de-4a25-89a4-b63d24035160', 'Park og Anlegg A/S', '947585533', '', '', 'Sandflatvegen 32', '7036', 'TRONDHEIM', 'Norge', '', 'active', 'bronze', '', false, '', ''),
+('1f48be94-23de-4a25-89a4-b63d24035160', 'Park & Anlegg AS', '982382955', '', '', 'Gamle Kongevei 101', '1712', 'GRÅLUM', 'Norge', '', 'active', 'bronze', '', false, '', ''),
 ('ad765551-e313-47a8-82e2-5949636cf92d', 'RANDEM & HÜBERT AS', '989653245', '', '', 'Stanseveien 11', '0975', 'OSLO', 'Norway', 'RANDEM & HÜBERT AS', 'active', 'bronze', '', false, 'OSLO', 'OSLO'),
 ('3e8af49f-b8d1-442b-914f-7f1bd1dd36f6', 'Rg Fjellsikring AS', '924823755', '', '', 'Hølen Verft 15', '', '', 'Norway', '', 'active', 'bronze', '', false, '', ''),
 ('461cabf0-5a7f-4061-a042-9396572920dc', 'Rygge Senior Bo', '989480146', '', '+4797697880', 'c/o Hans Magnus Lie, Goenveien 4', '1580', 'RYGGE', 'Norway', '', 'active', 'bronze', '', false, 'MOSS', 'ØSTFOLD'),

@@ -175,4 +175,8 @@ var (
 
 	// ErrOfferAlreadyCompleted is returned when trying to complete an offer that is already completed
 	ErrOfferAlreadyCompleted = errors.New("offer is already completed")
+
+	// ErrOfferFinancialFieldReadOnly is returned when trying to manually edit spent/invoiced fields
+	// which are now managed by data warehouse sync
+	ErrOfferFinancialFieldReadOnly = errors.New("spent and invoiced fields are read-only and managed by data warehouse sync")
 )

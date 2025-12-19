@@ -169,7 +169,7 @@ type OfferDTO struct {
 	Title                 string         `json:"title"`
 	OfferNumber           string         `json:"offerNumber,omitempty"`       // Internal number, e.g., "TK-2025-001"
 	ExternalReference     string         `json:"externalReference,omitempty"` // External/customer reference number
-	CustomerID            uuid.UUID      `json:"customerId"`
+	CustomerID            *uuid.UUID     `json:"customerId,omitempty"`        // Optional - offer can exist without customer
 	CustomerName          string         `json:"customerName,omitempty"`
 	ProjectID             *uuid.UUID     `json:"projectId,omitempty"` // Link to project (nullable)
 	ProjectName           string         `json:"projectName,omitempty"`
@@ -210,6 +210,13 @@ type OfferDTO struct {
 	CreatedByName string `json:"createdByName,omitempty"`
 	UpdatedByID   string `json:"updatedById,omitempty"`
 	UpdatedByName string `json:"updatedByName,omitempty"`
+	// Data Warehouse synced fields
+	DWTotalIncome   float64 `json:"dwTotalIncome"`            // Income from data warehouse
+	DWMaterialCosts float64 `json:"dwMaterialCosts"`          // Material costs from data warehouse
+	DWEmployeeCosts float64 `json:"dwEmployeeCosts"`          // Employee costs from data warehouse
+	DWOtherCosts    float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
+	DWNetResult     float64 `json:"dwNetResult"`              // Net result from data warehouse
+	DWLastSyncedAt  *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
 }
 
 type OfferItemDTO struct {
@@ -874,7 +881,9 @@ type ApproveProjectActualCostRequest struct {
 type OfferWithItemsDTO struct {
 	ID                  uuid.UUID      `json:"id"`
 	Title               string         `json:"title"`
-	CustomerID          uuid.UUID      `json:"customerId"`
+	OfferNumber         string         `json:"offerNumber,omitempty"`       // Internal number, e.g., "TK-2025-001"
+	ExternalReference   string         `json:"externalReference,omitempty"` // External/customer reference number
+	CustomerID          *uuid.UUID     `json:"customerId,omitempty"`        // Optional - offer can exist without customer
 	CustomerName        string         `json:"customerName,omitempty"`
 	CompanyID           CompanyID      `json:"companyId"`
 	Phase               OfferPhase     `json:"phase"`
@@ -1545,4 +1554,64 @@ type ReopenProjectResponse struct {
 	RevertedOffer     *OfferDTO   `json:"revertedOffer,omitempty"` // Offer that was reverted to sent (if any)
 	ClearedOfferID    bool        `json:"clearedOfferId"`          // Whether WinningOfferID was cleared
 	ClearedOfferValue bool        `json:"clearedOfferValue"`       // Whether economic values were cleared
+}
+
+// ============================================================================
+// Data Warehouse Sync DTOs
+// ============================================================================
+
+// DataWarehouseFinancialsDTO contains financial data retrieved from the data warehouse
+type DataWarehouseFinancialsDTO struct {
+	TotalIncome   float64 `json:"totalIncome"`   // Sum of income accounts (3000-3999)
+	MaterialCosts float64 `json:"materialCosts"` // Sum of material cost accounts (4000-4999)
+	EmployeeCosts float64 `json:"employeeCosts"` // Sum of employee cost accounts (5000-5999)
+	OtherCosts    float64 `json:"otherCosts"`    // Sum of other cost accounts (>=6000)
+	NetResult     float64 `json:"netResult"`     // totalIncome - all costs
+	Connected     bool    `json:"connected"`     // Whether data warehouse connection was successful
+}
+
+// OfferExternalSyncResponse contains the result of syncing data warehouse financials for an offer
+type OfferExternalSyncResponse struct {
+	OfferID           uuid.UUID                   `json:"offerId"`
+	ExternalReference string                      `json:"externalReference"`
+	CompanyID         CompanyID                   `json:"companyId"`
+	DataWarehouse     *DataWarehouseFinancialsDTO `json:"dataWarehouse"`
+	SyncedAt          *string                     `json:"syncedAt,omitempty"` // ISO 8601 - When the sync was performed
+	Persisted         bool                        `json:"persisted"`          // Whether data was persisted to the offer
+
+	// Current offer financial values after sync
+	DWTotalIncome   float64 `json:"dwTotalIncome"`   // Persisted DW total income
+	DWMaterialCosts float64 `json:"dwMaterialCosts"` // Persisted DW material costs
+	DWEmployeeCosts float64 `json:"dwEmployeeCosts"` // Persisted DW employee costs
+	DWOtherCosts    float64 `json:"dwOtherCosts"`    // Persisted DW other costs
+	DWNetResult     float64 `json:"dwNetResult"`     // Persisted DW net result
+	Spent           float64 `json:"spent"`           // Updated if was 0, otherwise unchanged
+	Invoiced        float64 `json:"invoiced"`        // Updated if was 0, otherwise unchanged
+}
+
+// ============================================================================
+// Customer ERP Sync DTOs
+// ============================================================================
+
+// ERPCustomerDTO represents a customer from the ERP data warehouse
+type ERPCustomerDTO struct {
+	OrganizationNumber string `json:"organizationNumber"`
+	Name               string `json:"name"`
+}
+
+// LocalCustomerDTO represents a customer from our local database (minimal fields for comparison)
+type LocalCustomerDTO struct {
+	ID                 uuid.UUID `json:"id"`
+	OrganizationNumber string    `json:"organizationNumber"`
+	Name               string    `json:"name"`
+}
+
+// CustomerERPDifferencesResponse contains the differences between ERP and local database customers
+type CustomerERPDifferencesResponse struct {
+	ERPCustomerCount     int                `json:"erpCustomerCount"`     // Total customers in ERP
+	LocalCustomerCount   int                `json:"localCustomerCount"`   // Total customers in our DB
+	MissingInLocal       []ERPCustomerDTO   `json:"missingInLocal"`       // Customers in ERP but not in local DB
+	MissingInERP         []LocalCustomerDTO `json:"missingInERP"`         // Customers in local DB but not in ERP
+	SyncedAt             string             `json:"syncedAt"`             // ISO 8601 - When the comparison was performed
+	DataWarehouseEnabled bool               `json:"dataWarehouseEnabled"` // Whether data warehouse is available
 }

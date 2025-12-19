@@ -258,7 +258,7 @@ func TestToOfferDTO_BasicFields(t *testing.T) {
 		},
 		Title:         "Test Offer",
 		OfferNumber:   "SB-2024-001",
-		CustomerID:    customerID,
+		CustomerID:    &customerID,
 		CustomerName:  "Test Customer",
 		CompanyID:     domain.CompanyStalbygg,
 		Phase:         domain.OfferPhaseSent,
@@ -274,7 +274,7 @@ func TestToOfferDTO_BasicFields(t *testing.T) {
 	assert.Equal(t, offer.ID, dto.ID)
 	assert.Equal(t, "Test Offer", dto.Title)
 	assert.Equal(t, "SB-2024-001", dto.OfferNumber)
-	assert.Equal(t, customerID, dto.CustomerID)
+	assert.Equal(t, &customerID, dto.CustomerID)
 	assert.Equal(t, "Test Customer", dto.CustomerName)
 	assert.Equal(t, domain.CompanyStalbygg, dto.CompanyID)
 	assert.Equal(t, domain.OfferPhaseSent, dto.Phase)
@@ -303,7 +303,7 @@ func TestToOfferDTO_WithOrderPhaseFields(t *testing.T) {
 		},
 		Title:        "Order Phase Offer",
 		OfferNumber:  "SB-2024-002O",
-		CustomerID:   customerID,
+		CustomerID:   &customerID,
 		CustomerName: "Test Customer",
 		CompanyID:    domain.CompanyStalbygg,
 		Phase:        domain.OfferPhaseOrder,
@@ -365,7 +365,7 @@ func TestToOfferDTO_WithNilOrderPhaseFields(t *testing.T) {
 			UpdatedAt: now,
 		},
 		Title:        "Draft Offer",
-		CustomerID:   customerID,
+		CustomerID:   &customerID,
 		CustomerName: "Test Customer",
 		CompanyID:    domain.CompanyStalbygg,
 		Phase:        domain.OfferPhaseDraft,

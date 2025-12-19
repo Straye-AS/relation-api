@@ -1012,6 +1012,31 @@ definitions:
       updatedByName:
         type: string
     type: object
+  domain.CustomerERPDifferencesResponse:
+    properties:
+      dataWarehouseEnabled:
+        description: Whether data warehouse is available
+        type: boolean
+      erpCustomerCount:
+        description: Total customers in ERP
+        type: integer
+      localCustomerCount:
+        description: Total customers in our DB
+        type: integer
+      missingInERP:
+        description: Customers in local DB but not in ERP
+        items:
+          $ref: '#/definitions/domain.LocalCustomerDTO'
+        type: array
+      missingInLocal:
+        description: Customers in ERP but not in local DB
+        items:
+          $ref: '#/definitions/domain.ERPCustomerDTO'
+        type: array
+      syncedAt:
+        description: ISO 8601 - When the comparison was performed
+        type: string
+    type: object
   domain.CustomerIndustry:
     enum:
     - construction
@@ -1265,6 +1290,27 @@ definitions:
         - $ref: '#/definitions/domain.WinRateMetrics'
         description: Win Rate Metrics
     type: object
+  domain.DataWarehouseFinancialsDTO:
+    properties:
+      connected:
+        description: Whether data warehouse connection was successful
+        type: boolean
+      employeeCosts:
+        description: Sum of employee cost accounts (5000-5999)
+        type: number
+      materialCosts:
+        description: Sum of material cost accounts (4000-4999)
+        type: number
+      netResult:
+        description: totalIncome - all costs
+        type: number
+      otherCosts:
+        description: Sum of other cost accounts (>=6000)
+        type: number
+      totalIncome:
+        description: Sum of income accounts (3000-3999)
+        type: number
+    type: object
   domain.DealDTO:
     properties:
       actualCloseDate:
@@ -1347,6 +1393,13 @@ definitions:
       toStage:
         $ref: '#/definitions/domain.DealStage'
     type: object
+  domain.ERPCustomerDTO:
+    properties:
+      name:
+        type: string
+      organizationNumber:
+        type: string
+    type: object
   domain.ErrorResponse:
     properties:
       code:
@@ -1402,6 +1455,15 @@ definitions:
       overBudget:
         description: Over budget offers
         type: integer
+    type: object
+  domain.LocalCustomerDTO:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      organizationNumber:
+        type: string
     type: object
   domain.LoseDealRequest:
     properties:
@@ -1493,6 +1555,7 @@ definitions:
         description: Whether customer has won their project
         type: boolean
       customerId:
+        description: Optional - offer can exist without customer
         type: string
       customerName:
         type: string
@@ -1501,6 +1564,24 @@ definitions:
       dueDate:
         description: ISO 8601
         type: string
+      dwEmployeeCosts:
+        description: Employee costs from data warehouse
+        type: number
+      dwLastSyncedAt:
+        description: ISO 8601 - Last sync timestamp
+        type: string
+      dwMaterialCosts:
+        description: Material costs from data warehouse
+        type: number
+      dwNetResult:
+        description: Net result from data warehouse
+        type: number
+      dwOtherCosts:
+        description: Other costs from data warehouse
+        type: number
+      dwTotalIncome:
+        description: Data Warehouse synced fields
+        type: number
       endDate:
         description: ISO 8601 - Planned end date
         type: string
@@ -1614,6 +1695,7 @@ definitions:
         description: Whether customer has won their project
         type: boolean
       customerId:
+        description: Optional - offer can exist without customer
         type: string
       customerName:
         type: string
@@ -1622,6 +1704,24 @@ definitions:
       dueDate:
         description: ISO 8601
         type: string
+      dwEmployeeCosts:
+        description: Employee costs from data warehouse
+        type: number
+      dwLastSyncedAt:
+        description: ISO 8601 - Last sync timestamp
+        type: string
+      dwMaterialCosts:
+        description: Material costs from data warehouse
+        type: number
+      dwNetResult:
+        description: Net result from data warehouse
+        type: number
+      dwOtherCosts:
+        description: Other costs from data warehouse
+        type: number
+      dwTotalIncome:
+        description: Data Warehouse synced fields
+        type: number
       endDate:
         description: ISO 8601 - Planned end date
         type: string
@@ -1709,6 +1809,44 @@ definitions:
       value:
         type: number
     type: object
+  domain.OfferExternalSyncResponse:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      dataWarehouse:
+        $ref: '#/definitions/domain.DataWarehouseFinancialsDTO'
+      dwEmployeeCosts:
+        description: Persisted DW employee costs
+        type: number
+      dwMaterialCosts:
+        description: Persisted DW material costs
+        type: number
+      dwNetResult:
+        description: Persisted DW net result
+        type: number
+      dwOtherCosts:
+        description: Persisted DW other costs
+        type: number
+      dwTotalIncome:
+        description: Current offer financial values after sync
+        type: number
+      externalReference:
+        type: string
+      invoiced:
+        description: Updated if was 0, otherwise unchanged
+        type: number
+      offerId:
+        type: string
+      persisted:
+        description: Whether data was persisted to the offer
+        type: boolean
+      spent:
+        description: Updated if was 0, otherwise unchanged
+        type: number
+      syncedAt:
+        description: ISO 8601 - When the sync was performed
+        type: string
+    type: object
   domain.OfferHealth:
     enum:
     - on_track
@@ -1786,10 +1924,14 @@ definitions:
       createdAt:
         type: string
       customerId:
+        description: Optional - offer can exist without customer
         type: string
       customerName:
         type: string
       description:
+        type: string
+      externalReference:
+        description: External/customer reference number
         type: string
       id:
         type: string
@@ -1798,6 +1940,9 @@ definitions:
           $ref: '#/definitions/domain.OfferItemDTO'
         type: array
       notes:
+        type: string
+      offerNumber:
+        description: Internal number, e.g., "TK-2025-001"
         type: string
       phase:
         $ref: '#/definitions/domain.OfferPhase'
@@ -4395,8 +4540,9 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Soft delete a customer. Cannot delete customers with active projects,
-        deals, or offers.
+      description: Soft delete a customer. The customer is hidden from lists but preserved
+        for historical reference. Related projects and offers keep their customer
+        reference.
       parameters:
       - description: Customer ID
         format: uuid
@@ -4419,10 +4565,6 @@ paths:
             $ref: '#/definitions/domain.ErrorResponse'
         "404":
           description: Not Found
-          schema:
-            $ref: '#/definitions/domain.ErrorResponse'
-        "409":
-          description: Customer has active dependencies
           schema:
             $ref: '#/definitions/domain.ErrorResponse'
         "500":
@@ -5344,6 +5486,36 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update customer tier
+      tags:
+      - Customers
+  /customers/erp-differences:
+    get:
+      consumes:
+      - application/json
+      description: Compare customers in the ERP data warehouse with customers in our
+        database. Returns customers that exist in ERP but not in our local database,
+        and customers that exist locally but not in ERP. For organizations, matching
+        is done by organization number. For private persons (no org number), matching
+        is done by name.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CustomerERPDifferencesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get differences between ERP and local customers
       tags:
       - Customers
   /customers/search:
@@ -7364,6 +7536,43 @@ paths:
       summary: Update external reference
       tags:
       - Offers
+  /offers/{id}/external-sync:
+    get:
+      description: |-
+        Syncs financial data from the data warehouse for the given offer and persists it.
+        The offer must have an external_reference to be matched in the data warehouse.
+        This endpoint queries the DW, persists the financial data to the offer, and returns the result.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Data warehouse financials with sync status
+          schema:
+            $ref: '#/definitions/domain.OfferExternalSyncResponse'
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Sync data warehouse financials for an offer
+      tags:
+      - Offers
   /offers/{id}/files:
     get:
       parameters:
@@ -8090,6 +8299,33 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Win an offer within a project
+      tags:
+      - Offers
+  /offers/admin/trigger-dw-sync:
+    post:
+      description: |-
+        Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).
+        This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sync results with synced/failed counts
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - requires super admin
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Trigger bulk data warehouse sync (Admin only)
       tags:
       - Offers
   /offers/next-number:

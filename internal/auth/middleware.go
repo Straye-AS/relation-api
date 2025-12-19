@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/subtle"
 	"net/http"
 	"strings"
@@ -12,18 +13,26 @@ import (
 	"go.uber.org/zap"
 )
 
+// UserLookup defines an interface for looking up users from the database.
+// This avoids circular dependencies with the repository package.
+type UserLookup interface {
+	GetByEmail(ctx context.Context, email string) (*domain.User, error)
+}
+
 // Middleware handles authentication for HTTP requests
 type Middleware struct {
 	jwtValidator *JWTValidator
 	apiKey       string
+	userLookup   UserLookup
 	logger       *zap.Logger
 }
 
 // NewMiddleware creates a new authentication middleware
-func NewMiddleware(cfg *config.Config, logger *zap.Logger) *Middleware {
+func NewMiddleware(cfg *config.Config, userLookup UserLookup, logger *zap.Logger) *Middleware {
 	return &Middleware{
 		jwtValidator: NewJWTValidator(&cfg.AzureAd),
 		apiKey:       cfg.ApiKey.Value,
+		userLookup:   userLookup,
 		logger:       logger,
 	}
 }
@@ -107,6 +116,28 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		// Store the access token for OBO flow (to call Graph API)
 		userCtx.AccessToken = token
 
+		// Look up user in database to get their roles
+		if m.userLookup != nil && userCtx.Email != "" {
+			dbUser, err := m.userLookup.GetByEmail(r.Context(), userCtx.Email)
+			if err == nil && dbUser != nil {
+				// Use database roles instead of JWT roles
+				dbRoles := make([]domain.UserRoleType, len(dbUser.Roles))
+				for i, role := range dbUser.Roles {
+					dbRoles[i] = domain.UserRoleType(role)
+				}
+				userCtx.Roles = dbRoles
+
+				// Also use database company if set
+				if dbUser.CompanyID != nil {
+					userCtx.CompanyID = *dbUser.CompanyID
+				}
+			} else if err != nil {
+				m.logger.Debug("user not found in database, using JWT roles",
+					zap.String("email", userCtx.Email),
+					zap.Error(err))
+			}
+		}
+
 		// Allow X-Company-Id header to override the user's company
 		// This allows any user to filter data by any company
 		if companyHeader := r.Header.Get("X-Company-Id"); companyHeader != "" {
@@ -172,6 +203,24 @@ func (m *Middleware) OptionalAuthenticate(next http.Handler) http.Handler {
 				token := parts[1]
 				userCtx, err := m.jwtValidator.ValidateToken(token)
 				if err == nil {
+					// Look up user in database to get their roles
+					if m.userLookup != nil && userCtx.Email != "" {
+						dbUser, dbErr := m.userLookup.GetByEmail(r.Context(), userCtx.Email)
+						if dbErr == nil && dbUser != nil {
+							// Use database roles instead of JWT roles
+							dbRoles := make([]domain.UserRoleType, len(dbUser.Roles))
+							for i, role := range dbUser.Roles {
+								dbRoles[i] = domain.UserRoleType(role)
+							}
+							userCtx.Roles = dbRoles
+
+							// Also use database company if set
+							if dbUser.CompanyID != nil {
+								userCtx.CompanyID = *dbUser.CompanyID
+							}
+						}
+					}
+
 					ctx := WithUserContext(r.Context(), userCtx)
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return

@@ -674,7 +674,7 @@ func TestDealService_CreateOfferFromDeal(t *testing.T) {
 
 		// Verify offer was created with deal data
 		assert.Equal(t, "Lead Deal for Offer", result.Offer.Title)
-		assert.Equal(t, customer.ID, result.Offer.CustomerID)
+		assert.Equal(t, customer.ID, *result.Offer.CustomerID)
 		assert.Equal(t, domain.CompanyStalbygg, result.Offer.CompanyID)
 		assert.Equal(t, float64(150000), result.Offer.Value)
 		assert.Equal(t, domain.OfferPhaseDraft, result.Offer.Phase)
@@ -819,7 +819,7 @@ func TestDealService_CreateOfferFromDealWithTemplate(t *testing.T) {
 		// Create a template offer with budget dimensions
 		templateOffer := &domain.Offer{
 			Title:             "Template Offer",
-			CustomerID:        customer.ID,
+			CustomerID:        &customer.ID,
 			CustomerName:      customer.Name,
 			CompanyID:         domain.CompanyStalbygg,
 			Phase:             domain.OfferPhaseDraft,

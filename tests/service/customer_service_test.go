@@ -25,10 +25,12 @@ func setupCustomerServiceTestDB(t *testing.T) *gorm.DB {
 
 func createCustomerService(db *gorm.DB) *service.CustomerService {
 	customerRepo := repository.NewCustomerRepository(db)
+	dealRepo := repository.NewDealRepository(db)
+	projectRepo := repository.NewProjectRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 	logger := zap.NewNop()
 
-	return service.NewCustomerService(customerRepo, activityRepo, logger)
+	return service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, activityRepo, logger)
 }
 
 func createCustomerTestContext() context.Context {
