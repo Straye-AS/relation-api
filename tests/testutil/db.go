@@ -18,10 +18,10 @@ import (
 // It uses environment variables or falls back to docker-compose defaults
 func SetupTestDB(t *testing.T) *gorm.DB {
 	host := getEnvOrDefault("DATABASE_HOST", "localhost")
-	port := getEnvOrDefault("DATABASE_PORT", "5432")
+	port := getEnvOrDefault("DATABASE_PORT", "5433")
 	user := getEnvOrDefault("DATABASE_USER", "relation_user")
 	password := getEnvOrDefault("DATABASE_PASSWORD", "relation_password")
-	dbname := getEnvOrDefault("DATABASE_NAME", "relation")
+	dbname := getEnvOrDefault("DATABASE_NAME", "relation_test")
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=UTC",
 		host, port, user, password, dbname)

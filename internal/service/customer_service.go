@@ -475,6 +475,32 @@ func (s *CustomerService) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("failed to get customer: %w", err)
 	}
 
+	// Check for active dependencies before allowing delete (only if repos are available)
+	if s.dealRepo != nil {
+		// Get all deals for this customer and count only active ones (not won or lost)
+		dealFilters := &repository.DealFilters{CustomerID: &id}
+		deals, _, err := s.dealRepo.List(ctx, 1, 100, dealFilters, repository.DealSortByCreatedDesc)
+		if err != nil {
+			return fmt.Errorf("failed to check customer deals: %w", err)
+		}
+		// Filter out won and lost deals - only count active deals
+		for _, deal := range deals {
+			if deal.Stage != domain.DealStageWon && deal.Stage != domain.DealStageLost {
+				return fmt.Errorf("%w: has active deals", ErrCustomerHasActiveDependencies)
+			}
+		}
+	}
+
+	if s.projectRepo != nil {
+		projects, _, err := s.projectRepo.List(ctx, 1, 1, &id, nil)
+		if err != nil {
+			return fmt.Errorf("failed to check customer projects: %w", err)
+		}
+		if len(projects) > 0 {
+			return fmt.Errorf("%w: has active projects", ErrCustomerHasActiveDependencies)
+		}
+	}
+
 	// Soft delete - customer is hidden but preserved for historical reference
 	// Related projects and offers keep their customer_id and customer_name
 	if err := s.customerRepo.Delete(ctx, id); err != nil {
