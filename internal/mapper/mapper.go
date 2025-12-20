@@ -703,3 +703,123 @@ func formatTimePointer(t *time.Time) *string {
 	formatted := t.UTC().Format(time.RFC3339)
 	return &formatted
 }
+
+// ============================================================================
+// Supplier Mappers
+// ============================================================================
+
+// SupplierToDTO converts Supplier to SupplierDTO
+func SupplierToDTO(supplier *domain.Supplier) domain.SupplierDTO {
+	return domain.SupplierDTO{
+		ID:            supplier.ID,
+		Name:          supplier.Name,
+		OrgNumber:     supplier.OrgNumber,
+		Email:         supplier.Email,
+		Phone:         supplier.Phone,
+		Address:       supplier.Address,
+		City:          supplier.City,
+		PostalCode:    supplier.PostalCode,
+		Country:       supplier.Country,
+		Municipality:  supplier.Municipality,
+		County:        supplier.County,
+		ContactPerson: supplier.ContactPerson,
+		ContactEmail:  supplier.ContactEmail,
+		ContactPhone:  supplier.ContactPhone,
+		Status:        supplier.Status,
+		Category:      supplier.Category,
+		Notes:         supplier.Notes,
+		PaymentTerms:  supplier.PaymentTerms,
+		Website:       supplier.Website,
+		CreatedAt:     supplier.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:     supplier.UpdatedAt.UTC().Format(time.RFC3339),
+		CreatedByID:   supplier.CreatedByID,
+		CreatedByName: supplier.CreatedByName,
+		UpdatedByID:   supplier.UpdatedByID,
+		UpdatedByName: supplier.UpdatedByName,
+	}
+}
+
+// SuppliersToDTO converts a slice of Suppliers to a slice of SupplierDTOs
+func SuppliersToDTO(suppliers []domain.Supplier) []domain.SupplierDTO {
+	dtos := make([]domain.SupplierDTO, len(suppliers))
+	for i, supplier := range suppliers {
+		dtos[i] = SupplierToDTO(&supplier)
+	}
+	return dtos
+}
+
+// SupplierContactToDTO converts SupplierContact to SupplierContactDTO
+func SupplierContactToDTO(contact *domain.SupplierContact) domain.SupplierContactDTO {
+	return domain.SupplierContactDTO{
+		ID:         contact.ID,
+		SupplierID: contact.SupplierID,
+		Name:       contact.Name,
+		Title:      contact.Title,
+		Email:      contact.Email,
+		Phone:      contact.Phone,
+		IsPrimary:  contact.IsPrimary,
+		Notes:      contact.Notes,
+		CreatedAt:  contact.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:  contact.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// OfferSupplierToDTO converts OfferSupplier to OfferSupplierDTO
+func OfferSupplierToDTO(offerSupplier *domain.OfferSupplier) domain.OfferSupplierDTO {
+	return domain.OfferSupplierDTO{
+		ID:           offerSupplier.ID,
+		OfferID:      offerSupplier.OfferID,
+		OfferTitle:   offerSupplier.OfferTitle,
+		SupplierID:   offerSupplier.SupplierID,
+		SupplierName: offerSupplier.SupplierName,
+		Status:       offerSupplier.Status,
+		Notes:        offerSupplier.Notes,
+		CreatedAt:    offerSupplier.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:    offerSupplier.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// SupplierStatsInput holds aggregated statistics for a supplier - used for mapping
+// This mirrors repository.SupplierStats to avoid circular imports
+type SupplierStatsInput struct {
+	TotalOffers     int
+	ActiveOffers    int
+	CompletedOffers int
+	TotalProjects   int
+}
+
+// SupplierToWithDetailsDTO converts Supplier to SupplierWithDetailsDTO with stats and related data
+// stats should be of type *repository.SupplierStats or *SupplierStatsInput
+func SupplierToWithDetailsDTO(supplier *domain.Supplier, stats *SupplierStatsInput, recentOffers []domain.OfferSupplier) domain.SupplierWithDetailsDTO {
+	dto := domain.SupplierWithDetailsDTO{
+		SupplierDTO: SupplierToDTO(supplier),
+	}
+
+	// Map stats if provided
+	if stats != nil {
+		dto.Stats = &domain.SupplierStatsDTO{
+			TotalOffers:     stats.TotalOffers,
+			ActiveOffers:    stats.ActiveOffers,
+			CompletedOffers: stats.CompletedOffers,
+			TotalProjects:   stats.TotalProjects,
+		}
+	}
+
+	// Map contacts if loaded
+	if len(supplier.Contacts) > 0 {
+		dto.Contacts = make([]domain.SupplierContactDTO, len(supplier.Contacts))
+		for i, contact := range supplier.Contacts {
+			dto.Contacts[i] = SupplierContactToDTO(&contact)
+		}
+	}
+
+	// Map recent offers
+	if len(recentOffers) > 0 {
+		dto.RecentOffers = make([]domain.OfferSupplierDTO, len(recentOffers))
+		for i, offerSupplier := range recentOffers {
+			dto.RecentOffers[i] = OfferSupplierToDTO(&offerSupplier)
+		}
+	}
+
+	return dto
+}

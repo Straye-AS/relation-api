@@ -1630,3 +1630,160 @@ type CustomerERPDifferencesResponse struct {
 	SyncedAt             string             `json:"syncedAt"`             // ISO 8601 - When the comparison was performed
 	DataWarehouseEnabled bool               `json:"dataWarehouseEnabled"` // Whether data warehouse is available
 }
+
+// ============================================================================
+// Supplier DTOs
+// ============================================================================
+
+// SupplierDTO represents a supplier response
+type SupplierDTO struct {
+	ID            uuid.UUID      `json:"id"`
+	Name          string         `json:"name"`
+	OrgNumber     string         `json:"orgNumber,omitempty"`
+	Email         string         `json:"email,omitempty"`
+	Phone         string         `json:"phone,omitempty"`
+	Address       string         `json:"address,omitempty"`
+	City          string         `json:"city,omitempty"`
+	PostalCode    string         `json:"postalCode,omitempty"`
+	Country       string         `json:"country"`
+	Municipality  string         `json:"municipality,omitempty"`
+	County        string         `json:"county,omitempty"`
+	ContactPerson string         `json:"contactPerson,omitempty"`
+	ContactEmail  string         `json:"contactEmail,omitempty"`
+	ContactPhone  string         `json:"contactPhone,omitempty"`
+	Status        SupplierStatus `json:"status"`
+	Category      string         `json:"category,omitempty"`
+	Notes         string         `json:"notes,omitempty"`
+	PaymentTerms  string         `json:"paymentTerms,omitempty"`
+	Website       string         `json:"website,omitempty"`
+	CreatedAt     string         `json:"createdAt"`
+	UpdatedAt     string         `json:"updatedAt"`
+	CreatedByID   string         `json:"createdById,omitempty"`
+	CreatedByName string         `json:"createdByName,omitempty"`
+	UpdatedByID   string         `json:"updatedById,omitempty"`
+	UpdatedByName string         `json:"updatedByName,omitempty"`
+}
+
+// SupplierWithDetailsDTO includes supplier data with stats, contacts, and recent offers
+type SupplierWithDetailsDTO struct {
+	SupplierDTO
+	Stats        *SupplierStatsDTO    `json:"stats,omitempty"`
+	Contacts     []SupplierContactDTO `json:"contacts,omitempty"`
+	RecentOffers []OfferSupplierDTO   `json:"recentOffers,omitempty"`
+}
+
+// SupplierStatsDTO holds aggregated statistics for a supplier
+type SupplierStatsDTO struct {
+	TotalOffers     int `json:"totalOffers"`
+	ActiveOffers    int `json:"activeOffers"`
+	CompletedOffers int `json:"completedOffers"`
+	TotalProjects   int `json:"totalProjects"`
+}
+
+// SupplierContactDTO represents a contact person for a supplier
+type SupplierContactDTO struct {
+	ID         uuid.UUID `json:"id"`
+	SupplierID uuid.UUID `json:"supplierId"`
+	Name       string    `json:"name"`
+	Title      string    `json:"title,omitempty"`
+	Email      string    `json:"email,omitempty"`
+	Phone      string    `json:"phone,omitempty"`
+	IsPrimary  bool      `json:"isPrimary"`
+	Notes      string    `json:"notes,omitempty"`
+	CreatedAt  string    `json:"createdAt"`
+	UpdatedAt  string    `json:"updatedAt"`
+}
+
+// OfferSupplierDTO represents the many-to-many relationship between offers and suppliers
+type OfferSupplierDTO struct {
+	ID           uuid.UUID           `json:"id"`
+	OfferID      uuid.UUID           `json:"offerId"`
+	OfferTitle   string              `json:"offerTitle,omitempty"`
+	SupplierID   uuid.UUID           `json:"supplierId"`
+	SupplierName string              `json:"supplierName,omitempty"`
+	Status       OfferSupplierStatus `json:"status"`
+	Notes        string              `json:"notes,omitempty"`
+	CreatedAt    string              `json:"createdAt"`
+	UpdatedAt    string              `json:"updatedAt"`
+}
+
+// TopSupplierDTO represents a supplier with offer statistics for dashboard/reports
+type TopSupplierDTO struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	OrgNumber  string    `json:"orgNumber,omitempty"`
+	Category   string    `json:"category,omitempty"`
+	OfferCount int       `json:"offerCount"`
+}
+
+// ============================================================================
+// Supplier Request DTOs
+// ============================================================================
+
+// CreateSupplierRequest contains the data needed to create a new supplier
+type CreateSupplierRequest struct {
+	Name          string         `json:"name" validate:"required,max=200"`
+	OrgNumber     string         `json:"orgNumber,omitempty" validate:"max=20"`
+	Email         string         `json:"email,omitempty" validate:"omitempty,email"`
+	Phone         string         `json:"phone,omitempty" validate:"max=50"`
+	Address       string         `json:"address,omitempty" validate:"max=500"`
+	City          string         `json:"city,omitempty" validate:"max=100"`
+	PostalCode    string         `json:"postalCode,omitempty" validate:"max=20"`
+	Country       string         `json:"country" validate:"required,max=100"`
+	Municipality  string         `json:"municipality,omitempty" validate:"max=100"`
+	County        string         `json:"county,omitempty" validate:"max=100"`
+	ContactPerson string         `json:"contactPerson,omitempty" validate:"max=200"`
+	ContactEmail  string         `json:"contactEmail,omitempty" validate:"omitempty,email"`
+	ContactPhone  string         `json:"contactPhone,omitempty" validate:"max=50"`
+	Status        SupplierStatus `json:"status,omitempty"`
+	Category      string         `json:"category,omitempty" validate:"max=200"`
+	Notes         string         `json:"notes,omitempty"`
+	PaymentTerms  string         `json:"paymentTerms,omitempty" validate:"max=200"`
+	Website       string         `json:"website,omitempty" validate:"max=500"`
+}
+
+// UpdateSupplierRequest contains the data for updating an existing supplier
+type UpdateSupplierRequest struct {
+	Name          string         `json:"name" validate:"required,max=200"`
+	OrgNumber     string         `json:"orgNumber,omitempty" validate:"max=20"`
+	Email         string         `json:"email,omitempty" validate:"omitempty,email"`
+	Phone         string         `json:"phone,omitempty" validate:"max=50"`
+	Address       string         `json:"address,omitempty" validate:"max=500"`
+	City          string         `json:"city,omitempty" validate:"max=100"`
+	PostalCode    string         `json:"postalCode,omitempty" validate:"max=20"`
+	Country       string         `json:"country" validate:"required,max=100"`
+	Municipality  string         `json:"municipality,omitempty" validate:"max=100"`
+	County        string         `json:"county,omitempty" validate:"max=100"`
+	ContactPerson string         `json:"contactPerson,omitempty" validate:"max=200"`
+	ContactEmail  string         `json:"contactEmail,omitempty" validate:"omitempty,email"`
+	ContactPhone  string         `json:"contactPhone,omitempty" validate:"max=50"`
+	Status        SupplierStatus `json:"status,omitempty"`
+	Category      string         `json:"category,omitempty" validate:"max=200"`
+	Notes         string         `json:"notes,omitempty"`
+	PaymentTerms  string         `json:"paymentTerms,omitempty" validate:"max=200"`
+	Website       string         `json:"website,omitempty" validate:"max=500"`
+}
+
+// ============================================================================
+// Supplier Property Update Request DTOs
+// ============================================================================
+
+// UpdateSupplierStatusRequest for updating supplier status
+type UpdateSupplierStatusRequest struct {
+	Status SupplierStatus `json:"status" validate:"required,oneof=active inactive pending blacklisted"`
+}
+
+// UpdateSupplierNotesRequest for updating supplier notes
+type UpdateSupplierNotesRequest struct {
+	Notes string `json:"notes"`
+}
+
+// UpdateSupplierCategoryRequest for updating supplier category
+type UpdateSupplierCategoryRequest struct {
+	Category string `json:"category" validate:"max=200"`
+}
+
+// UpdateSupplierPaymentTermsRequest for updating supplier payment terms
+type UpdateSupplierPaymentTermsRequest struct {
+	PaymentTerms string `json:"paymentTerms" validate:"max=200"`
+}

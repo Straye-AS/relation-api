@@ -152,6 +152,7 @@ func run() error {
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
 	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
+	supplierRepo := repository.NewSupplierRepository(db)
 
 	// Initialize services
 	// Company service first (other services may depend on it)
@@ -181,6 +182,7 @@ func run() error {
 	budgetItemService := service.NewBudgetItemService(budgetItemRepo, offerRepo, projectRepo, log)
 	notificationService := service.NewNotificationService(notificationRepo, log)
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
+	supplierService := service.NewSupplierService(supplierRepo, activityRepo, log)
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, userRepo, log)
@@ -204,6 +206,7 @@ func run() error {
 	budgetItemHandler := handler.NewBudgetItemHandler(budgetItemService, log)
 	notificationHandler := handler.NewNotificationHandler(notificationService, log)
 	activityHandler := handler.NewActivityHandler(activityService, log)
+	supplierHandler := handler.NewSupplierHandler(supplierService, log)
 
 	// Setup router
 	rt := router.NewRouter(
@@ -229,6 +232,7 @@ func run() error {
 		budgetItemHandler,
 		notificationHandler,
 		activityHandler,
+		supplierHandler,
 	)
 
 	// Initialize and start scheduler for background jobs

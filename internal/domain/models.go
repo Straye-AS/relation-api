@@ -708,6 +708,7 @@ const (
 	ActivityTargetDeal         ActivityTargetType = "Deal"
 	ActivityTargetFile         ActivityTargetType = "File"
 	ActivityTargetNotification ActivityTargetType = "Notification"
+	ActivityTargetSupplier     ActivityTargetType = "Supplier"
 )
 
 // ActivityType represents the type of activity
@@ -985,4 +986,115 @@ func (u *User) FullName() string {
 		return u.FirstName + " " + u.LastName
 	}
 	return u.DisplayName
+}
+
+// SupplierStatus represents the status of a supplier
+type SupplierStatus string
+
+const (
+	SupplierStatusActive      SupplierStatus = "active"
+	SupplierStatusInactive    SupplierStatus = "inactive"
+	SupplierStatusPending     SupplierStatus = "pending"
+	SupplierStatusBlacklisted SupplierStatus = "blacklisted"
+)
+
+// IsValid checks if the SupplierStatus is a valid enum value
+func (s SupplierStatus) IsValid() bool {
+	switch s {
+	case SupplierStatusActive, SupplierStatusInactive, SupplierStatusPending, SupplierStatusBlacklisted:
+		return true
+	}
+	return false
+}
+
+// OfferSupplierStatus represents the status of a supplier in an offer
+type OfferSupplierStatus string
+
+const (
+	OfferSupplierStatusActive OfferSupplierStatus = "active"
+	OfferSupplierStatusDone   OfferSupplierStatus = "done"
+)
+
+// IsValid checks if the OfferSupplierStatus is a valid enum value
+func (s OfferSupplierStatus) IsValid() bool {
+	switch s {
+	case OfferSupplierStatusActive, OfferSupplierStatusDone:
+		return true
+	}
+	return false
+}
+
+// Supplier represents an organization that provides goods/services
+type Supplier struct {
+	BaseModel
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
+	Name          string         `gorm:"type:varchar(200);not null;index"`
+	OrgNumber     string         `gorm:"type:varchar(20);unique;index;column:org_number"`
+	Email         string         `gorm:"type:varchar(255)"`
+	Phone         string         `gorm:"type:varchar(50)"`
+	Address       string         `gorm:"type:varchar(500)"`
+	City          string         `gorm:"type:varchar(100)"`
+	PostalCode    string         `gorm:"type:varchar(20);column:postal_code"`
+	Country       string         `gorm:"type:varchar(100);not null;default:'Norway'"`
+	Municipality  string         `gorm:"type:varchar(100)"`
+	County        string         `gorm:"type:varchar(100)"`
+	ContactPerson string         `gorm:"type:varchar(200);column:contact_person"`
+	ContactEmail  string         `gorm:"type:varchar(255);column:contact_email"`
+	ContactPhone  string         `gorm:"type:varchar(50);column:contact_phone"`
+	Status        SupplierStatus `gorm:"type:varchar(50);not null;default:'active';index"`
+	Category      string         `gorm:"type:varchar(200)"`
+	Notes         string         `gorm:"type:text"`
+	PaymentTerms  string         `gorm:"type:varchar(200);column:payment_terms"`
+	Website       string         `gorm:"type:varchar(500)"`
+	CompanyID     *CompanyID     `gorm:"type:varchar(50);column:company_id;index"`
+	Company       *Company       `gorm:"foreignKey:CompanyID"`
+	// User tracking fields
+	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id;index"`
+	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
+	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
+	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
+	// Relations
+	Contacts       []SupplierContact `gorm:"foreignKey:SupplierID"`
+	OfferSuppliers []OfferSupplier   `gorm:"foreignKey:SupplierID"`
+}
+
+// SupplierContact represents a contact person for a supplier
+type SupplierContact struct {
+	BaseModel
+	SupplierID uuid.UUID `gorm:"type:uuid;not null;index;column:supplier_id"`
+	Supplier   *Supplier `gorm:"foreignKey:SupplierID"`
+	Name       string    `gorm:"type:varchar(200);not null"`
+	Title      string    `gorm:"type:varchar(200)"`
+	Email      string    `gorm:"type:varchar(255)"`
+	Phone      string    `gorm:"type:varchar(50)"`
+	IsPrimary  bool      `gorm:"not null;default:false;column:is_primary"`
+	Notes      string    `gorm:"type:text"`
+}
+
+// TableName overrides the default table name for SupplierContact
+func (SupplierContact) TableName() string {
+	return "supplier_contacts"
+}
+
+// OfferSupplier represents the many-to-many relationship between offers and suppliers
+type OfferSupplier struct {
+	BaseModel
+	OfferID      uuid.UUID           `gorm:"type:uuid;not null;index;column:offer_id"`
+	Offer        *Offer              `gorm:"foreignKey:OfferID"`
+	SupplierID   uuid.UUID           `gorm:"type:uuid;not null;index;column:supplier_id"`
+	Supplier     *Supplier           `gorm:"foreignKey:SupplierID"`
+	SupplierName string              `gorm:"type:varchar(200);column:supplier_name"`
+	OfferTitle   string              `gorm:"type:varchar(200);column:offer_title"`
+	Status       OfferSupplierStatus `gorm:"type:varchar(50);not null;default:'active'"`
+	Notes        string              `gorm:"type:text"`
+	// User tracking fields
+	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id"`
+	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`
+	UpdatedByID   string `gorm:"type:varchar(100);column:updated_by_id"`
+	UpdatedByName string `gorm:"type:varchar(200);column:updated_by_name"`
+}
+
+// TableName overrides the default table name for OfferSupplier
+func (OfferSupplier) TableName() string {
+	return "offer_suppliers"
 }

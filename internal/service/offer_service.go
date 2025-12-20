@@ -589,6 +589,7 @@ func (s *OfferService) ListWithSort(ctx context.Context, page, pageSize int, cus
 		TotalPages: totalPages,
 	}, nil
 }
+
 // ============================================================================
 // Budget Methods
 // ============================================================================
@@ -1068,4 +1069,3 @@ func (s *OfferService) syncProjectPhase(ctx context.Context, projectID uuid.UUID
 
 	return nil
 }
-

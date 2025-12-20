@@ -41,6 +41,7 @@ type Router struct {
 	budgetItemHandler       *handler.BudgetItemHandler
 	notificationHandler     *handler.NotificationHandler
 	activityHandler         *handler.ActivityHandler
+	supplierHandler         *handler.SupplierHandler
 }
 
 func NewRouter(
@@ -66,6 +67,7 @@ func NewRouter(
 	budgetItemHandler *handler.BudgetItemHandler,
 	notificationHandler *handler.NotificationHandler,
 	activityHandler *handler.ActivityHandler,
+	supplierHandler *handler.SupplierHandler,
 ) *Router {
 	return &Router{
 		cfg:                     cfg,
@@ -90,6 +92,7 @@ func NewRouter(
 		budgetItemHandler:       budgetItemHandler,
 		notificationHandler:     notificationHandler,
 		activityHandler:         activityHandler,
+		supplierHandler:         supplierHandler,
 	}
 }
 
@@ -464,6 +467,21 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/follow-up", rt.activityHandler.CreateFollowUp)
 				r.Post("/{id}/attendees", rt.activityHandler.AddAttendee)
 				r.Delete("/{id}/attendees/{userId}", rt.activityHandler.RemoveAttendee)
+			})
+
+			// Suppliers
+			r.Route("/suppliers", func(r chi.Router) {
+				r.Get("/", rt.supplierHandler.List)
+				r.Post("/", rt.supplierHandler.Create)
+				r.Get("/{id}", rt.supplierHandler.GetByID)
+				r.Put("/{id}", rt.supplierHandler.Update)
+				r.Delete("/{id}", rt.supplierHandler.Delete)
+
+				// Individual property update endpoints
+				r.Put("/{id}/status", rt.supplierHandler.UpdateStatus)
+				r.Put("/{id}/notes", rt.supplierHandler.UpdateNotes)
+				r.Put("/{id}/category", rt.supplierHandler.UpdateCategory)
+				r.Put("/{id}/payment-terms", rt.supplierHandler.UpdatePaymentTerms)
 			})
 		})
 	})
