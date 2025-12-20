@@ -2644,6 +2644,12 @@ definitions:
         description: nullable to allow clearing
         type: string
     type: object
+  domain.UpdateOfferEndDateRequest:
+    properties:
+      endDate:
+        description: nullable to allow clearing
+        type: string
+    type: object
   domain.UpdateOfferExpirationDateRequest:
     properties:
       expirationDate:
@@ -2758,12 +2764,24 @@ definitions:
     required:
     - responsibleUserId
     type: object
+  domain.UpdateOfferSentDateRequest:
+    properties:
+      sentDate:
+        description: nullable to allow clearing
+        type: string
+    type: object
   domain.UpdateOfferSpentRequest:
     properties:
       spent:
         description: Amount spent on this order
         minimum: 0
         type: number
+    type: object
+  domain.UpdateOfferStartDateRequest:
+    properties:
+      startDate:
+        description: nullable to allow clearing
+        type: string
     type: object
   domain.UpdateOfferTitleRequest:
     properties:
@@ -7446,6 +7464,49 @@ paths:
       summary: Update offer due date
       tags:
       - Offers
+  /offers/{id}/end-date:
+    put:
+      consumes:
+      - application/json
+      description: Updates the end date of an offer. Used to record the expected or
+        actual project end date.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: End date data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferEndDateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID, offer closed, or end date before start date
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer end date
+      tags:
+      - Offers
   /offers/{id}/expiration-date:
     put:
       consumes:
@@ -8129,6 +8190,49 @@ paths:
       summary: Send offer to customer
       tags:
       - Offers
+  /offers/{id}/sent-date:
+    put:
+      consumes:
+      - application/json
+      description: Updates the sent date of an offer. Used to record when the offer
+        was sent to the customer.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Sent date data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferSentDateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID or offer closed
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer sent date
+      tags:
+      - Offers
   /offers/{id}/spent:
     put:
       consumes:
@@ -8170,6 +8274,49 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Update offer spent amount
+      tags:
+      - Offers
+  /offers/{id}/start-date:
+    put:
+      consumes:
+      - application/json
+      description: Updates the start date of an offer. Used to record the expected
+        or actual project start date.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start date data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateOfferStartDateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID, offer closed, or end date before start date
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update offer start date
       tags:
       - Offers
   /offers/{id}/title:

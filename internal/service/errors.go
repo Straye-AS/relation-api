@@ -179,4 +179,7 @@ var (
 	// ErrOfferFinancialFieldReadOnly is returned when trying to manually edit spent/invoiced fields
 	// which are now managed by data warehouse sync
 	ErrOfferFinancialFieldReadOnly = errors.New("spent and invoiced fields are read-only and managed by data warehouse sync")
+
+	// ErrEndDateBeforeStartDate is returned when end date is set to a date before start date
+	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 )

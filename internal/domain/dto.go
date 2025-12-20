@@ -1378,6 +1378,21 @@ type UpdateOfferNotesRequest struct {
 	Notes string `json:"notes" validate:"max=10000"`
 }
 
+// UpdateOfferSentDateRequest for updating offer sent date
+type UpdateOfferSentDateRequest struct {
+	SentDate *time.Time `json:"sentDate"` // nullable to allow clearing
+}
+
+// UpdateOfferStartDateRequest for updating offer start date
+type UpdateOfferStartDateRequest struct {
+	StartDate *time.Time `json:"startDate"` // nullable to allow clearing
+}
+
+// UpdateOfferEndDateRequest for updating offer end date
+type UpdateOfferEndDateRequest struct {
+	EndDate *time.Time `json:"endDate"` // nullable to allow clearing
+}
+
 // UpdateOfferProjectRequest for linking offer to a project
 type UpdateOfferProjectRequest struct {
 	ProjectID uuid.UUID `json:"projectId" validate:"required"`

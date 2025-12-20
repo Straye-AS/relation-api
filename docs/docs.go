@@ -6808,6 +6808,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/end-date": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the end date of an offer. Used to record the expected or actual project end date.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer end date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "End date data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferEndDateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID, offer closed, or end date before start date",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/expiration-date": {
             "put": {
                 "security": [
@@ -7887,6 +7954,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/sent-date": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the sent date of an offer. Used to record when the offer was sent to the customer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer sent date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Sent date data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferSentDateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or offer closed",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/spent": {
             "put": {
                 "security": [
@@ -7947,6 +8081,73 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/start-date": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the start date of an offer. Used to record the expected or actual project start date.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer start date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Start date data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferStartDateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID, offer closed, or end date before start date",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/domain.ErrorResponse"
                         }
@@ -13054,6 +13255,15 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferEndDateRequest": {
+            "type": "object",
+            "properties": {
+                "endDate": {
+                    "description": "nullable to allow clearing",
+                    "type": "string"
+                }
+            }
+        },
         "domain.UpdateOfferExpirationDateRequest": {
             "type": "object",
             "properties": {
@@ -13220,6 +13430,15 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferSentDateRequest": {
+            "type": "object",
+            "properties": {
+                "sentDate": {
+                    "description": "nullable to allow clearing",
+                    "type": "string"
+                }
+            }
+        },
         "domain.UpdateOfferSpentRequest": {
             "type": "object",
             "properties": {
@@ -13227,6 +13446,15 @@ const docTemplate = `{
                     "description": "Amount spent on this order",
                     "type": "number",
                     "minimum": 0
+                }
+            }
+        },
+        "domain.UpdateOfferStartDateRequest": {
+            "type": "object",
+            "properties": {
+                "startDate": {
+                    "description": "nullable to allow clearing",
+                    "type": "string"
                 }
             }
         },

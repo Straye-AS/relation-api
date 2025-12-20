@@ -1,6 +1,7 @@
 package datawarehouse_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/straye-as/relation-api/internal/config"
@@ -189,7 +190,7 @@ func TestClient_Close_NilClient(t *testing.T) {
 func TestClient_HealthCheck_NilClient(t *testing.T) {
 	// Nil client health check should return disabled status
 	var nilClient *datawarehouse.Client
-	status := nilClient.HealthCheck(nil)
+	status := nilClient.HealthCheck(context.Background())
 	assert.NotNil(t, status)
 	assert.Equal(t, "disabled", status.Status)
 }
@@ -327,21 +328,21 @@ func TestIsIncomeAccount_IsCostAccount_Inverse(t *testing.T) {
 
 func TestClient_GetProjectIncome_NilClient(t *testing.T) {
 	var nilClient *datawarehouse.Client
-	_, err := nilClient.GetProjectIncome(nil, "tak", "PROJECT-123")
+	_, err := nilClient.GetProjectIncome(context.Background(), "tak", "PROJECT-123")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not initialized")
 }
 
 func TestClient_GetProjectCosts_NilClient(t *testing.T) {
 	var nilClient *datawarehouse.Client
-	_, err := nilClient.GetProjectCosts(nil, "tak", "PROJECT-123")
+	_, err := nilClient.GetProjectCosts(context.Background(), "tak", "PROJECT-123")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not initialized")
 }
 
 func TestClient_GetProjectFinancials_NilClient(t *testing.T) {
 	var nilClient *datawarehouse.Client
-	_, err := nilClient.GetProjectFinancials(nil, "tak", "PROJECT-123")
+	_, err := nilClient.GetProjectFinancials(context.Background(), "tak", "PROJECT-123")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not initialized")
 }
