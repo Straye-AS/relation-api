@@ -167,8 +167,9 @@ func (s *OfferService) SyncFromDataWarehouse(ctx context.Context, id uuid.UUID) 
 }
 
 // SyncAllOffersFromDataWarehouse syncs financial data from the data warehouse for all offers
-// that have an external_reference. Continues on error for individual offers.
+// in "order" phase that have an external_reference. Continues on error for individual offers.
 // Returns counts for successfully synced and failed offers.
+// Note: Only "order" phase offers are synced automatically; other phases require manual sync.
 func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (synced int, failed int, err error) {
 	// Check if data warehouse client is available
 	if s.dwClient == nil || !s.dwClient.IsEnabled() {
@@ -176,10 +177,10 @@ func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (sync
 		return 0, 0, ErrDataWarehouseNotAvailable
 	}
 
-	// Get ALL offers with external_reference (regardless of phase) that need syncing
+	// Get "order" phase offers with external_reference that need syncing
 	// Only sync offers not synced in the last hour (DW only updates hourly)
 	maxAge := time.Hour
-	offers, err := s.offerRepo.GetAllOffersWithExternalReference(ctx, maxAge)
+	offers, err := s.offerRepo.GetOffersNeedingDWSync(ctx, maxAge)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get offers for DW sync: %w", err)
 	}

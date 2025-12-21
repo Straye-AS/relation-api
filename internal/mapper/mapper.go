@@ -644,8 +644,20 @@ func ToProjectWithDetailsDTO(
 	offer *domain.Offer,
 	deal *domain.Deal,
 ) domain.ProjectWithDetailsDTO {
+	return ToProjectWithDetailsDTOWithOfferCount(project, budgetSummary, activities, offer, deal, 0)
+}
+
+// ToProjectWithDetailsDTOWithOfferCount converts Project with related data to ProjectWithDetailsDTO with offer count
+func ToProjectWithDetailsDTOWithOfferCount(
+	project *domain.Project,
+	budgetSummary *domain.BudgetSummaryDTO,
+	activities []domain.Activity,
+	offer *domain.Offer,
+	deal *domain.Deal,
+	offerCount int,
+) domain.ProjectWithDetailsDTO {
 	dto := domain.ProjectWithDetailsDTO{
-		ProjectDTO:    ToProjectDTO(project),
+		ProjectDTO:    ToProjectDTOWithOfferCount(project, offerCount),
 		BudgetSummary: budgetSummary,
 	}
 
