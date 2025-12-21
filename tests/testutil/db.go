@@ -54,11 +54,14 @@ func cleanupAllTestData(db *gorm.DB) {
 		"deals",
 		"notifications",
 		"activities",
+		"offer_suppliers",
 		"offer_items",
 		"files",
 		"offers",
 		"projects",
 		"contact_relationships",
+		"supplier_contacts",
+		"suppliers",
 		"contacts",
 		"customers",
 		"number_sequences",
@@ -78,11 +81,14 @@ func CleanupTestData(t *testing.T, db *gorm.DB) {
 		"deals",
 		"notifications",
 		"activities",
+		"offer_suppliers",
 		"offer_items",
 		"files",
 		"offers",
 		"projects",
 		"contact_relationships",
+		"supplier_contacts",
+		"suppliers",
 		"contacts",
 		"customers",
 		"number_sequences",
@@ -153,4 +159,27 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// CreateTestSupplier creates a test supplier with default values and returns it
+func CreateTestSupplier(t *testing.T, db *gorm.DB, name string) *domain.Supplier {
+	return CreateTestSupplierWithCategory(t, db, name, "")
+}
+
+// CreateTestSupplierWithCategory creates a test supplier with a specific category and returns it
+func CreateTestSupplierWithCategory(t *testing.T, db *gorm.DB, name string, category string) *domain.Supplier {
+	// Use unique org number based on nanoseconds
+	orgNum := fmt.Sprintf("%09d", randomInt()%1000000000)
+	supplier := &domain.Supplier{
+		Name:      name,
+		OrgNumber: orgNum,
+		Email:     fmt.Sprintf("supplier-%d@example.com", randomInt()%100000),
+		Phone:     "12345678",
+		Country:   "Norway",
+		Status:    domain.SupplierStatusActive,
+		Category:  category,
+	}
+	err := db.Omit(clause.Associations).Create(supplier).Error
+	require.NoError(t, err)
+	return supplier
 }
