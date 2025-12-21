@@ -941,4 +941,3 @@ func (s *OfferService) GetNextOfferNumber(ctx context.Context, companyID domain.
 		Year:            time.Now().Year(),
 	}, nil
 }
-

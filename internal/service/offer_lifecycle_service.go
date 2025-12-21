@@ -22,7 +22,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 // ============================================================================
 // Lifecycle Methods
 // ============================================================================
@@ -892,4 +891,3 @@ func (s *OfferService) AdvanceWithProjectResponse(ctx context.Context, id uuid.U
 
 	return response, nil
 }
-

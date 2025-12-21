@@ -1197,6 +1197,7 @@ type DWFinancials struct {
 // UpdateDWFinancials updates the data warehouse synced financial fields on an offer.
 // This is called after successfully querying the data warehouse for project financials.
 // Always updates Spent (total costs) and Invoiced (total income) - these fields are read-only from the API.
+// Uses a session variable to prevent the trigger from updating updated_at.
 // Returns the updated offer.
 func (r *OfferRepository) UpdateDWFinancials(ctx context.Context, id uuid.UUID, financials *DWFinancials) (*domain.Offer, error) {
 	now := time.Now()
@@ -1213,26 +1214,39 @@ func (r *OfferRepository) UpdateDWFinancials(ctx context.Context, id uuid.UUID, 
 		"dw_last_synced_at": now,
 		"spent":             totalCosts,             // Always sync from DW
 		"invoiced":          financials.TotalIncome, // Always sync from DW
-		"updated_at":        now,
 	}
 
-	result := r.db.WithContext(ctx).
-		Model(&domain.Offer{}).
-		Where("id = ?", id).
-		Updates(updates)
-
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to update DW financials: %w", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		return nil, fmt.Errorf("offer not found: %s", id)
-	}
-
-	// Fetch and return the updated offer
 	var offer domain.Offer
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&offer).Error; err != nil {
-		return nil, fmt.Errorf("failed to get updated offer: %w", err)
+
+	// Use a transaction to set session variable that tells the trigger to skip updated_at
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Set session variable to skip updated_at in the trigger
+		if err := tx.Exec("SET LOCAL app.skip_updated_at = 'true'").Error; err != nil {
+			return fmt.Errorf("failed to set session variable: %w", err)
+		}
+
+		result := tx.Model(&domain.Offer{}).
+			Where("id = ?", id).
+			Updates(updates)
+
+		if result.Error != nil {
+			return fmt.Errorf("failed to update DW financials: %w", result.Error)
+		}
+
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("offer not found: %s", id)
+		}
+
+		// Fetch the updated offer within the same transaction
+		if err := tx.Where("id = ?", id).First(&offer).Error; err != nil {
+			return fmt.Errorf("failed to get updated offer: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return &offer, nil

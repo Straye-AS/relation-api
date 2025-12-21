@@ -158,7 +158,18 @@ func (s *ProjectService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pro
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	dto := mapper.ToProjectDTO(project)
+	// Get offer count for this project
+	offerCount := 0
+	if s.offerRepo != nil {
+		counts, err := s.offerRepo.CountOffersByProjectIDs(ctx, []uuid.UUID{id})
+		if err != nil {
+			s.logger.Warn("failed to get offer count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			offerCount = counts[id]
+		}
+	}
+
+	dto := mapper.ToProjectDTOWithOfferCount(project, offerCount)
 	return &dto, nil
 }
 
@@ -172,7 +183,18 @@ func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID)
 		return nil, nil, nil, fmt.Errorf("failed to get project with relations: %w", err)
 	}
 
-	projectDTO := mapper.ToProjectDTO(project)
+	// Get offer count for this project
+	offerCount := 0
+	if s.offerRepo != nil {
+		counts, err := s.offerRepo.CountOffersByProjectIDs(ctx, []uuid.UUID{id})
+		if err != nil {
+			s.logger.Warn("failed to get offer count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			offerCount = counts[id]
+		}
+	}
+
+	projectDTO := mapper.ToProjectDTOWithOfferCount(project, offerCount)
 
 	itemDTOs := make([]domain.BudgetItemDTO, len(budgetItems))
 	for i, item := range budgetItems {
@@ -197,9 +219,20 @@ func (s *ProjectService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) (
 		return nil, fmt.Errorf("failed to get project with relations: %w", err)
 	}
 
+	// Get offer count for this project
+	offerCount := 0
+	if s.offerRepo != nil {
+		counts, err := s.offerRepo.CountOffersByProjectIDs(ctx, []uuid.UUID{id})
+		if err != nil {
+			s.logger.Warn("failed to get offer count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			offerCount = counts[id]
+		}
+	}
+
 	// Note: Offers link to projects (project_id on offer), not the other way around.
 	// For backward compatibility, we pass nil for offer. Use GetProjectOffers to get linked offers.
-	dto := mapper.ToProjectWithDetailsDTO(project, nil, activities, nil, project.Deal)
+	dto := mapper.ToProjectWithDetailsDTOWithOfferCount(project, nil, activities, nil, project.Deal, offerCount)
 	return &dto, nil
 }
 

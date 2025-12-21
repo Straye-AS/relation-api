@@ -129,6 +129,7 @@ definitions:
     - Deal
     - File
     - Notification
+    - Supplier
     type: string
     x-enum-varnames:
     - ActivityTargetCustomer
@@ -138,6 +139,7 @@ definitions:
     - ActivityTargetDeal
     - ActivityTargetFile
     - ActivityTargetNotification
+    - ActivityTargetSupplier
   domain.ActivityType:
     enum:
     - meeting
@@ -942,6 +944,62 @@ definitions:
       summary:
         type: string
     required:
+    - name
+    type: object
+  domain.CreateSupplierRequest:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      category:
+        maxLength: 200
+        type: string
+      city:
+        maxLength: 100
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        maxLength: 200
+        type: string
+      contactPhone:
+        maxLength: 50
+        type: string
+      country:
+        maxLength: 100
+        type: string
+      county:
+        maxLength: 100
+        type: string
+      email:
+        type: string
+      municipality:
+        maxLength: 100
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      notes:
+        type: string
+      orgNumber:
+        maxLength: 20
+        type: string
+      paymentTerms:
+        maxLength: 200
+        type: string
+      phone:
+        maxLength: 50
+        type: string
+      postalCode:
+        maxLength: 20
+        type: string
+      status:
+        $ref: '#/definitions/domain.SupplierStatus'
+      website:
+        maxLength: 500
+        type: string
+    required:
+    - country
     - name
     type: object
   domain.CustomerDTO:
@@ -1917,6 +1975,35 @@ definitions:
     - OfferStatusActive
     - OfferStatusInactive
     - OfferStatusArchived
+  domain.OfferSupplierDTO:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      notes:
+        type: string
+      offerId:
+        type: string
+      offerTitle:
+        type: string
+      status:
+        $ref: '#/definitions/domain.OfferSupplierStatus'
+      supplierId:
+        type: string
+      supplierName:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  domain.OfferSupplierStatus:
+    enum:
+    - active
+    - done
+    type: string
+    x-enum-varnames:
+    - OfferSupplierStatusActive
+    - OfferSupplierStatusDone
   domain.OfferWithItemsDTO:
     properties:
       companyId:
@@ -2247,6 +2334,168 @@ definitions:
         type: number
       weightedValue:
         type: number
+    type: object
+  domain.SupplierContactDTO:
+    properties:
+      createdAt:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      isPrimary:
+        type: boolean
+      name:
+        type: string
+      notes:
+        type: string
+      phone:
+        type: string
+      supplierId:
+        type: string
+      title:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  domain.SupplierDTO:
+    properties:
+      address:
+        type: string
+      category:
+        type: string
+      city:
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        type: string
+      contactPhone:
+        type: string
+      country:
+        type: string
+      county:
+        type: string
+      createdAt:
+        type: string
+      createdById:
+        type: string
+      createdByName:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      municipality:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      orgNumber:
+        type: string
+      paymentTerms:
+        type: string
+      phone:
+        type: string
+      postalCode:
+        type: string
+      status:
+        $ref: '#/definitions/domain.SupplierStatus'
+      updatedAt:
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
+        type: string
+      website:
+        type: string
+    type: object
+  domain.SupplierStatsDTO:
+    properties:
+      activeOffers:
+        type: integer
+      completedOffers:
+        type: integer
+      totalOffers:
+        type: integer
+      totalProjects:
+        type: integer
+    type: object
+  domain.SupplierStatus:
+    enum:
+    - active
+    - inactive
+    - pending
+    - blacklisted
+    type: string
+    x-enum-varnames:
+    - SupplierStatusActive
+    - SupplierStatusInactive
+    - SupplierStatusPending
+    - SupplierStatusBlacklisted
+  domain.SupplierWithDetailsDTO:
+    properties:
+      address:
+        type: string
+      category:
+        type: string
+      city:
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        type: string
+      contactPhone:
+        type: string
+      contacts:
+        items:
+          $ref: '#/definitions/domain.SupplierContactDTO'
+        type: array
+      country:
+        type: string
+      county:
+        type: string
+      createdAt:
+        type: string
+      createdById:
+        type: string
+      createdByName:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      municipality:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      orgNumber:
+        type: string
+      paymentTerms:
+        type: string
+      phone:
+        type: string
+      postalCode:
+        type: string
+      recentOffers:
+        items:
+          $ref: '#/definitions/domain.OfferSupplierDTO'
+        type: array
+      stats:
+        $ref: '#/definitions/domain.SupplierStatsDTO'
+      status:
+        $ref: '#/definitions/domain.SupplierStatus'
+      updatedAt:
+        type: string
+      updatedById:
+        type: string
+      updatedByName:
+        type: string
+      website:
+        type: string
     type: object
   domain.TimeRange:
     enum:
@@ -2881,6 +3130,92 @@ definitions:
         type: string
     required:
     - name
+    type: object
+  domain.UpdateSupplierCategoryRequest:
+    properties:
+      category:
+        maxLength: 200
+        type: string
+    type: object
+  domain.UpdateSupplierNotesRequest:
+    properties:
+      notes:
+        type: string
+    type: object
+  domain.UpdateSupplierPaymentTermsRequest:
+    properties:
+      paymentTerms:
+        maxLength: 200
+        type: string
+    type: object
+  domain.UpdateSupplierRequest:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      category:
+        maxLength: 200
+        type: string
+      city:
+        maxLength: 100
+        type: string
+      contactEmail:
+        type: string
+      contactPerson:
+        maxLength: 200
+        type: string
+      contactPhone:
+        maxLength: 50
+        type: string
+      country:
+        maxLength: 100
+        type: string
+      county:
+        maxLength: 100
+        type: string
+      email:
+        type: string
+      municipality:
+        maxLength: 100
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      notes:
+        type: string
+      orgNumber:
+        maxLength: 20
+        type: string
+      paymentTerms:
+        maxLength: 200
+        type: string
+      phone:
+        maxLength: 50
+        type: string
+      postalCode:
+        maxLength: 20
+        type: string
+      status:
+        $ref: '#/definitions/domain.SupplierStatus'
+      website:
+        maxLength: 500
+        type: string
+    required:
+    - country
+    - name
+    type: object
+  domain.UpdateSupplierStatusRequest:
+    properties:
+      status:
+        allOf:
+        - $ref: '#/definitions/domain.SupplierStatus'
+        enum:
+        - active
+        - inactive
+        - pending
+        - blacklisted
+    required:
+    - status
     type: object
   domain.UserDTO:
     properties:
@@ -9158,6 +9493,459 @@ paths:
       summary: Global search
       tags:
       - Search
+  /suppliers:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of suppliers with optional filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page (max 200)
+        in: query
+        name: pageSize
+        type: integer
+      - description: Search by name or organization number
+        in: query
+        name: search
+        type: string
+      - description: Filter by city
+        in: query
+        name: city
+        type: string
+      - description: Filter by country
+        in: query
+        name: country
+        type: string
+      - description: Filter by status
+        enum:
+        - active
+        - inactive
+        - pending
+        - blacklisted
+        in: query
+        name: status
+        type: string
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      - description: Sort field
+        enum:
+        - createdAt
+        - updatedAt
+        - name
+        - city
+        - country
+        - status
+        - category
+        - orgNumber
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/domain.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.SupplierDTO'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List suppliers
+      tags:
+      - Suppliers
+    post:
+      consumes:
+      - application/json
+      description: Create a new supplier
+      parameters:
+      - description: Supplier data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateSupplierRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.SupplierDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Duplicate organization number
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Create supplier
+      tags:
+      - Suppliers
+  /suppliers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete a supplier. The supplier is hidden from lists but preserved
+        for historical reference.
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Supplier has active relationships
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete supplier
+      tags:
+      - Suppliers
+    get:
+      consumes:
+      - application/json
+      description: Get a supplier with full details including stats, contacts, and
+        recent offers
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SupplierWithDetailsDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get supplier by ID
+      tags:
+      - Suppliers
+    put:
+      consumes:
+      - application/json
+      description: Update an existing supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Supplier data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateSupplierRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SupplierDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "409":
+          description: Duplicate organization number
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update supplier
+      tags:
+      - Suppliers
+  /suppliers/{id}/category:
+    put:
+      consumes:
+      - application/json
+      description: Update only the category of a supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateSupplierCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SupplierDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update supplier category
+      tags:
+      - Suppliers
+  /suppliers/{id}/notes:
+    put:
+      consumes:
+      - application/json
+      description: Update only the notes of a supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Notes data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateSupplierNotesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SupplierDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update supplier notes
+      tags:
+      - Suppliers
+  /suppliers/{id}/payment-terms:
+    put:
+      consumes:
+      - application/json
+      description: Update only the payment terms of a supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment terms data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateSupplierPaymentTermsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SupplierDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update supplier payment terms
+      tags:
+      - Suppliers
+  /suppliers/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update only the status of a supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateSupplierStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SupplierDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update supplier status
+      tags:
+      - Suppliers
   /users:
     get:
       description: Returns a list of active users. Super admins and gruppen users
