@@ -182,4 +182,15 @@ var (
 
 	// ErrEndDateBeforeStartDate is returned when end date is set to a date before start date
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
+
+	// Offer-Supplier relationship errors
+
+	// ErrOfferSupplierNotFound is returned when an offer-supplier relationship is not found
+	ErrOfferSupplierNotFound = errors.New("offer-supplier relationship not found")
+
+	// ErrOfferSupplierAlreadyExists is returned when trying to add a supplier that's already linked
+	ErrOfferSupplierAlreadyExists = errors.New("supplier is already linked to this offer")
+
+	// ErrInvalidOfferSupplierStatus is returned when an invalid status is provided
+	ErrInvalidOfferSupplierStatus = errors.New("invalid offer-supplier status")
 )

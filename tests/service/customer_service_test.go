@@ -160,7 +160,7 @@ func TestCustomerService_Create(t *testing.T) {
 			Name:      "Short Phone Company",
 			OrgNumber: "333444555",
 			Email:     "valid@example.com",
-			Phone:     "123", // Too short
+			Phone:     "12", // Too short (minimum is 3 digits)
 			Country:   "Norway",
 		}
 
@@ -272,7 +272,6 @@ func TestCustomerService_Update(t *testing.T) {
 		// Update the customer
 		updateReq := &domain.UpdateCustomerRequest{
 			Name:          "Updated Company",
-			OrgNumber:     "777888999", // Keep same org number
 			Email:         "updated@example.com",
 			Phone:         "87654321",
 			Address:       "Updated Address",
@@ -299,69 +298,6 @@ func TestCustomerService_Update(t *testing.T) {
 		assert.Equal(t, updateReq.ContactPhone, updated.ContactPhone)
 	})
 
-	t.Run("success - change org number to valid unique number", func(t *testing.T) {
-		createReq := &domain.CreateCustomerRequest{
-			Name:      "Org Change Company",
-			OrgNumber: "888999000",
-			Email:     "orgchange@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
-		}
-
-		created, err := svc.Create(ctx, createReq)
-		require.NoError(t, err)
-
-		updateReq := &domain.UpdateCustomerRequest{
-			Name:      "Org Change Company",
-			OrgNumber: "111000999", // New valid org number
-			Email:     "orgchange@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
-		}
-
-		updated, err := svc.Update(ctx, created.ID, updateReq)
-		require.NoError(t, err)
-		assert.Equal(t, "111000999", updated.OrgNumber)
-	})
-
-	t.Run("fails - change org number to existing number", func(t *testing.T) {
-		// Create first customer
-		req1 := &domain.CreateCustomerRequest{
-			Name:      "First Update Company",
-			OrgNumber: "999000111",
-			Email:     "first.update@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
-		}
-		_, err := svc.Create(ctx, req1)
-		require.NoError(t, err)
-
-		// Create second customer
-		req2 := &domain.CreateCustomerRequest{
-			Name:      "Second Update Company",
-			OrgNumber: "999000222",
-			Email:     "second.update@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
-		}
-		created2, err := svc.Create(ctx, req2)
-		require.NoError(t, err)
-
-		// Try to update second customer with first customer's org number
-		updateReq := &domain.UpdateCustomerRequest{
-			Name:      "Second Update Company",
-			OrgNumber: "999000111", // First customer's org number
-			Email:     "second.update@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
-		}
-
-		updated, err := svc.Update(ctx, created2.ID, updateReq)
-		assert.Error(t, err)
-		assert.Nil(t, updated)
-		assert.ErrorIs(t, err, service.ErrDuplicateOrgNumber)
-	})
-
 	t.Run("fails - invalid email on update", func(t *testing.T) {
 		createReq := &domain.CreateCustomerRequest{
 			Name:      "Email Update Company",
@@ -375,11 +311,10 @@ func TestCustomerService_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		updateReq := &domain.UpdateCustomerRequest{
-			Name:      "Email Update Company",
-			OrgNumber: "999000333",
-			Email:     "invalid-email", // Invalid email
-			Phone:     "12345678",
-			Country:   "Norway",
+			Name:    "Email Update Company",
+			Email:   "invalid-email", // Invalid email
+			Phone:   "12345678",
+			Country: "Norway",
 		}
 
 		updated, err := svc.Update(ctx, created.ID, updateReq)
@@ -390,11 +325,10 @@ func TestCustomerService_Update(t *testing.T) {
 
 	t.Run("fails - non-existent customer", func(t *testing.T) {
 		updateReq := &domain.UpdateCustomerRequest{
-			Name:      "Non-existent Company",
-			OrgNumber: "999000444",
-			Email:     "test@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
+			Name:    "Non-existent Company",
+			Email:   "test@example.com",
+			Phone:   "12345678",
+			Country: "Norway",
 		}
 
 		updated, err := svc.Update(ctx, uuid.New(), updateReq)
@@ -772,11 +706,10 @@ func TestCustomerService_ActivityLogging(t *testing.T) {
 		require.NoError(t, err)
 
 		updateReq := &domain.UpdateCustomerRequest{
-			Name:      "Activity Update Test - Updated",
-			OrgNumber: "411222332",
-			Email:     "update.activity@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
+			Name:    "Activity Update Test - Updated",
+			Email:   "update.activity@example.com",
+			Phone:   "12345678",
+			Country: "Norway",
 		}
 
 		_, err = svc.Update(ctx, created.ID, updateReq)

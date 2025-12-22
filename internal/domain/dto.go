@@ -30,6 +30,7 @@ type CustomerDTO struct {
 	IsInternal       bool             `json:"isInternal"`
 	Municipality     string           `json:"municipality,omitempty"`
 	County           string           `json:"county,omitempty"`
+	Website          string           `json:"website,omitempty"`
 	CreatedAt        string           `json:"createdAt"`                  // ISO 8601
 	UpdatedAt        string           `json:"updatedAt"`                  // ISO 8601
 	TotalValueActive float64          `json:"totalValueActive,omitempty"` // Value of offers in in_progress or sent phases
@@ -558,6 +559,7 @@ type SearchResults struct {
 	Projects  []ProjectDTO  `json:"projects"`
 	Offers    []OfferDTO    `json:"offers"`
 	Contacts  []ContactDTO  `json:"contacts"`
+	Suppliers []SupplierDTO `json:"suppliers"`
 	Total     int           `json:"total"`
 }
 
@@ -600,17 +602,17 @@ type CreateCustomerRequest struct {
 	IsInternal    bool             `json:"isInternal,omitempty"`
 	Municipality  string           `json:"municipality,omitempty" validate:"max=100"`
 	County        string           `json:"county,omitempty" validate:"max=100"`
+	Website       string           `json:"website,omitempty" validate:"max=500"`
 }
 
 type UpdateCustomerRequest struct {
-	Name          string           `json:"name" validate:"required,max=200"`
-	OrgNumber     string           `json:"orgNumber,omitempty" validate:"max=20"`
+	Name          string           `json:"name,omitempty" validate:"max=200"`
 	Email         string           `json:"email,omitempty" validate:"omitempty,email"`
 	Phone         string           `json:"phone,omitempty" validate:"max=50"`
 	Address       string           `json:"address,omitempty" validate:"max=500"`
 	City          string           `json:"city,omitempty" validate:"max=100"`
 	PostalCode    string           `json:"postalCode,omitempty" validate:"max=20"`
-	Country       string           `json:"country" validate:"required,max=100"`
+	Country       string           `json:"country,omitempty" validate:"max=100"`
 	ContactPerson string           `json:"contactPerson,omitempty" validate:"max=200"`
 	ContactEmail  string           `json:"contactEmail,omitempty" validate:"omitempty,email"`
 	ContactPhone  string           `json:"contactPhone,omitempty" validate:"max=50"`
@@ -620,9 +622,9 @@ type UpdateCustomerRequest struct {
 	Notes         string           `json:"notes,omitempty"`
 	CustomerClass string           `json:"customerClass,omitempty" validate:"max=50"`
 	CreditLimit   *float64         `json:"creditLimit,omitempty"`
-	IsInternal    bool             `json:"isInternal,omitempty"`
 	Municipality  string           `json:"municipality,omitempty" validate:"max=100"`
 	County        string           `json:"county,omitempty" validate:"max=100"`
+	Website       string           `json:"website,omitempty" validate:"max=500"`
 }
 
 type CreateContactRequest struct {
@@ -1489,6 +1491,11 @@ type UpdateCustomerContactInfoRequest struct {
 	ContactPhone  string `json:"contactPhone" validate:"max=50"`
 }
 
+// UpdateCustomerWebsiteRequest for updating customer website URL
+type UpdateCustomerWebsiteRequest struct {
+	Website string `json:"website" validate:"max=500"`
+}
+
 // ============================================================================
 // Project Property Update Request DTOs
 // ============================================================================
@@ -1684,7 +1691,9 @@ type SupplierStatsDTO struct {
 type SupplierContactDTO struct {
 	ID         uuid.UUID `json:"id"`
 	SupplierID uuid.UUID `json:"supplierId"`
-	Name       string    `json:"name"`
+	FirstName  string    `json:"firstName"`
+	LastName   string    `json:"lastName"`
+	FullName   string    `json:"fullName"`
 	Title      string    `json:"title,omitempty"`
 	Email      string    `json:"email,omitempty"`
 	Phone      string    `json:"phone,omitempty"`
@@ -1716,6 +1725,23 @@ type TopSupplierDTO struct {
 	OfferCount int       `json:"offerCount"`
 }
 
+// OfferSupplierWithDetailsDTO combines the offer-supplier relationship with full supplier details
+type OfferSupplierWithDetailsDTO struct {
+	// Relationship fields
+	ID        uuid.UUID           `json:"id"`
+	OfferID   uuid.UUID           `json:"offerId"`
+	Status    OfferSupplierStatus `json:"status"`
+	Notes     string              `json:"notes,omitempty"`
+	CreatedAt string              `json:"createdAt"`
+	UpdatedAt string              `json:"updatedAt"`
+	// Contact person for this offer (optional)
+	ContactID   *uuid.UUID          `json:"contactId,omitempty"`
+	ContactName string              `json:"contactName,omitempty"`
+	Contact     *SupplierContactDTO `json:"contact,omitempty"`
+	// Supplier details
+	Supplier SupplierDTO `json:"supplier"`
+}
+
 // ============================================================================
 // Supplier Request DTOs
 // ============================================================================
@@ -1743,15 +1769,15 @@ type CreateSupplierRequest struct {
 }
 
 // UpdateSupplierRequest contains the data for updating an existing supplier
+// All fields are optional - only provided fields will be updated
 type UpdateSupplierRequest struct {
-	Name          string         `json:"name" validate:"required,max=200"`
-	OrgNumber     string         `json:"orgNumber,omitempty" validate:"max=20"`
+	Name          string         `json:"name,omitempty" validate:"max=200"`
 	Email         string         `json:"email,omitempty" validate:"omitempty,email"`
 	Phone         string         `json:"phone,omitempty" validate:"max=50"`
 	Address       string         `json:"address,omitempty" validate:"max=500"`
 	City          string         `json:"city,omitempty" validate:"max=100"`
 	PostalCode    string         `json:"postalCode,omitempty" validate:"max=20"`
-	Country       string         `json:"country" validate:"required,max=100"`
+	Country       string         `json:"country,omitempty" validate:"max=100"`
 	Municipality  string         `json:"municipality,omitempty" validate:"max=100"`
 	County        string         `json:"county,omitempty" validate:"max=100"`
 	ContactPerson string         `json:"contactPerson,omitempty" validate:"max=200"`
@@ -1786,4 +1812,94 @@ type UpdateSupplierCategoryRequest struct {
 // UpdateSupplierPaymentTermsRequest for updating supplier payment terms
 type UpdateSupplierPaymentTermsRequest struct {
 	PaymentTerms string `json:"paymentTerms" validate:"max=200"`
+}
+
+// UpdateSupplierEmailRequest for updating supplier email
+type UpdateSupplierEmailRequest struct {
+	Email string `json:"email" validate:"omitempty,email"`
+}
+
+// UpdateSupplierPhoneRequest for updating supplier phone
+type UpdateSupplierPhoneRequest struct {
+	Phone string `json:"phone" validate:"max=50"`
+}
+
+// UpdateSupplierWebsiteRequest for updating supplier website
+type UpdateSupplierWebsiteRequest struct {
+	Website string `json:"website" validate:"max=500"`
+}
+
+// UpdateSupplierAddressRequest for updating supplier address
+type UpdateSupplierAddressRequest struct {
+	Address string `json:"address" validate:"max=500"`
+}
+
+// UpdateSupplierPostalCodeRequest for updating supplier postal code
+type UpdateSupplierPostalCodeRequest struct {
+	PostalCode string `json:"postalCode" validate:"max=20"`
+}
+
+// UpdateSupplierCityRequest for updating supplier city
+type UpdateSupplierCityRequest struct {
+	City string `json:"city" validate:"max=100"`
+}
+
+// ============================================================================
+// Offer-Supplier Relationship Request DTOs
+// ============================================================================
+
+// AddOfferSupplierRequest for adding a supplier to an offer
+type AddOfferSupplierRequest struct {
+	SupplierID uuid.UUID           `json:"supplierId" validate:"required"`
+	ContactID  *uuid.UUID          `json:"contactId,omitempty"`
+	Status     OfferSupplierStatus `json:"status,omitempty"`
+	Notes      string              `json:"notes,omitempty"`
+}
+
+// UpdateOfferSupplierRequest for updating an offer-supplier relationship
+type UpdateOfferSupplierRequest struct {
+	ContactID *uuid.UUID          `json:"contactId,omitempty"`
+	Status    OfferSupplierStatus `json:"status,omitempty"`
+	Notes     string              `json:"notes,omitempty"`
+}
+
+// UpdateOfferSupplierStatusRequest for updating only the relationship status
+type UpdateOfferSupplierStatusRequest struct {
+	Status OfferSupplierStatus `json:"status" validate:"required,oneof=active done"`
+}
+
+// UpdateOfferSupplierNotesRequest for updating only the relationship notes
+type UpdateOfferSupplierNotesRequest struct {
+	Notes string `json:"notes"`
+}
+
+// UpdateOfferSupplierContactRequest for updating only the contact person
+type UpdateOfferSupplierContactRequest struct {
+	ContactID *uuid.UUID `json:"contactId"`
+}
+
+// ============================================================================
+// Supplier Contact Request DTOs
+// ============================================================================
+
+// CreateSupplierContactRequest contains the data needed to create a new supplier contact
+type CreateSupplierContactRequest struct {
+	FirstName string `json:"firstName" validate:"required,max=100"`
+	LastName  string `json:"lastName" validate:"required,max=100"`
+	Title     string `json:"title,omitempty" validate:"max=200"`
+	Email     string `json:"email,omitempty" validate:"omitempty,email"`
+	Phone     string `json:"phone,omitempty" validate:"max=50"`
+	IsPrimary bool   `json:"isPrimary,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+}
+
+// UpdateSupplierContactRequest contains the data needed to update a supplier contact
+type UpdateSupplierContactRequest struct {
+	FirstName string `json:"firstName" validate:"required,max=100"`
+	LastName  string `json:"lastName" validate:"required,max=100"`
+	Title     string `json:"title,omitempty" validate:"max=200"`
+	Email     string `json:"email,omitempty" validate:"omitempty,email"`
+	Phone     string `json:"phone,omitempty" validate:"max=50"`
+	IsPrimary bool   `json:"isPrimary,omitempty"`
+	Notes     string `json:"notes,omitempty"`
 }

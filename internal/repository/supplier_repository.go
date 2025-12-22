@@ -129,8 +129,7 @@ func (r *SupplierRepository) ListWithSortConfig(ctx context.Context, page, pageS
 		}
 	}
 
-	// Apply company filter from context
-	query = ApplyCompanyFilter(ctx, query)
+	// Note: Suppliers are global entities, no company filter applied
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -146,25 +145,25 @@ func (r *SupplierRepository) ListWithSortConfig(ctx context.Context, page, pageS
 }
 
 // Count returns the total count of active suppliers
+// Note: Suppliers are global entities, no company filter applied
 func (r *SupplierRepository) Count(ctx context.Context) (int, error) {
 	var count int64
-	query := r.db.WithContext(ctx).Model(&domain.Supplier{}).
-		Where("status != ?", domain.SupplierStatusBlacklisted)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&domain.Supplier{}).
+		Where("status != ?", domain.SupplierStatusBlacklisted).
+		Count(&count).Error
 	return int(count), err
 }
 
 // Search searches for suppliers by name or org number
+// Note: Suppliers are global entities, no company filter applied
 func (r *SupplierRepository) Search(ctx context.Context, searchQuery string, limit int) ([]domain.Supplier, error) {
 	var suppliers []domain.Supplier
 	searchPattern := "%" + strings.ToLower(searchQuery) + "%"
-	query := r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Where("LOWER(name) LIKE ? OR LOWER(org_number) LIKE ?", searchPattern, searchPattern).
 		Where("status != ?", domain.SupplierStatusBlacklisted).
-		Limit(limit)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.Find(&suppliers).Error
+		Limit(limit).
+		Find(&suppliers).Error
 	return suppliers, err
 }
 
@@ -173,7 +172,7 @@ func (r *SupplierRepository) GetWithContacts(ctx context.Context, id uuid.UUID) 
 	var supplier domain.Supplier
 	err := r.db.WithContext(ctx).
 		Preload("Contacts", func(db *gorm.DB) *gorm.DB {
-			return db.Order("is_primary DESC, name ASC").Limit(20)
+			return db.Order("is_primary DESC, last_name ASC, first_name ASC").Limit(20)
 		}).
 		Where("id = ?", id).
 		First(&supplier).Error
@@ -283,4 +282,136 @@ func (r *SupplierRepository) HasActiveRelations(ctx context.Context, supplierID 
 	}
 
 	return false, "", nil
+}
+
+// ============================================================================
+// Supplier Contact Methods
+// ============================================================================
+
+// ListContacts returns all contacts for a supplier
+func (r *SupplierRepository) ListContacts(ctx context.Context, supplierID uuid.UUID) ([]domain.SupplierContact, error) {
+	var contacts []domain.SupplierContact
+	err := r.db.WithContext(ctx).
+		Where("supplier_id = ?", supplierID).
+		Order("is_primary DESC, last_name ASC, first_name ASC").
+		Find(&contacts).Error
+	return contacts, err
+}
+
+// GetContactByID retrieves a supplier contact by its ID
+func (r *SupplierRepository) GetContactByID(ctx context.Context, contactID uuid.UUID) (*domain.SupplierContact, error) {
+	var contact domain.SupplierContact
+	err := r.db.WithContext(ctx).Where("id = ?", contactID).First(&contact).Error
+	if err != nil {
+		return nil, err
+	}
+	return &contact, nil
+}
+
+// CreateContact creates a new supplier contact
+func (r *SupplierRepository) CreateContact(ctx context.Context, contact *domain.SupplierContact) error {
+	return r.db.WithContext(ctx).Create(contact).Error
+}
+
+// UpdateContact updates an existing supplier contact
+func (r *SupplierRepository) UpdateContact(ctx context.Context, contact *domain.SupplierContact) error {
+	return r.db.WithContext(ctx).Save(contact).Error
+}
+
+// DeleteContact deletes a supplier contact
+func (r *SupplierRepository) DeleteContact(ctx context.Context, contactID uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.SupplierContact{}, "id = ?", contactID).Error
+}
+
+// ClearPrimaryContacts sets is_primary to false for all contacts of a supplier
+func (r *SupplierRepository) ClearPrimaryContacts(ctx context.Context, supplierID uuid.UUID) error {
+	return r.db.WithContext(ctx).
+		Model(&domain.SupplierContact{}).
+		Where("supplier_id = ?", supplierID).
+		Update("is_primary", false).Error
+}
+
+// IsContactUsedInOffers checks if a contact is currently assigned to any offer-supplier relationships
+func (r *SupplierRepository) IsContactUsedInOffers(ctx context.Context, contactID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.OfferSupplier{}).
+		Joins("JOIN offers ON offers.id = offer_suppliers.offer_id").
+		Where("offer_suppliers.contact_id = ?", contactID).
+		Where("offers.phase IN ?", []domain.OfferPhase{
+			domain.OfferPhaseInProgress,
+			domain.OfferPhaseSent,
+			domain.OfferPhaseOrder,
+		}).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// ============================================================================
+// Supplier Offers Methods
+// ============================================================================
+
+// supplierOfferSortableFields maps API field names to database column names for offer sorting
+var supplierOfferSortableFields = map[string]string{
+	"createdAt":    "offers.created_at",
+	"updatedAt":    "offers.updated_at",
+	"title":        "offers.title",
+	"value":        "offers.value",
+	"probability":  "offers.probability",
+	"phase":        "offers.phase",
+	"status":       "offers.status",
+	"dueDate":      "offers.due_date",
+	"customerName": "offers.customer_name",
+}
+
+// GetOffersBySupplier returns a paginated list of offers linked to a supplier via offer_suppliers junction table
+func (r *SupplierRepository) GetOffersBySupplier(ctx context.Context, supplierID uuid.UUID, page, pageSize int, phase *domain.OfferPhase, sort SortConfig) ([]domain.Offer, int64, error) {
+	var offers []domain.Offer
+	var total int64
+
+	// Validate and normalize pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20 // Default page size
+	}
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
+
+	// Base query: join offers with offer_suppliers to get offers for this supplier
+	query := r.db.WithContext(ctx).
+		Model(&domain.Offer{}).
+		Preload("Customer").
+		Joins("JOIN offer_suppliers ON offer_suppliers.offer_id = offers.id").
+		Where("offer_suppliers.supplier_id = ?", supplierID)
+
+	// Apply company filter on offers table
+	query = ApplyCompanyFilterWithAlias(ctx, query, "offers")
+
+	// Apply optional phase filter
+	if phase != nil {
+		query = query.Where("offers.phase = ?", *phase)
+	}
+
+	// Count total before pagination
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Build order clause from sort config
+	orderClause := BuildOrderClause(sort, supplierOfferSortableFields, "offers.updated_at")
+
+	// Apply pagination and ordering
+	offset := (page - 1) * pageSize
+	err := query.
+		Offset(offset).
+		Limit(pageSize).
+		Order(orderClause).
+		Find(&offers).Error
+
+	return offers, total, err
 }

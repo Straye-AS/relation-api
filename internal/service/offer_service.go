@@ -220,7 +220,7 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 	// Track project creation result
 	var projectLinkRes *projectLinkResult
 
-	// Handle project linking/creation based on explicit flags
+	// Handle project linking/creation
 	if req.ProjectID != nil {
 		// User provided a project ID - validate and link
 		projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, req.ProjectID, false)
@@ -228,8 +228,8 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 			return nil, err
 		}
 		offer.ProjectID = &projectLinkRes.ProjectID
-	} else if req.CreateProject && !s.isDraftPhase(phase) {
-		// CreateProject=true and no ProjectID provided - auto-create project (only for non-draft offers)
+	} else if !s.isDraftPhase(phase) {
+		// No ProjectID provided and not a draft - auto-create project
 		projectLinkRes, err = s.ensureProjectForOffer(ctx, offer, nil, true)
 		if err != nil {
 			return nil, err
@@ -445,6 +445,16 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 	if transitioningFromDraft {
 		if err := s.generateOfferNumberIfNeeded(ctx, offer); err != nil {
 			return nil, err
+		}
+
+		// Auto-create project if transitioning from draft and no project is linked
+		if offer.ProjectID == nil {
+			projectLinkRes, err := s.ensureProjectForOffer(ctx, offer, nil, true)
+			if err != nil {
+				return nil, err
+			}
+			offer.ProjectID = &projectLinkRes.ProjectID
+			offer.ProjectName = projectLinkRes.Project.Name
 		}
 	}
 
@@ -1068,4 +1078,317 @@ func (s *OfferService) syncProjectPhase(ctx context.Context, projectID uuid.UUID
 	}
 
 	return nil
+}
+
+// GetOfferSuppliers returns all suppliers linked to an offer with their relationship details
+func (s *OfferService) GetOfferSuppliers(ctx context.Context, offerID uuid.UUID) ([]domain.OfferSupplierWithDetailsDTO, error) {
+	offerSuppliers, err := s.offerRepo.GetOfferSuppliers(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer suppliers: %w", err)
+	}
+
+	return mapper.OfferSuppliersToWithDetailsDTOs(offerSuppliers), nil
+}
+
+// AddSupplierToOffer links a supplier to an offer
+func (s *OfferService) AddSupplierToOffer(ctx context.Context, offerID uuid.UUID, req *domain.AddOfferSupplierRequest) (*domain.OfferSupplierWithDetailsDTO, error) {
+	// Get the offer to verify it exists and get denormalized fields
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	// Check if supplier is already linked
+	exists, err := s.offerRepo.OfferSupplierExists(ctx, offerID, req.SupplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check offer supplier existence: %w", err)
+	}
+	if exists {
+		return nil, ErrOfferSupplierAlreadyExists
+	}
+
+	// Get supplier for denormalized name
+	var supplier domain.Supplier
+	if err := s.db.WithContext(ctx).Where("id = ?", req.SupplierID).First(&supplier).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	// Validate and get contact if provided
+	var contactID *uuid.UUID
+	var contactName string
+	if req.ContactID != nil {
+		var contact domain.SupplierContact
+		if err := s.db.WithContext(ctx).Where("id = ? AND supplier_id = ?", req.ContactID, req.SupplierID).First(&contact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("contact not found or does not belong to this supplier")
+			}
+			return nil, fmt.Errorf("failed to get contact: %w", err)
+		}
+		contactID = req.ContactID
+		contactName = contact.FullName()
+	}
+
+	// Set default status if not provided
+	status := req.Status
+	if status == "" {
+		status = domain.OfferSupplierStatusActive
+	}
+
+	offerSupplier := &domain.OfferSupplier{
+		OfferID:      offerID,
+		SupplierID:   req.SupplierID,
+		SupplierName: supplier.Name,
+		OfferTitle:   offer.Title,
+		Status:       status,
+		Notes:        req.Notes,
+		ContactID:    contactID,
+		ContactName:  contactName,
+	}
+
+	// Set user tracking fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offerSupplier.CreatedByID = userCtx.UserID.String()
+		offerSupplier.CreatedByName = userCtx.DisplayName
+		offerSupplier.UpdatedByID = userCtx.UserID.String()
+		offerSupplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.CreateOfferSupplier(ctx, offerSupplier); err != nil {
+		return nil, fmt.Errorf("failed to create offer supplier: %w", err)
+	}
+
+	// Fetch the created relationship with supplier preloaded
+	created, err := s.offerRepo.GetOfferSupplier(ctx, offerID, req.SupplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get created offer supplier: %w", err)
+	}
+
+	// Log activity
+	s.logOfferSupplierActivity(ctx, offer, supplier.Name, "Leverandør lagt til", fmt.Sprintf("Leverandør '%s' lagt til tilbudet", supplier.Name))
+
+	dto := mapper.OfferSupplierToWithDetailsDTO(created)
+	return &dto, nil
+}
+
+// UpdateOfferSupplier updates the relationship between an offer and a supplier
+func (s *OfferService) UpdateOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID, req *domain.UpdateOfferSupplierRequest) (*domain.OfferSupplierWithDetailsDTO, error) {
+	// Get existing relationship
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer supplier: %w", err)
+	}
+
+	// Update fields
+	if req.Status != "" {
+		offerSupplier.Status = req.Status
+	}
+	offerSupplier.Notes = req.Notes
+
+	// Update contact if provided
+	if req.ContactID != nil {
+		var contact domain.SupplierContact
+		if err := s.db.WithContext(ctx).Where("id = ? AND supplier_id = ?", req.ContactID, supplierID).First(&contact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("contact not found or does not belong to this supplier")
+			}
+			return nil, fmt.Errorf("failed to get contact: %w", err)
+		}
+		offerSupplier.ContactID = req.ContactID
+		offerSupplier.ContactName = contact.FullName()
+	}
+
+	// Set user tracking fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offerSupplier.UpdatedByID = userCtx.UserID.String()
+		offerSupplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.UpdateOfferSupplier(ctx, offerSupplier); err != nil {
+		return nil, fmt.Errorf("failed to update offer supplier: %w", err)
+	}
+
+	// Refetch to get updated data
+	updated, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated offer supplier: %w", err)
+	}
+
+	dto := mapper.OfferSupplierToWithDetailsDTO(updated)
+	return &dto, nil
+}
+
+// RemoveSupplierFromOffer removes the relationship between an offer and a supplier
+func (s *OfferService) RemoveSupplierFromOffer(ctx context.Context, offerID, supplierID uuid.UUID) error {
+	// Get the relationship first for activity logging
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrOfferSupplierNotFound
+		}
+		return fmt.Errorf("failed to get offer supplier: %w", err)
+	}
+
+	// Get the offer for activity logging
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		return fmt.Errorf("failed to get offer: %w", err)
+	}
+
+	if err := s.offerRepo.DeleteOfferSupplier(ctx, offerID, supplierID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrOfferSupplierNotFound
+		}
+		return fmt.Errorf("failed to delete offer supplier: %w", err)
+	}
+
+	// Log activity
+	s.logOfferSupplierActivity(ctx, offer, offerSupplier.SupplierName, "Leverandør fjernet", fmt.Sprintf("Leverandør '%s' fjernet fra tilbudet", offerSupplier.SupplierName))
+
+	return nil
+}
+
+// UpdateOfferSupplierStatus updates only the status of an offer-supplier relationship
+func (s *OfferService) UpdateOfferSupplierStatus(ctx context.Context, offerID, supplierID uuid.UUID, status domain.OfferSupplierStatus) (*domain.OfferSupplierWithDetailsDTO, error) {
+	// Validate status
+	if !status.IsValid() {
+		return nil, ErrInvalidOfferSupplierStatus
+	}
+
+	// Get existing relationship
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer supplier: %w", err)
+	}
+
+	offerSupplier.Status = status
+
+	// Set user tracking fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offerSupplier.UpdatedByID = userCtx.UserID.String()
+		offerSupplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.UpdateOfferSupplier(ctx, offerSupplier); err != nil {
+		return nil, fmt.Errorf("failed to update offer supplier status: %w", err)
+	}
+
+	// Refetch to get updated data
+	updated, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated offer supplier: %w", err)
+	}
+
+	dto := mapper.OfferSupplierToWithDetailsDTO(updated)
+	return &dto, nil
+}
+
+// UpdateOfferSupplierNotes updates only the notes of an offer-supplier relationship
+func (s *OfferService) UpdateOfferSupplierNotes(ctx context.Context, offerID, supplierID uuid.UUID, notes string) (*domain.OfferSupplierWithDetailsDTO, error) {
+	// Get existing relationship
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer supplier: %w", err)
+	}
+
+	offerSupplier.Notes = notes
+
+	// Set user tracking fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offerSupplier.UpdatedByID = userCtx.UserID.String()
+		offerSupplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.UpdateOfferSupplier(ctx, offerSupplier); err != nil {
+		return nil, fmt.Errorf("failed to update offer supplier notes: %w", err)
+	}
+
+	// Refetch to get updated data
+	updated, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated offer supplier: %w", err)
+	}
+
+	dto := mapper.OfferSupplierToWithDetailsDTO(updated)
+	return &dto, nil
+}
+
+// UpdateOfferSupplierContact updates only the contact person of an offer-supplier relationship
+func (s *OfferService) UpdateOfferSupplierContact(ctx context.Context, offerID, supplierID uuid.UUID, contactID *uuid.UUID) (*domain.OfferSupplierWithDetailsDTO, error) {
+	// Get existing relationship
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOfferSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get offer supplier: %w", err)
+	}
+
+	// Update or clear contact
+	if contactID != nil {
+		var contact domain.SupplierContact
+		if err := s.db.WithContext(ctx).Where("id = ? AND supplier_id = ?", contactID, supplierID).First(&contact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("contact not found or does not belong to this supplier")
+			}
+			return nil, fmt.Errorf("failed to get contact: %w", err)
+		}
+		offerSupplier.ContactID = contactID
+		offerSupplier.ContactName = contact.FullName()
+	} else {
+		// Clear the contact
+		offerSupplier.ContactID = nil
+		offerSupplier.ContactName = ""
+	}
+
+	// Set user tracking fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		offerSupplier.UpdatedByID = userCtx.UserID.String()
+		offerSupplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.offerRepo.UpdateOfferSupplier(ctx, offerSupplier); err != nil {
+		return nil, fmt.Errorf("failed to update offer supplier contact: %w", err)
+	}
+
+	// Refetch to get updated data
+	updated, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated offer supplier: %w", err)
+	}
+
+	dto := mapper.OfferSupplierToWithDetailsDTO(updated)
+	return &dto, nil
+}
+
+// logOfferSupplierActivity logs an activity for offer-supplier operations
+func (s *OfferService) logOfferSupplierActivity(ctx context.Context, offer *domain.Offer, supplierName, title, body string) {
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		activity := &domain.Activity{
+			TargetType:  domain.ActivityTargetOffer,
+			TargetID:    offer.ID,
+			TargetName:  offer.Title,
+			Title:       title,
+			Body:        body,
+			CreatorName: userCtx.DisplayName,
+		}
+		_ = s.activityRepo.Create(ctx, activity)
+	}
 }

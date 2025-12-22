@@ -413,10 +413,9 @@ func TestSupplierHandler_Update(t *testing.T) {
 
 	t.Run("update supplier successfully", func(t *testing.T) {
 		reqBody := domain.UpdateSupplierRequest{
-			Name:      "Updated Supplier Name",
-			OrgNumber: supplier.OrgNumber,
-			Country:   "Sweden",
-			Category:  "windows",
+			Name:     "Updated Supplier Name",
+			Country:  "Sweden",
+			Category: "windows",
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -484,9 +483,9 @@ func TestSupplierHandler_Update(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("update with validation error", func(t *testing.T) {
+	t.Run("update with empty request succeeds (PATCH-style)", func(t *testing.T) {
 		reqBody := domain.UpdateSupplierRequest{
-			// Missing required fields: Name, Country
+			// All fields are optional - empty request is valid (no changes made)
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -501,7 +500,7 @@ func TestSupplierHandler_Update(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.Update(rr, req)
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 }
 

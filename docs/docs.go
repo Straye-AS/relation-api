@@ -3789,6 +3789,80 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/website": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the website URL of a customer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update customer website",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Website data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateCustomerWebsiteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.CustomerDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/dashboard/metrics": {
             "get": {
                 "security": [
@@ -8155,6 +8229,485 @@ const docTemplate = `{
                 }
             }
         },
+        "/offers/{id}/suppliers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all suppliers linked to an offer with their relationship details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Get offer suppliers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.OfferSupplierWithDetailsDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Links a supplier to an offer with optional status and notes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Add supplier to offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Supplier data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AddOfferSupplierRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferSupplierWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID or request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer or supplier not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Supplier already linked to offer",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/suppliers/{supplierId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the status and/or notes of an offer-supplier relationship",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer-supplier relationship",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Supplier ID",
+                        "name": "supplierId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferSupplierRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferSupplierWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer or supplier ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer-supplier relationship not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Removes the link between a supplier and an offer",
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Remove supplier from offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Supplier ID",
+                        "name": "supplierId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Invalid offer or supplier ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer-supplier relationship not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/suppliers/{supplierId}/contact": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the contact person for an offer-supplier relationship. Pass null to clear the contact.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer-supplier contact person",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Supplier ID",
+                        "name": "supplierId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Contact data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferSupplierContactRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferSupplierWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer or supplier ID, or contact not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer-supplier relationship not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/suppliers/{supplierId}/notes": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates only the notes of an offer-supplier relationship",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer-supplier notes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Supplier ID",
+                        "name": "supplierId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Notes data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferSupplierNotesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferSupplierWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer or supplier ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer-supplier relationship not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/suppliers/{supplierId}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates only the status of an offer-supplier relationship",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Offers"
+                ],
+                "summary": "Update offer-supplier status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Supplier ID",
+                        "name": "supplierId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateOfferSupplierStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferSupplierWithDetailsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer or supplier ID, or invalid status",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer-supplier relationship not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/offers/{id}/title": {
             "put": {
                 "security": [
@@ -9777,6 +10330,80 @@ const docTemplate = `{
                 }
             }
         },
+        "/suppliers/{id}/address": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the address of a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update supplier address",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Address data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierAddressRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/suppliers/{id}/category": {
             "put": {
                 "security": [
@@ -9814,6 +10441,521 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/domain.UpdateSupplierCategoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/suppliers/{id}/city": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the city of a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update supplier city",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "City data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierCityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/suppliers/{id}/contacts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all contact persons for a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "List contacts for a supplier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.SupplierContactDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new contact person for a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Create a contact for a supplier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Contact data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.CreateSupplierContactRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierContactDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/suppliers/{id}/contacts/{contactId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a specific contact person for a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Get a supplier contact by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Contact ID",
+                        "name": "contactId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierContactDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a contact person for a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update a supplier contact",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Contact ID",
+                        "name": "contactId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Contact data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierContactRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierContactDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a contact person for a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Delete a supplier contact",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Contact ID",
+                        "name": "contactId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Contact is assigned to active offers",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/suppliers/{id}/email": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the email of a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update supplier email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Email data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierEmailRequest"
                         }
                     }
                 ],
@@ -9925,6 +11067,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/suppliers/{id}/offers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get paginated list of offers associated with a supplier via the offer_suppliers junction table",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "List offers for a supplier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page (max 200)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "draft",
+                            "in_progress",
+                            "sent",
+                            "order",
+                            "completed",
+                            "won",
+                            "lost",
+                            "expired"
+                        ],
+                        "type": "string",
+                        "description": "Filter by phase",
+                        "name": "phase",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "createdAt",
+                            "updatedAt",
+                            "title",
+                            "value",
+                            "probability",
+                            "phase",
+                            "status",
+                            "dueDate",
+                            "customerName"
+                        ],
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "sortOrder",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/domain.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.OfferDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/suppliers/{id}/payment-terms": {
             "put": {
                 "security": [
@@ -9999,6 +11279,154 @@ const docTemplate = `{
                 }
             }
         },
+        "/suppliers/{id}/phone": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the phone of a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update supplier phone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phone data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierPhoneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/suppliers/{id}/postal-code": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the postal code of a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update supplier postal code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Postal code data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierPostalCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/suppliers/{id}/status": {
             "put": {
                 "security": [
@@ -10036,6 +11464,80 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/domain.UpdateSupplierStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/suppliers/{id}/website": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update only the website of a supplier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update supplier website",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Website data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateSupplierWebsiteRequest"
                         }
                     }
                 ],
@@ -10467,6 +11969,26 @@ const docTemplate = `{
                 "quantity": {
                     "type": "number",
                     "minimum": 0
+                }
+            }
+        },
+        "domain.AddOfferSupplierRequest": {
+            "type": "object",
+            "required": [
+                "supplierId"
+            ],
+            "properties": {
+                "contactId": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferSupplierStatus"
+                },
+                "supplierId": {
+                    "type": "string"
                 }
             }
         },
@@ -11232,6 +12754,10 @@ const docTemplate = `{
                 },
                 "tier": {
                     "$ref": "#/definitions/domain.CustomerTier"
+                },
+                "website": {
+                    "type": "string",
+                    "maxLength": 500
                 }
             }
         },
@@ -11526,6 +13052,40 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.CreateSupplierContactRequest": {
+            "type": "object",
+            "required": [
+                "firstName",
+                "lastName"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "isPrimary": {
+                    "type": "boolean"
+                },
+                "lastName": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
         "domain.CreateSupplierRequest": {
             "type": "object",
             "required": [
@@ -11699,6 +13259,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updatedByName": {
+                    "type": "string"
+                },
+                "website": {
                     "type": "string"
                 }
             }
@@ -11961,6 +13524,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updatedByName": {
+                    "type": "string"
+                },
+                "website": {
                     "type": "string"
                 }
             }
@@ -13018,6 +14584,48 @@ const docTemplate = `{
                 "OfferSupplierStatusDone"
             ]
         },
+        "domain.OfferSupplierWithDetailsDTO": {
+            "type": "object",
+            "properties": {
+                "contact": {
+                    "$ref": "#/definitions/domain.SupplierContactDTO"
+                },
+                "contactId": {
+                    "description": "Contact person for this offer (optional)",
+                    "type": "string"
+                },
+                "contactName": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Relationship fields",
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferSupplierStatus"
+                },
+                "supplier": {
+                    "description": "Supplier details",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.SupplierDTO"
+                        }
+                    ]
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.OfferWithItemsDTO": {
             "type": "object",
             "properties": {
@@ -13517,13 +15125,19 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "firstName": {
+                    "type": "string"
+                },
+                "fullName": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
                 "isPrimary": {
                     "type": "boolean"
                 },
-                "name": {
+                "lastName": {
                     "type": "string"
                 },
                 "notes": {
@@ -14089,10 +15703,6 @@ const docTemplate = `{
         },
         "domain.UpdateCustomerRequest": {
             "type": "object",
-            "required": [
-                "country",
-                "name"
-            ],
             "properties": {
                 "address": {
                     "type": "string",
@@ -14134,9 +15744,6 @@ const docTemplate = `{
                 "industry": {
                     "$ref": "#/definitions/domain.CustomerIndustry"
                 },
-                "isInternal": {
-                    "type": "boolean"
-                },
                 "municipality": {
                     "type": "string",
                     "maxLength": 100
@@ -14147,10 +15754,6 @@ const docTemplate = `{
                 },
                 "notes": {
                     "type": "string"
-                },
-                "orgNumber": {
-                    "type": "string",
-                    "maxLength": 20
                 },
                 "phone": {
                     "type": "string",
@@ -14165,6 +15768,10 @@ const docTemplate = `{
                 },
                 "tier": {
                     "$ref": "#/definitions/domain.CustomerTier"
+                },
+                "website": {
+                    "type": "string",
+                    "maxLength": 500
                 }
             }
         },
@@ -14207,6 +15814,15 @@ const docTemplate = `{
                             "$ref": "#/definitions/domain.CustomerTier"
                         }
                     ]
+                }
+            }
+        },
+        "domain.UpdateCustomerWebsiteRequest": {
+            "type": "object",
+            "properties": {
+                "website": {
+                    "type": "string",
+                    "maxLength": 500
                 }
             }
         },
@@ -14528,6 +16144,55 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateOfferSupplierContactRequest": {
+            "type": "object",
+            "properties": {
+                "contactId": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.UpdateOfferSupplierNotesRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.UpdateOfferSupplierRequest": {
+            "type": "object",
+            "properties": {
+                "contactId": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OfferSupplierStatus"
+                }
+            }
+        },
+        "domain.UpdateOfferSupplierStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "enum": [
+                        "active",
+                        "done"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.OfferSupplierStatus"
+                        }
+                    ]
+                }
+            }
+        },
         "domain.UpdateOfferTitleRequest": {
             "type": "object",
             "required": [
@@ -14676,12 +16341,72 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateSupplierAddressRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
         "domain.UpdateSupplierCategoryRequest": {
             "type": "object",
             "properties": {
                 "category": {
                     "type": "string",
                     "maxLength": 200
+                }
+            }
+        },
+        "domain.UpdateSupplierCityRequest": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "domain.UpdateSupplierContactRequest": {
+            "type": "object",
+            "required": [
+                "firstName",
+                "lastName"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "isPrimary": {
+                    "type": "boolean"
+                },
+                "lastName": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "domain.UpdateSupplierEmailRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
                 }
             }
         },
@@ -14702,12 +16427,26 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.UpdateSupplierPhoneRequest": {
+            "type": "object",
+            "properties": {
+                "phone": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
+        "domain.UpdateSupplierPostalCodeRequest": {
+            "type": "object",
+            "properties": {
+                "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                }
+            }
+        },
         "domain.UpdateSupplierRequest": {
             "type": "object",
-            "required": [
-                "country",
-                "name"
-            ],
             "properties": {
                 "address": {
                     "type": "string",
@@ -14754,10 +16493,6 @@ const docTemplate = `{
                 "notes": {
                     "type": "string"
                 },
-                "orgNumber": {
-                    "type": "string",
-                    "maxLength": 20
-                },
                 "paymentTerms": {
                     "type": "string",
                     "maxLength": 200
@@ -14797,6 +16532,15 @@ const docTemplate = `{
                             "$ref": "#/definitions/domain.SupplierStatus"
                         }
                     ]
+                }
+            }
+        },
+        "domain.UpdateSupplierWebsiteRequest": {
+            "type": "object",
+            "properties": {
+                "website": {
+                    "type": "string",
+                    "maxLength": 500
                 }
             }
         },

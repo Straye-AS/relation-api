@@ -1182,6 +1182,66 @@ func (h *CustomerHandler) UpdateCity(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, customer)
 }
 
+// UpdateWebsite godoc
+// @Summary Update customer website
+// @Description Update only the website URL of a customer
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID" format(uuid)
+// @Param request body domain.UpdateCustomerWebsiteRequest true "Website data"
+// @Success 200 {object} domain.CustomerDTO
+// @Failure 400 {object} domain.ErrorResponse
+// @Failure 401 {object} domain.ErrorResponse
+// @Failure 404 {object} domain.ErrorResponse
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /customers/{id}/website [put]
+func (h *CustomerHandler) UpdateWebsite(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid customer ID format",
+		})
+		return
+	}
+
+	var req domain.UpdateCustomerWebsiteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, domain.ErrorResponse{
+			Error:   "Bad Request",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	customer, err := h.customerService.UpdateWebsite(r.Context(), id, req.Website)
+	if err != nil {
+		if errors.Is(err, service.ErrCustomerNotFound) {
+			respondJSON(w, http.StatusNotFound, domain.ErrorResponse{
+				Error:   "Not Found",
+				Message: "Customer not found",
+			})
+			return
+		}
+		h.logger.Error("failed to update customer website", zap.Error(err))
+		respondJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+			Error:   "Internal Server Error",
+			Message: "Failed to update customer website",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, customer)
+}
+
 // ListOffers godoc
 // @Summary List offers for a customer
 // @Description Get paginated list of offers associated with a customer

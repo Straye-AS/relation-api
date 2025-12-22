@@ -404,14 +404,14 @@ func (r *CustomerRepository) HasActiveRelations(ctx context.Context, customerID 
 }
 
 // GetTopCustomers returns customers with the most active offers/projects
+// Note: Customers are global entities, no company filter applied
 func (r *CustomerRepository) GetTopCustomers(ctx context.Context, limit int) ([]domain.Customer, error) {
 	var customers []domain.Customer
-	query := r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Where("status = ?", domain.CustomerStatusActive).
 		Order("updated_at DESC").
-		Limit(limit)
-	query = ApplyCompanyFilter(ctx, query)
-	err := query.Find(&customers).Error
+		Limit(limit).
+		Find(&customers).Error
 	return customers, err
 }
 

@@ -200,33 +200,57 @@ func (s *SupplierService) Update(ctx context.Context, id uuid.UUID, req *domain.
 		return nil, fmt.Errorf("failed to get supplier: %w", err)
 	}
 
-	// Check for duplicate org number if it's being changed
-	if req.OrgNumber != "" && req.OrgNumber != supplier.OrgNumber {
-		existing, err := s.supplierRepo.GetByOrgNumber(ctx, req.OrgNumber)
-		if err == nil && existing != nil && existing.ID != id {
-			return nil, ErrDuplicateSupplierOrgNumber
-		}
+	// Note: OrgNumber is immutable after creation and cannot be changed via update
+	// Only update fields that are explicitly provided (non-empty values)
+
+	if req.Name != "" {
+		supplier.Name = req.Name
 	}
-
-	supplier.Name = req.Name
-	supplier.OrgNumber = req.OrgNumber
-	supplier.Email = req.Email
-	supplier.Phone = req.Phone
-	supplier.Address = req.Address
-	supplier.City = req.City
-	supplier.PostalCode = req.PostalCode
-	supplier.Country = req.Country
-	supplier.Municipality = req.Municipality
-	supplier.County = req.County
-	supplier.ContactPerson = req.ContactPerson
-	supplier.ContactEmail = req.ContactEmail
-	supplier.ContactPhone = req.ContactPhone
-	supplier.Category = req.Category
-	supplier.Notes = req.Notes
-	supplier.PaymentTerms = req.PaymentTerms
-	supplier.Website = req.Website
-
-	// Update status if provided, keep existing if empty
+	if req.Email != "" {
+		supplier.Email = req.Email
+	}
+	if req.Phone != "" {
+		supplier.Phone = req.Phone
+	}
+	if req.Address != "" {
+		supplier.Address = req.Address
+	}
+	if req.City != "" {
+		supplier.City = req.City
+	}
+	if req.PostalCode != "" {
+		supplier.PostalCode = req.PostalCode
+	}
+	if req.Country != "" {
+		supplier.Country = req.Country
+	}
+	if req.Municipality != "" {
+		supplier.Municipality = req.Municipality
+	}
+	if req.County != "" {
+		supplier.County = req.County
+	}
+	if req.ContactPerson != "" {
+		supplier.ContactPerson = req.ContactPerson
+	}
+	if req.ContactEmail != "" {
+		supplier.ContactEmail = req.ContactEmail
+	}
+	if req.ContactPhone != "" {
+		supplier.ContactPhone = req.ContactPhone
+	}
+	if req.Category != "" {
+		supplier.Category = req.Category
+	}
+	if req.Notes != "" {
+		supplier.Notes = req.Notes
+	}
+	if req.PaymentTerms != "" {
+		supplier.PaymentTerms = req.PaymentTerms
+	}
+	if req.Website != "" {
+		supplier.Website = req.Website
+	}
 	if req.Status != "" {
 		supplier.Status = req.Status
 	}
@@ -429,6 +453,238 @@ func (s *SupplierService) UpdatePaymentTerms(ctx context.Context, id uuid.UUID, 
 	return &dto, nil
 }
 
+// UpdateEmail updates only the supplier email
+func (s *SupplierService) UpdateEmail(ctx context.Context, id uuid.UUID, email string) (*domain.SupplierDTO, error) {
+	// Validate email format
+	if err := validateEmail(email); err != nil {
+		return nil, fmt.Errorf("%w: email", ErrInvalidEmailFormat)
+	}
+
+	supplier, err := s.supplierRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	oldEmail := supplier.Email
+	supplier.Email = email
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		supplier.UpdatedByID = userCtx.UserID.String()
+		supplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier email: %w", err)
+	}
+
+	activityMsg := "Leverandorens e-post ble fjernet"
+	if email != "" {
+		if oldEmail == "" {
+			activityMsg = fmt.Sprintf("Leverandorens e-post satt til '%s'", email)
+		} else {
+			activityMsg = fmt.Sprintf("Leverandorens e-post endret fra '%s' til '%s'", oldEmail, email)
+		}
+	}
+	s.logActivity(ctx, supplier.ID, supplier.Name, "E-post oppdatert", activityMsg)
+
+	dto := mapper.SupplierToDTO(supplier)
+	return &dto, nil
+}
+
+// UpdatePhone updates only the supplier phone
+func (s *SupplierService) UpdatePhone(ctx context.Context, id uuid.UUID, phone string) (*domain.SupplierDTO, error) {
+	// Validate phone format
+	if err := validatePhone(phone); err != nil {
+		return nil, fmt.Errorf("%w: phone", ErrInvalidPhoneFormat)
+	}
+
+	supplier, err := s.supplierRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	oldPhone := supplier.Phone
+	supplier.Phone = phone
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		supplier.UpdatedByID = userCtx.UserID.String()
+		supplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier phone: %w", err)
+	}
+
+	activityMsg := "Leverandorens telefonnummer ble fjernet"
+	if phone != "" {
+		if oldPhone == "" {
+			activityMsg = fmt.Sprintf("Leverandorens telefonnummer satt til '%s'", phone)
+		} else {
+			activityMsg = fmt.Sprintf("Leverandorens telefonnummer endret fra '%s' til '%s'", oldPhone, phone)
+		}
+	}
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Telefon oppdatert", activityMsg)
+
+	dto := mapper.SupplierToDTO(supplier)
+	return &dto, nil
+}
+
+// UpdateWebsite updates only the supplier website
+func (s *SupplierService) UpdateWebsite(ctx context.Context, id uuid.UUID, website string) (*domain.SupplierDTO, error) {
+	supplier, err := s.supplierRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	oldWebsite := supplier.Website
+	supplier.Website = website
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		supplier.UpdatedByID = userCtx.UserID.String()
+		supplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier website: %w", err)
+	}
+
+	activityMsg := "Leverandorens nettside ble fjernet"
+	if website != "" {
+		if oldWebsite == "" {
+			activityMsg = fmt.Sprintf("Leverandorens nettside satt til '%s'", website)
+		} else {
+			activityMsg = fmt.Sprintf("Leverandorens nettside endret fra '%s' til '%s'", oldWebsite, website)
+		}
+	}
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Nettside oppdatert", activityMsg)
+
+	dto := mapper.SupplierToDTO(supplier)
+	return &dto, nil
+}
+
+// UpdateAddress updates only the supplier address
+func (s *SupplierService) UpdateAddress(ctx context.Context, id uuid.UUID, address string) (*domain.SupplierDTO, error) {
+	supplier, err := s.supplierRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	oldAddress := supplier.Address
+	supplier.Address = address
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		supplier.UpdatedByID = userCtx.UserID.String()
+		supplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier address: %w", err)
+	}
+
+	activityMsg := "Leverandorens adresse ble fjernet"
+	if address != "" {
+		if oldAddress == "" {
+			activityMsg = fmt.Sprintf("Leverandorens adresse satt til '%s'", address)
+		} else {
+			activityMsg = fmt.Sprintf("Leverandorens adresse endret fra '%s' til '%s'", oldAddress, address)
+		}
+	}
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Adresse oppdatert", activityMsg)
+
+	dto := mapper.SupplierToDTO(supplier)
+	return &dto, nil
+}
+
+// UpdatePostalCode updates only the supplier postal code
+func (s *SupplierService) UpdatePostalCode(ctx context.Context, id uuid.UUID, postalCode string) (*domain.SupplierDTO, error) {
+	supplier, err := s.supplierRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	oldPostalCode := supplier.PostalCode
+	supplier.PostalCode = postalCode
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		supplier.UpdatedByID = userCtx.UserID.String()
+		supplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier postal code: %w", err)
+	}
+
+	activityMsg := "Leverandorens postnummer ble fjernet"
+	if postalCode != "" {
+		if oldPostalCode == "" {
+			activityMsg = fmt.Sprintf("Leverandorens postnummer satt til '%s'", postalCode)
+		} else {
+			activityMsg = fmt.Sprintf("Leverandorens postnummer endret fra '%s' til '%s'", oldPostalCode, postalCode)
+		}
+	}
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Postnummer oppdatert", activityMsg)
+
+	dto := mapper.SupplierToDTO(supplier)
+	return &dto, nil
+}
+
+// UpdateCity updates only the supplier city
+func (s *SupplierService) UpdateCity(ctx context.Context, id uuid.UUID, city string) (*domain.SupplierDTO, error) {
+	supplier, err := s.supplierRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	oldCity := supplier.City
+	supplier.City = city
+
+	// Set updated by fields
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		supplier.UpdatedByID = userCtx.UserID.String()
+		supplier.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.supplierRepo.Update(ctx, supplier); err != nil {
+		return nil, fmt.Errorf("failed to update supplier city: %w", err)
+	}
+
+	activityMsg := "Leverandorens by ble fjernet"
+	if city != "" {
+		if oldCity == "" {
+			activityMsg = fmt.Sprintf("Leverandorens by satt til '%s'", city)
+		} else {
+			activityMsg = fmt.Sprintf("Leverandorens by endret fra '%s' til '%s'", oldCity, city)
+		}
+	}
+	s.logActivity(ctx, supplier.ID, supplier.Name, "By oppdatert", activityMsg)
+
+	dto := mapper.SupplierToDTO(supplier)
+	return &dto, nil
+}
+
 // logActivity is a helper to log supplier activities
 func (s *SupplierService) logActivity(ctx context.Context, supplierID uuid.UUID, supplierName, title, body string) {
 	if userCtx, ok := auth.FromContext(ctx); ok {
@@ -442,4 +698,264 @@ func (s *SupplierService) logActivity(ctx context.Context, supplierID uuid.UUID,
 		}
 		_ = s.activityRepo.Create(ctx, activity)
 	}
+}
+
+// ListOffers returns a paginated list of offers linked to a supplier
+func (s *SupplierService) ListOffers(ctx context.Context, supplierID uuid.UUID, page, pageSize int, phase *domain.OfferPhase, sort repository.SortConfig) (*domain.PaginatedResponse, error) {
+	// Verify supplier exists
+	_, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	// Clamp page size
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	if page < 1 {
+		page = 1
+	}
+
+	offers, total, err := s.supplierRepo.GetOffersBySupplier(ctx, supplierID, page, pageSize, phase, sort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list supplier offers: %w", err)
+	}
+
+	dtos := make([]domain.OfferDTO, len(offers))
+	for i, offer := range offers {
+		dtos[i] = mapper.ToOfferDTO(&offer)
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	return &domain.PaginatedResponse{
+		Data:       dtos,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// ============================================================================
+// Supplier Contact Methods
+// ============================================================================
+
+// ErrSupplierContactNotFound is returned when a supplier contact is not found
+var ErrSupplierContactNotFound = errors.New("supplier contact not found")
+
+// ErrContactUsedInActiveOffers is returned when trying to delete a contact that is used in active offers
+var ErrContactUsedInActiveOffers = errors.New("contact is assigned to active offers and cannot be deleted")
+
+// ListContacts returns all contacts for a supplier
+func (s *SupplierService) ListContacts(ctx context.Context, supplierID uuid.UUID) ([]domain.SupplierContactDTO, error) {
+	// Verify supplier exists
+	supplier, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	contacts, err := s.supplierRepo.ListContacts(ctx, supplier.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacts: %w", err)
+	}
+
+	dtos := make([]domain.SupplierContactDTO, len(contacts))
+	for i, contact := range contacts {
+		dtos[i] = mapper.SupplierContactToDTO(&contact)
+	}
+
+	return dtos, nil
+}
+
+// GetContact retrieves a supplier contact by ID
+func (s *SupplierService) GetContact(ctx context.Context, supplierID, contactID uuid.UUID) (*domain.SupplierContactDTO, error) {
+	// Verify supplier exists
+	_, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	contact, err := s.supplierRepo.GetContactByID(ctx, contactID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierContactNotFound
+		}
+		return nil, fmt.Errorf("failed to get contact: %w", err)
+	}
+
+	// Verify contact belongs to the supplier
+	if contact.SupplierID != supplierID {
+		return nil, ErrSupplierContactNotFound
+	}
+
+	dto := mapper.SupplierContactToDTO(contact)
+	return &dto, nil
+}
+
+// CreateContact creates a new contact for a supplier
+func (s *SupplierService) CreateContact(ctx context.Context, supplierID uuid.UUID, req *domain.CreateSupplierContactRequest) (*domain.SupplierContactDTO, error) {
+	// Verify supplier exists
+	supplier, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	// Validate email format
+	if err := validateEmail(req.Email); err != nil {
+		return nil, fmt.Errorf("%w: email", ErrInvalidEmailFormat)
+	}
+
+	// Validate phone format
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, fmt.Errorf("%w: phone", ErrInvalidPhoneFormat)
+	}
+
+	// If this contact is marked as primary, clear existing primary contacts
+	if req.IsPrimary {
+		if err := s.supplierRepo.ClearPrimaryContacts(ctx, supplierID); err != nil {
+			return nil, fmt.Errorf("failed to clear primary contacts: %w", err)
+		}
+	}
+
+	contact := &domain.SupplierContact{
+		SupplierID: supplierID,
+		FirstName:  req.FirstName,
+		LastName:   req.LastName,
+		Title:      req.Title,
+		Email:      req.Email,
+		Phone:      req.Phone,
+		IsPrimary:  req.IsPrimary,
+		Notes:      req.Notes,
+	}
+
+	if err := s.supplierRepo.CreateContact(ctx, contact); err != nil {
+		return nil, fmt.Errorf("failed to create contact: %w", err)
+	}
+
+	// Log activity
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Kontaktperson lagt til", fmt.Sprintf("Kontaktperson '%s' ble lagt til leverandor '%s'", contact.FullName(), supplier.Name))
+
+	dto := mapper.SupplierContactToDTO(contact)
+	return &dto, nil
+}
+
+// UpdateContact updates an existing supplier contact
+func (s *SupplierService) UpdateContact(ctx context.Context, supplierID, contactID uuid.UUID, req *domain.UpdateSupplierContactRequest) (*domain.SupplierContactDTO, error) {
+	// Verify supplier exists
+	supplier, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierNotFound
+		}
+		return nil, fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	// Get existing contact
+	contact, err := s.supplierRepo.GetContactByID(ctx, contactID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSupplierContactNotFound
+		}
+		return nil, fmt.Errorf("failed to get contact: %w", err)
+	}
+
+	// Verify contact belongs to the supplier
+	if contact.SupplierID != supplierID {
+		return nil, ErrSupplierContactNotFound
+	}
+
+	// Validate email format
+	if err := validateEmail(req.Email); err != nil {
+		return nil, fmt.Errorf("%w: email", ErrInvalidEmailFormat)
+	}
+
+	// Validate phone format
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, fmt.Errorf("%w: phone", ErrInvalidPhoneFormat)
+	}
+
+	// If this contact is being marked as primary, clear existing primary contacts
+	if req.IsPrimary && !contact.IsPrimary {
+		if err := s.supplierRepo.ClearPrimaryContacts(ctx, supplierID); err != nil {
+			return nil, fmt.Errorf("failed to clear primary contacts: %w", err)
+		}
+	}
+
+	// Update contact fields
+	contact.FirstName = req.FirstName
+	contact.LastName = req.LastName
+	contact.Title = req.Title
+	contact.Email = req.Email
+	contact.Phone = req.Phone
+	contact.IsPrimary = req.IsPrimary
+	contact.Notes = req.Notes
+
+	if err := s.supplierRepo.UpdateContact(ctx, contact); err != nil {
+		return nil, fmt.Errorf("failed to update contact: %w", err)
+	}
+
+	// Log activity
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Kontaktperson oppdatert", fmt.Sprintf("Kontaktperson '%s' ble oppdatert", contact.FullName()))
+
+	dto := mapper.SupplierContactToDTO(contact)
+	return &dto, nil
+}
+
+// DeleteContact deletes a supplier contact
+func (s *SupplierService) DeleteContact(ctx context.Context, supplierID, contactID uuid.UUID) error {
+	// Verify supplier exists
+	supplier, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrSupplierNotFound
+		}
+		return fmt.Errorf("failed to get supplier: %w", err)
+	}
+
+	// Get existing contact
+	contact, err := s.supplierRepo.GetContactByID(ctx, contactID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrSupplierContactNotFound
+		}
+		return fmt.Errorf("failed to get contact: %w", err)
+	}
+
+	// Verify contact belongs to the supplier
+	if contact.SupplierID != supplierID {
+		return ErrSupplierContactNotFound
+	}
+
+	// Check if contact is used in active offers
+	isUsed, err := s.supplierRepo.IsContactUsedInOffers(ctx, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to check contact usage: %w", err)
+	}
+	if isUsed {
+		return ErrContactUsedInActiveOffers
+	}
+
+	if err := s.supplierRepo.DeleteContact(ctx, contactID); err != nil {
+		return fmt.Errorf("failed to delete contact: %w", err)
+	}
+
+	// Log activity
+	s.logActivity(ctx, supplier.ID, supplier.Name, "Kontaktperson slettet", fmt.Sprintf("Kontaktperson '%s' ble slettet fra leverandor '%s'", contact.FullName(), supplier.Name))
+
+	return nil
 }

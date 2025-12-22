@@ -114,6 +114,7 @@ type Customer struct {
 	IsInternal    bool             `gorm:"type:boolean;not null;default:false;column:is_internal"`
 	Municipality  string           `gorm:"type:varchar(100)"`
 	County        string           `gorm:"type:varchar(100)"`
+	Website       string           `gorm:"type:varchar(500)"`
 	CompanyID     *CompanyID       `gorm:"type:varchar(50);column:company_id;index"`
 	Company       *Company         `gorm:"foreignKey:CompanyID"`
 	// User tracking fields
@@ -1063,7 +1064,8 @@ type SupplierContact struct {
 	BaseModel
 	SupplierID uuid.UUID `gorm:"type:uuid;not null;index;column:supplier_id"`
 	Supplier   *Supplier `gorm:"foreignKey:SupplierID"`
-	Name       string    `gorm:"type:varchar(200);not null"`
+	FirstName  string    `gorm:"type:varchar(100);not null;column:first_name"`
+	LastName   string    `gorm:"type:varchar(100);not null;column:last_name"`
 	Title      string    `gorm:"type:varchar(200)"`
 	Email      string    `gorm:"type:varchar(255)"`
 	Phone      string    `gorm:"type:varchar(50)"`
@@ -1074,6 +1076,11 @@ type SupplierContact struct {
 // TableName overrides the default table name for SupplierContact
 func (SupplierContact) TableName() string {
 	return "supplier_contacts"
+}
+
+// FullName returns the contact's full name
+func (c *SupplierContact) FullName() string {
+	return c.FirstName + " " + c.LastName
 }
 
 // OfferSupplier represents the many-to-many relationship between offers and suppliers
@@ -1087,6 +1094,10 @@ type OfferSupplier struct {
 	OfferTitle   string              `gorm:"type:varchar(200);column:offer_title"`
 	Status       OfferSupplierStatus `gorm:"type:varchar(50);not null;default:'active'"`
 	Notes        string              `gorm:"type:text"`
+	// Contact person for this offer (optional - selects one of supplier's contacts)
+	ContactID   *uuid.UUID       `gorm:"type:uuid;column:contact_id"`
+	Contact     *SupplierContact `gorm:"foreignKey:ContactID"`
+	ContactName string           `gorm:"type:varchar(200);column:contact_name"`
 	// User tracking fields
 	CreatedByID   string `gorm:"type:varchar(100);column:created_by_id"`
 	CreatedByName string `gorm:"type:varchar(200);column:created_by_name"`

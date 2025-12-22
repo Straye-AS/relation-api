@@ -35,8 +35,9 @@ var ErrInvalidPhoneFormat = errors.New("invalid phone format")
 // Email and phone validation patterns
 var (
 	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	// Norwegian phone pattern: allows +47 prefix, spaces, and common formats
-	phoneRegex = regexp.MustCompile(`^(\+47\s?)?[\d\s\-]{8,15}$`)
+	// Phone pattern: allows +47 prefix, spaces, dashes, and various formats
+	// Supports short service numbers (e.g., 04020) and regular numbers
+	phoneRegex = regexp.MustCompile(`^(\+47\s?)?[\d\s\-]{3,20}$`)
 )
 
 // validateEmail checks if the email has a valid format
@@ -57,7 +58,8 @@ func validatePhone(phone string) error {
 	}
 	// Remove common formatting characters for validation
 	cleaned := strings.ReplaceAll(strings.ReplaceAll(phone, " ", ""), "-", "")
-	if len(cleaned) < 8 || !phoneRegex.MatchString(phone) {
+	// Allow short service numbers (3+ digits) as well as regular phone numbers
+	if len(cleaned) < 3 || !phoneRegex.MatchString(phone) {
 		return ErrInvalidPhoneFormat
 	}
 	return nil
@@ -200,6 +202,7 @@ func (s *CustomerService) Create(ctx context.Context, req *domain.CreateCustomer
 		IsInternal:    req.IsInternal,
 		Municipality:  req.Municipality,
 		County:        req.County,
+		Website:       req.Website,
 	}
 
 	// Set user tracking fields on creation
@@ -387,46 +390,66 @@ func (s *CustomerService) Update(ctx context.Context, id uuid.UUID, req *domain.
 		return nil, fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	// Check for duplicate org number if it's being changed
-	if req.OrgNumber != customer.OrgNumber {
-		existing, err := s.customerRepo.GetByOrgNumber(ctx, req.OrgNumber)
-		if err == nil && existing != nil && existing.ID != id {
-			return nil, ErrDuplicateOrgNumber
-		}
+	// Note: OrgNumber is immutable after creation and cannot be changed via update
+	// Only update fields that are explicitly provided (non-empty values)
+
+	if req.Name != "" {
+		customer.Name = req.Name
 	}
-
-	customer.Name = req.Name
-	customer.OrgNumber = req.OrgNumber
-	customer.Email = req.Email
-	customer.Phone = req.Phone
-	customer.Address = req.Address
-	customer.City = req.City
-	customer.PostalCode = req.PostalCode
-	customer.Country = req.Country
-	customer.ContactPerson = req.ContactPerson
-	customer.ContactEmail = req.ContactEmail
-	customer.ContactPhone = req.ContactPhone
-
-	// Update status if provided, keep existing if empty
+	if req.Email != "" {
+		customer.Email = req.Email
+	}
+	if req.Phone != "" {
+		customer.Phone = req.Phone
+	}
+	if req.Address != "" {
+		customer.Address = req.Address
+	}
+	if req.City != "" {
+		customer.City = req.City
+	}
+	if req.PostalCode != "" {
+		customer.PostalCode = req.PostalCode
+	}
+	if req.Country != "" {
+		customer.Country = req.Country
+	}
+	if req.ContactPerson != "" {
+		customer.ContactPerson = req.ContactPerson
+	}
+	if req.ContactEmail != "" {
+		customer.ContactEmail = req.ContactEmail
+	}
+	if req.ContactPhone != "" {
+		customer.ContactPhone = req.ContactPhone
+	}
 	if req.Status != "" {
 		customer.Status = req.Status
 	}
-
-	// Update tier if provided, keep existing if empty
 	if req.Tier != "" {
 		customer.Tier = req.Tier
 	}
-
-	// Update industry (can be empty to clear)
-	customer.Industry = req.Industry
-
-	// Update extended fields
-	customer.Notes = req.Notes
-	customer.CustomerClass = req.CustomerClass
-	customer.CreditLimit = req.CreditLimit
-	customer.IsInternal = req.IsInternal
-	customer.Municipality = req.Municipality
-	customer.County = req.County
+	if req.Industry != "" {
+		customer.Industry = req.Industry
+	}
+	if req.Notes != "" {
+		customer.Notes = req.Notes
+	}
+	if req.CustomerClass != "" {
+		customer.CustomerClass = req.CustomerClass
+	}
+	if req.CreditLimit != nil {
+		customer.CreditLimit = req.CreditLimit
+	}
+	if req.Municipality != "" {
+		customer.Municipality = req.Municipality
+	}
+	if req.County != "" {
+		customer.County = req.County
+	}
+	if req.Website != "" {
+		customer.Website = req.Website
+	}
 
 	// Set updated by fields (never modify created by)
 	if userCtx, ok := auth.FromContext(ctx); ok {
@@ -1066,6 +1089,47 @@ func (s *CustomerService) UpdateContactInfo(ctx context.Context, id uuid.UUID, c
 	}
 
 	s.logActivity(ctx, customer.ID, customer.Name, "Kontaktinfo oppdatert", "Kundens kontaktinformasjon ble oppdatert")
+
+	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
+	if stats == nil {
+		stats = &repository.CustomerStats{}
+	}
+	dto := mapper.ToCustomerDTO(customer, stats.TotalValueActive, stats.TotalValueWon, stats.ActiveOffers)
+	return &dto, nil
+}
+
+// UpdateWebsite updates only the customer website URL
+func (s *CustomerService) UpdateWebsite(ctx context.Context, id uuid.UUID, website string) (*domain.CustomerDTO, error) {
+	customer, err := s.customerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCustomerNotFound
+		}
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	oldWebsite := customer.Website
+	customer.Website = website
+
+	// Set updated by fields (never modify created by)
+	if userCtx, ok := auth.FromContext(ctx); ok {
+		customer.UpdatedByID = userCtx.UserID.String()
+		customer.UpdatedByName = userCtx.DisplayName
+	}
+
+	if err := s.customerRepo.Update(ctx, customer); err != nil {
+		return nil, fmt.Errorf("failed to update customer website: %w", err)
+	}
+
+	activityMsg := "Kundens nettside ble fjernet"
+	if website != "" {
+		if oldWebsite == "" {
+			activityMsg = fmt.Sprintf("Kundens nettside satt til '%s'", website)
+		} else {
+			activityMsg = fmt.Sprintf("Kundens nettside endret fra '%s' til '%s'", oldWebsite, website)
+		}
+	}
+	s.logActivity(ctx, customer.ID, customer.Name, "Nettside oppdatert", activityMsg)
 
 	stats, _ := s.customerRepo.GetCustomerStats(ctx, id)
 	if stats == nil {
