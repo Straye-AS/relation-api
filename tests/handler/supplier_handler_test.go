@@ -413,10 +413,9 @@ func TestSupplierHandler_Update(t *testing.T) {
 
 	t.Run("update supplier successfully", func(t *testing.T) {
 		reqBody := domain.UpdateSupplierRequest{
-			Name:      "Updated Supplier Name",
-			OrgNumber: supplier.OrgNumber,
-			Country:   "Sweden",
-			Category:  "windows",
+			Name:     "Updated Supplier Name",
+			Country:  "Sweden",
+			Category: "windows",
 		}
 		body, _ := json.Marshal(reqBody)
 

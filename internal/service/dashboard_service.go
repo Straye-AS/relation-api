@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/mapper"
 	"github.com/straye-as/relation-api/internal/repository"
@@ -17,6 +18,7 @@ type DashboardService struct {
 	offerRepo        *repository.OfferRepository
 	activityRepo     *repository.ActivityRepository
 	notificationRepo *repository.NotificationRepository
+	supplierRepo     *repository.SupplierRepository
 	logger           *zap.Logger
 }
 
@@ -26,6 +28,7 @@ func NewDashboardService(
 	offerRepo *repository.OfferRepository,
 	activityRepo *repository.ActivityRepository,
 	notificationRepo *repository.NotificationRepository,
+	supplierRepo *repository.SupplierRepository,
 	logger *zap.Logger,
 ) *DashboardService {
 	return &DashboardService{
@@ -34,6 +37,7 @@ func NewDashboardService(
 		offerRepo:        offerRepo,
 		activityRepo:     activityRepo,
 		notificationRepo: notificationRepo,
+		supplierRepo:     supplierRepo,
 		logger:           logger,
 	}
 }
@@ -230,6 +234,11 @@ func (s *DashboardService) Search(ctx context.Context, query string) (*domain.Se
 		return nil, fmt.Errorf("failed to search offers: %w", err)
 	}
 
+	suppliers, err := s.supplierRepo.Search(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search suppliers: %w", err)
+	}
+
 	// Convert to DTOs
 	customerDTOs := make([]domain.CustomerDTO, len(customers))
 	for i, c := range customers {
@@ -240,9 +249,20 @@ func (s *DashboardService) Search(ctx context.Context, query string) (*domain.Se
 		customerDTOs[i] = mapper.ToCustomerDTO(&c, totalValueActive, totalValueWon, activeOffers)
 	}
 
+	// Get offer counts for projects
+	projectIDs := make([]uuid.UUID, len(projects))
+	for i, p := range projects {
+		projectIDs[i] = p.ID
+	}
+	offerCounts, err := s.offerRepo.CountOffersByProjectIDs(ctx, projectIDs)
+	if err != nil {
+		s.logger.Warn("failed to get offer counts for projects", zap.Error(err))
+		offerCounts = make(map[uuid.UUID]int) // Use empty map on error
+	}
+
 	projectDTOs := make([]domain.ProjectDTO, len(projects))
 	for i, p := range projects {
-		projectDTOs[i] = mapper.ToProjectDTO(&p)
+		projectDTOs[i] = mapper.ToProjectDTOWithOfferCount(&p, offerCounts[p.ID])
 	}
 
 	offerDTOs := make([]domain.OfferDTO, len(offers))
@@ -250,13 +270,19 @@ func (s *DashboardService) Search(ctx context.Context, query string) (*domain.Se
 		offerDTOs[i] = mapper.ToOfferDTO(&o)
 	}
 
-	total := len(customers) + len(projects) + len(offers)
+	supplierDTOs := make([]domain.SupplierDTO, len(suppliers))
+	for i, sup := range suppliers {
+		supplierDTOs[i] = mapper.SupplierToDTO(&sup)
+	}
+
+	total := len(customers) + len(projects) + len(offers) + len(suppliers)
 
 	return &domain.SearchResults{
 		Customers: customerDTOs,
 		Projects:  projectDTOs,
 		Offers:    offerDTOs,
 		Contacts:  []domain.ContactDTO{}, // TODO: Add contact search
+		Suppliers: supplierDTOs,
 		Total:     total,
 	}, nil
 }

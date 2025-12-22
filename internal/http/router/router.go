@@ -300,6 +300,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/contact-info", rt.customerHandler.UpdateContactInfo)
 				r.Put("/{id}/postal-code", rt.customerHandler.UpdatePostalCode)
 				r.Put("/{id}/city", rt.customerHandler.UpdateCity)
+				r.Put("/{id}/website", rt.customerHandler.UpdateWebsite)
 			})
 
 			// Contacts
@@ -392,6 +393,13 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/{id}/items", rt.offerHandler.AddItem)
 				r.Get("/{id}/files", rt.offerHandler.GetFiles)
 				r.Get("/{id}/activities", rt.offerHandler.GetActivities)
+				r.Get("/{id}/suppliers", rt.offerHandler.GetSuppliers)
+				r.Post("/{id}/suppliers", rt.offerHandler.AddSupplier)
+				r.Put("/{id}/suppliers/{supplierId}", rt.offerHandler.UpdateSupplier)
+				r.Delete("/{id}/suppliers/{supplierId}", rt.offerHandler.RemoveSupplier)
+				r.Put("/{id}/suppliers/{supplierId}/status", rt.offerHandler.UpdateSupplierStatus)
+				r.Put("/{id}/suppliers/{supplierId}/notes", rt.offerHandler.UpdateSupplierNotes)
+				r.Put("/{id}/suppliers/{supplierId}/contact", rt.offerHandler.UpdateSupplierContact)
 
 				// Budget endpoints
 				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetItems)
@@ -482,6 +490,22 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/notes", rt.supplierHandler.UpdateNotes)
 				r.Put("/{id}/category", rt.supplierHandler.UpdateCategory)
 				r.Put("/{id}/payment-terms", rt.supplierHandler.UpdatePaymentTerms)
+				r.Put("/{id}/email", rt.supplierHandler.UpdateEmail)
+				r.Put("/{id}/phone", rt.supplierHandler.UpdatePhone)
+				r.Put("/{id}/website", rt.supplierHandler.UpdateWebsite)
+				r.Put("/{id}/address", rt.supplierHandler.UpdateAddress)
+				r.Put("/{id}/postal-code", rt.supplierHandler.UpdatePostalCode)
+				r.Put("/{id}/city", rt.supplierHandler.UpdateCity)
+
+				// Offers endpoint
+				r.Get("/{id}/offers", rt.supplierHandler.ListOffers)
+
+				// Contact endpoints
+				r.Get("/{id}/contacts", rt.supplierHandler.ListContacts)
+				r.Post("/{id}/contacts", rt.supplierHandler.CreateContact)
+				r.Get("/{id}/contacts/{contactId}", rt.supplierHandler.GetContact)
+				r.Put("/{id}/contacts/{contactId}", rt.supplierHandler.UpdateContact)
+				r.Delete("/{id}/contacts/{contactId}", rt.supplierHandler.DeleteContact)
 			})
 		})
 	})

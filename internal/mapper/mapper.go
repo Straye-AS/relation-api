@@ -32,6 +32,7 @@ func ToCustomerDTO(customer *domain.Customer, totalValueActive float64, totalVal
 		IsInternal:       customer.IsInternal,
 		Municipality:     customer.Municipality,
 		County:           customer.County,
+		Website:          customer.Website,
 		CreatedAt:        customer.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:        customer.UpdatedAt.UTC().Format(time.RFC3339),
 		TotalValueActive: totalValueActive,
@@ -765,7 +766,9 @@ func SupplierContactToDTO(contact *domain.SupplierContact) domain.SupplierContac
 	return domain.SupplierContactDTO{
 		ID:         contact.ID,
 		SupplierID: contact.SupplierID,
-		Name:       contact.Name,
+		FirstName:  contact.FirstName,
+		LastName:   contact.LastName,
+		FullName:   contact.FullName(),
 		Title:      contact.Title,
 		Email:      contact.Email,
 		Phone:      contact.Phone,
@@ -789,6 +792,43 @@ func OfferSupplierToDTO(offerSupplier *domain.OfferSupplier) domain.OfferSupplie
 		CreatedAt:    offerSupplier.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:    offerSupplier.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+// OfferSupplierToWithDetailsDTO converts OfferSupplier to OfferSupplierWithDetailsDTO
+// Requires the Supplier relationship to be preloaded
+func OfferSupplierToWithDetailsDTO(offerSupplier *domain.OfferSupplier) domain.OfferSupplierWithDetailsDTO {
+	dto := domain.OfferSupplierWithDetailsDTO{
+		ID:          offerSupplier.ID,
+		OfferID:     offerSupplier.OfferID,
+		Status:      offerSupplier.Status,
+		Notes:       offerSupplier.Notes,
+		CreatedAt:   offerSupplier.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:   offerSupplier.UpdatedAt.UTC().Format(time.RFC3339),
+		ContactID:   offerSupplier.ContactID,
+		ContactName: offerSupplier.ContactName,
+	}
+
+	// Map supplier if preloaded
+	if offerSupplier.Supplier != nil {
+		dto.Supplier = SupplierToDTO(offerSupplier.Supplier)
+	}
+
+	// Map contact if preloaded
+	if offerSupplier.Contact != nil {
+		contactDTO := SupplierContactToDTO(offerSupplier.Contact)
+		dto.Contact = &contactDTO
+	}
+
+	return dto
+}
+
+// OfferSuppliersToWithDetailsDTOs converts a slice of OfferSupplier to OfferSupplierWithDetailsDTO
+func OfferSuppliersToWithDetailsDTOs(offerSuppliers []domain.OfferSupplier) []domain.OfferSupplierWithDetailsDTO {
+	dtos := make([]domain.OfferSupplierWithDetailsDTO, len(offerSuppliers))
+	for i := range offerSuppliers {
+		dtos[i] = OfferSupplierToWithDetailsDTO(&offerSuppliers[i])
+	}
+	return dtos
 }
 
 // SupplierStatsInput holds aggregated statistics for a supplier - used for mapping

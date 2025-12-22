@@ -490,3 +490,109 @@ func (r *OfferRepository) GetBestOfferForProject(ctx context.Context, projectID 
 	// No offers found
 	return nil, nil
 }
+
+// ============================================================================
+// Offer-Supplier Relationship Methods
+// ============================================================================
+
+// GetOfferSuppliers returns all suppliers linked to an offer with their relationship details
+// Preloads the full Supplier entity for each relationship
+func (r *OfferRepository) GetOfferSuppliers(ctx context.Context, offerID uuid.UUID) ([]domain.OfferSupplier, error) {
+	// First verify the offer exists and user has access
+	var count int64
+	offerQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("id = ?", offerID)
+	offerQuery = ApplyCompanyFilter(ctx, offerQuery)
+	if err := offerQuery.Count(&count).Error; err != nil {
+		return nil, fmt.Errorf("failed to verify offer access: %w", err)
+	}
+	if count == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	var offerSuppliers []domain.OfferSupplier
+	err := r.db.WithContext(ctx).
+		Preload("Supplier").
+		Preload("Contact").
+		Where("offer_id = ?", offerID).
+		Order("updated_at DESC").
+		Find(&offerSuppliers).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get offer suppliers: %w", err)
+	}
+
+	return offerSuppliers, nil
+}
+
+// GetOfferSupplier returns a single offer-supplier relationship
+func (r *OfferRepository) GetOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID) (*domain.OfferSupplier, error) {
+	// First verify the offer exists and user has access
+	var count int64
+	offerQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("id = ?", offerID)
+	offerQuery = ApplyCompanyFilter(ctx, offerQuery)
+	if err := offerQuery.Count(&count).Error; err != nil {
+		return nil, fmt.Errorf("failed to verify offer access: %w", err)
+	}
+	if count == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	var offerSupplier domain.OfferSupplier
+	err := r.db.WithContext(ctx).
+		Preload("Supplier").
+		Preload("Contact").
+		Where("offer_id = ? AND supplier_id = ?", offerID, supplierID).
+		First(&offerSupplier).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &offerSupplier, nil
+}
+
+// OfferSupplierExists checks if a supplier is already linked to an offer
+func (r *OfferRepository) OfferSupplierExists(ctx context.Context, offerID, supplierID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&domain.OfferSupplier{}).
+		Where("offer_id = ? AND supplier_id = ?", offerID, supplierID).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check offer supplier existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// CreateOfferSupplier adds a supplier to an offer
+func (r *OfferRepository) CreateOfferSupplier(ctx context.Context, offerSupplier *domain.OfferSupplier) error {
+	return r.db.WithContext(ctx).Create(offerSupplier).Error
+}
+
+// UpdateOfferSupplier updates an offer-supplier relationship
+func (r *OfferRepository) UpdateOfferSupplier(ctx context.Context, offerSupplier *domain.OfferSupplier) error {
+	return r.db.WithContext(ctx).Save(offerSupplier).Error
+}
+
+// DeleteOfferSupplier removes a supplier from an offer
+func (r *OfferRepository) DeleteOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID) error {
+	// First verify the offer exists and user has access
+	var count int64
+	offerQuery := r.db.WithContext(ctx).Model(&domain.Offer{}).Where("id = ?", offerID)
+	offerQuery = ApplyCompanyFilter(ctx, offerQuery)
+	if err := offerQuery.Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to verify offer access: %w", err)
+	}
+	if count == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	result := r.db.WithContext(ctx).
+		Where("offer_id = ? AND supplier_id = ?", offerID, supplierID).
+		Delete(&domain.OfferSupplier{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete offer supplier: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}

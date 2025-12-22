@@ -355,6 +355,36 @@ func (h *OfferHandler) GetActivities(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, activities)
 }
 
+// GetSuppliers godoc
+// @Summary Get offer suppliers
+// @Description Get all suppliers linked to an offer with their relationship details
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {array} domain.OfferSupplierWithDetailsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers [get]
+func (h *OfferHandler) GetSuppliers(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	suppliers, err := h.offerService.GetOfferSuppliers(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to get offer suppliers", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, suppliers)
+}
+
 // Delete godoc
 // @Summary Delete offer
 // @Description Delete an offer by ID. Only offers in draft or in_progress phase can be deleted.
@@ -520,6 +550,13 @@ func (h *OfferHandler) handleOfferError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Spent and invoiced fields are read-only and managed by data warehouse sync")
 	case errors.Is(err, service.ErrEndDateBeforeStartDate):
 		respondWithError(w, http.StatusBadRequest, "End date cannot be before start date")
+	// Offer-Supplier errors
+	case errors.Is(err, service.ErrOfferSupplierNotFound):
+		respondWithError(w, http.StatusNotFound, "Offer-supplier relationship not found")
+	case errors.Is(err, service.ErrOfferSupplierAlreadyExists):
+		respondWithError(w, http.StatusConflict, "Supplier is already linked to this offer")
+	case errors.Is(err, service.ErrInvalidOfferSupplierStatus):
+		respondWithError(w, http.StatusBadRequest, "Invalid offer-supplier status")
 	default:
 		respondWithError(w, http.StatusInternalServerError, "Internal server error")
 	}
@@ -1260,4 +1297,283 @@ func (h *OfferHandler) UpdateExternalReference(w http.ResponseWriter, r *http.Re
 	}
 
 	respondJSON(w, http.StatusOK, offer)
+}
+
+// ============================================================================
+// Offer-Supplier CRUD Endpoints
+// ============================================================================
+
+// AddSupplier godoc
+// @Summary Add supplier to offer
+// @Description Links a supplier to an offer with optional status and notes
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param request body domain.AddOfferSupplierRequest true "Supplier data"
+// @Success 201 {object} domain.OfferSupplierWithDetailsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or request"
+// @Failure 404 {object} domain.ErrorResponse "Offer or supplier not found"
+// @Failure 409 {object} domain.ErrorResponse "Supplier already linked to offer"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers [post]
+func (h *OfferHandler) AddSupplier(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.AddOfferSupplierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	result, err := h.offerService.AddSupplierToOffer(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to add supplier to offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, result)
+}
+
+// UpdateSupplier godoc
+// @Summary Update offer-supplier relationship
+// @Description Updates the status and/or notes of an offer-supplier relationship
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param supplierId path string true "Supplier ID"
+// @Param request body domain.UpdateOfferSupplierRequest true "Update data"
+// @Success 200 {object} domain.OfferSupplierWithDetailsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer or supplier ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer-supplier relationship not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers/{supplierId} [put]
+func (h *OfferHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferSupplierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	result, err := h.offerService.UpdateOfferSupplier(r.Context(), offerID, supplierID, &req)
+	if err != nil {
+		h.logger.Error("failed to update offer supplier", zap.Error(err),
+			zap.String("offer_id", offerID.String()),
+			zap.String("supplier_id", supplierID.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// RemoveSupplier godoc
+// @Summary Remove supplier from offer
+// @Description Removes the link between a supplier and an offer
+// @Tags Offers
+// @Param id path string true "Offer ID"
+// @Param supplierId path string true "Supplier ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer or supplier ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer-supplier relationship not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers/{supplierId} [delete]
+func (h *OfferHandler) RemoveSupplier(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	err = h.offerService.RemoveSupplierFromOffer(r.Context(), offerID, supplierID)
+	if err != nil {
+		h.logger.Error("failed to remove supplier from offer", zap.Error(err),
+			zap.String("offer_id", offerID.String()),
+			zap.String("supplier_id", supplierID.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// UpdateSupplierStatus godoc
+// @Summary Update offer-supplier status
+// @Description Updates only the status of an offer-supplier relationship
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param supplierId path string true "Supplier ID"
+// @Param request body domain.UpdateOfferSupplierStatusRequest true "Status data"
+// @Success 200 {object} domain.OfferSupplierWithDetailsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer or supplier ID, or invalid status"
+// @Failure 404 {object} domain.ErrorResponse "Offer-supplier relationship not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers/{supplierId}/status [put]
+func (h *OfferHandler) UpdateSupplierStatus(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferSupplierStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	result, err := h.offerService.UpdateOfferSupplierStatus(r.Context(), offerID, supplierID, req.Status)
+	if err != nil {
+		h.logger.Error("failed to update offer supplier status", zap.Error(err),
+			zap.String("offer_id", offerID.String()),
+			zap.String("supplier_id", supplierID.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// UpdateSupplierNotes godoc
+// @Summary Update offer-supplier notes
+// @Description Updates only the notes of an offer-supplier relationship
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param supplierId path string true "Supplier ID"
+// @Param request body domain.UpdateOfferSupplierNotesRequest true "Notes data"
+// @Success 200 {object} domain.OfferSupplierWithDetailsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer or supplier ID"
+// @Failure 404 {object} domain.ErrorResponse "Offer-supplier relationship not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers/{supplierId}/notes [put]
+func (h *OfferHandler) UpdateSupplierNotes(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferSupplierNotesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	result, err := h.offerService.UpdateOfferSupplierNotes(r.Context(), offerID, supplierID, req.Notes)
+	if err != nil {
+		h.logger.Error("failed to update offer supplier notes", zap.Error(err),
+			zap.String("offer_id", offerID.String()),
+			zap.String("supplier_id", supplierID.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// UpdateSupplierContact godoc
+// @Summary Update offer-supplier contact person
+// @Description Updates the contact person for an offer-supplier relationship. Pass null to clear the contact.
+// @Tags Offers
+// @Accept json
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Param supplierId path string true "Supplier ID"
+// @Param request body domain.UpdateOfferSupplierContactRequest true "Contact data"
+// @Success 200 {object} domain.OfferSupplierWithDetailsDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer or supplier ID, or contact not found"
+// @Failure 404 {object} domain.ErrorResponse "Offer-supplier relationship not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/suppliers/{supplierId}/contact [put]
+func (h *OfferHandler) UpdateSupplierContact(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateOfferSupplierContactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	result, err := h.offerService.UpdateOfferSupplierContact(r.Context(), offerID, supplierID, req.ContactID)
+	if err != nil {
+		h.logger.Error("failed to update offer supplier contact", zap.Error(err),
+			zap.String("offer_id", offerID.String()),
+			zap.String("supplier_id", supplierID.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
 }

@@ -375,11 +375,10 @@ func TestCustomerHandler_Update(t *testing.T) {
 
 	t.Run("update customer successfully", func(t *testing.T) {
 		reqBody := domain.UpdateCustomerRequest{
-			Name:      "Updated Customer Name",
-			OrgNumber: customer.OrgNumber,
-			Email:     "updated@example.com",
-			Phone:     "99887766",
-			Country:   "Sweden",
+			Name:    "Updated Customer Name",
+			Email:   "updated@example.com",
+			Phone:   "99887766",
+			Country: "Sweden",
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -406,11 +405,10 @@ func TestCustomerHandler_Update(t *testing.T) {
 	t.Run("update non-existent customer", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		reqBody := domain.UpdateCustomerRequest{
-			Name:      "Updated Name",
-			OrgNumber: "111222333",
-			Email:     "test@example.com",
-			Phone:     "12345678",
-			Country:   "Norway",
+			Name:    "Updated Name",
+			Email:   "test@example.com",
+			Phone:   "12345678",
+			Country: "Norway",
 		}
 		body, _ := json.Marshal(reqBody)
 
