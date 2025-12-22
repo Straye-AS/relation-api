@@ -160,7 +160,7 @@ func TestCustomerService_Create(t *testing.T) {
 			Name:      "Short Phone Company",
 			OrgNumber: "333444555",
 			Email:     "valid@example.com",
-			Phone:     "123", // Too short
+			Phone:     "12", // Too short (minimum is 3 digits)
 			Country:   "Norway",
 		}
 

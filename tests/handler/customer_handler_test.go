@@ -446,9 +446,9 @@ func TestCustomerHandler_Update(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("update with validation error", func(t *testing.T) {
+	t.Run("update with empty request succeeds (PATCH-style)", func(t *testing.T) {
 		reqBody := domain.UpdateCustomerRequest{
-			// Missing required fields
+			// All fields are optional - empty request is valid (no changes made)
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -463,7 +463,7 @@ func TestCustomerHandler_Update(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.Update(rr, req)
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 }
 
