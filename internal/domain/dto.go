@@ -215,10 +215,11 @@ type OfferDTO struct {
 	// Data Warehouse synced fields
 	DWTotalIncome   float64 `json:"dwTotalIncome"`            // Income from data warehouse
 	DWMaterialCosts float64 `json:"dwMaterialCosts"`          // Material costs from data warehouse
-	DWEmployeeCosts float64 `json:"dwEmployeeCosts"`          // Employee costs from data warehouse
-	DWOtherCosts    float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
-	DWNetResult     float64 `json:"dwNetResult"`              // Net result from data warehouse
-	DWLastSyncedAt  *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
+	DWEmployeeCosts    float64 `json:"dwEmployeeCosts"`          // Employee costs from data warehouse
+	DWOtherCosts       float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
+	DWNetResult        float64 `json:"dwNetResult"`              // Net result from data warehouse
+	DWTotalFixedPrice  float64 `json:"dwTotalFixedPrice"`        // Sum of FixedPriceAmount from synced assignments
+	DWLastSyncedAt     *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
 }
 
 type OfferItemDTO struct {
@@ -1606,11 +1607,12 @@ type OfferExternalSyncResponse struct {
 	// Current offer financial values after sync
 	DWTotalIncome   float64 `json:"dwTotalIncome"`   // Persisted DW total income
 	DWMaterialCosts float64 `json:"dwMaterialCosts"` // Persisted DW material costs
-	DWEmployeeCosts float64 `json:"dwEmployeeCosts"` // Persisted DW employee costs
-	DWOtherCosts    float64 `json:"dwOtherCosts"`    // Persisted DW other costs
-	DWNetResult     float64 `json:"dwNetResult"`     // Persisted DW net result
-	Spent           float64 `json:"spent"`           // Updated if was 0, otherwise unchanged
-	Invoiced        float64 `json:"invoiced"`        // Updated if was 0, otherwise unchanged
+	DWEmployeeCosts   float64 `json:"dwEmployeeCosts"`   // Persisted DW employee costs
+	DWOtherCosts      float64 `json:"dwOtherCosts"`      // Persisted DW other costs
+	DWNetResult       float64 `json:"dwNetResult"`       // Persisted DW net result
+	DWTotalFixedPrice float64 `json:"dwTotalFixedPrice"` // Sum of FixedPriceAmount from synced assignments
+	Spent             float64 `json:"spent"`             // Updated if was 0, otherwise unchanged
+	Invoiced          float64 `json:"invoiced"`          // Updated if was 0, otherwise unchanged
 }
 
 // ============================================================================
@@ -1905,4 +1907,49 @@ type UpdateSupplierContactRequest struct {
 	Phone     string `json:"phone,omitempty" validate:"max=50"`
 	IsPrimary bool   `json:"isPrimary,omitempty"`
 	Notes     string `json:"notes,omitempty"`
+}
+
+// ============================================================================
+// Assignment DTOs (ERP Work Orders synced from Datawarehouse)
+// ============================================================================
+
+// AssignmentDTO represents an assignment (work order) from the ERP system
+type AssignmentDTO struct {
+	ID               uuid.UUID  `json:"id"`
+	DWAssignmentID   int64      `json:"dwAssignmentId"`   // Original ID from datawarehouse
+	DWProjectID      int64      `json:"dwProjectId"`      // Project ID from datawarehouse
+	OfferID          *uuid.UUID `json:"offerId,omitempty"`
+	CompanyID        CompanyID  `json:"companyId"`
+	AssignmentNumber string     `json:"assignmentNumber"` // e.g., "2406200"
+	Description      string     `json:"description,omitempty"`
+	FixedPriceAmount float64    `json:"fixedPriceAmount"` // Primary financial field
+	StatusID         *int       `json:"statusId,omitempty"`
+	ProgressID       *int       `json:"progressId,omitempty"`
+	DWSyncedAt       string     `json:"dwSyncedAt"` // ISO 8601
+	CreatedAt        string     `json:"createdAt"`  // ISO 8601
+	UpdatedAt        string     `json:"updatedAt"`  // ISO 8601
+}
+
+// AssignmentSyncResultDTO represents the result of syncing assignments for an offer
+type AssignmentSyncResultDTO struct {
+	OfferID           uuid.UUID `json:"offerId"`
+	ExternalReference string    `json:"externalReference"`
+	CompanyID         CompanyID `json:"companyId"`
+	Synced            int       `json:"synced"`  // Number of assignments synced
+	Created           int       `json:"created"` // Number of new assignments created
+	Updated           int       `json:"updated"` // Number of existing assignments updated
+	Deleted           int       `json:"deleted"` // Number of stale assignments removed
+	SyncedAt          string    `json:"syncedAt"` // ISO 8601
+	Error             string    `json:"error,omitempty"`
+}
+
+// AssignmentSummaryDTO represents aggregated assignment data for an offer
+type AssignmentSummaryDTO struct {
+	OfferID              uuid.UUID `json:"offerId"`
+	OfferValue           float64   `json:"offerValue"`           // Offer's value field
+	TotalFixedPriceAmount float64   `json:"totalFixedPriceAmount"` // Sum of all assignments' FixedPriceAmount
+	AssignmentCount      int       `json:"assignmentCount"`      // Number of assignments
+	Difference           float64   `json:"difference"`           // offerValue - totalFixedPriceAmount
+	DifferencePercent    float64   `json:"differencePercent"`    // (difference / offerValue) * 100
+	LastSyncedAt         *string   `json:"lastSyncedAt,omitempty"` // ISO 8601, most recent sync
 }

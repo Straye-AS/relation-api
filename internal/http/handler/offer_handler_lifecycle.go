@@ -553,10 +553,10 @@ func (h *OfferHandler) GetExternalSync(w http.ResponseWriter, r *http.Request) {
 // TriggerBulkDWSync godoc
 // @Summary Trigger bulk data warehouse sync (Admin only)
 // @Description Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).
-// @Description This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.
+// @Description Also syncs all assignments for offers in "order" phase. This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.
 // @Tags Offers
 // @Produce json
-// @Success 200 {object} map[string]interface{} "Sync results with synced/failed counts"
+// @Success 200 {object} map[string]interface{} "Sync results with synced/failed counts for offers and assignments"
 // @Failure 403 {object} domain.ErrorResponse "Forbidden - requires super admin"
 // @Failure 500 {object} domain.ErrorResponse "Internal server error"
 // @Security BearerAuth
@@ -575,29 +575,44 @@ func (h *OfferHandler) TriggerBulkDWSync(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.logger.Info("admin triggered bulk DW sync",
+	h.logger.Info("admin triggered force DW sync",
 		zap.String("user_id", userCtx.UserID.String()),
 		zap.String("user_email", userCtx.Email))
 
-	// Call the service to sync all offers
-	synced, failed, err := h.offerService.SyncAllOffersFromDataWarehouse(r.Context())
+	// 1. Force sync all offer financials (ignores last_synced_at)
+	offersSynced, offersFailed, err := h.offerService.ForceSyncAllOffersFromDataWarehouse(r.Context())
 	if err != nil {
-		h.logger.Error("bulk DW sync failed",
+		h.logger.Error("force DW offer sync failed",
 			zap.Error(err),
 			zap.String("triggered_by", userCtx.Email))
-		respondWithError(w, http.StatusInternalServerError, "Failed to run bulk sync: "+err.Error())
-		return
+		// Continue with assignment sync even if offer sync fails
+	}
+
+	// 2. Force sync all assignments (ignores last_synced_at)
+	var assignmentsSynced, assignmentsFailed int
+	if h.assignmentService != nil {
+		assignmentsSynced, assignmentsFailed, err = h.assignmentService.ForceSyncAllAssignmentsFromDataWarehouse(r.Context())
+		if err != nil {
+			h.logger.Error("force DW assignment sync failed",
+				zap.Error(err),
+				zap.String("triggered_by", userCtx.Email))
+		}
 	}
 
 	h.logger.Info("bulk DW sync completed",
-		zap.Int("synced", synced),
-		zap.Int("failed", failed),
+		zap.Int("offers_synced", offersSynced),
+		zap.Int("offers_failed", offersFailed),
+		zap.Int("assignments_synced", assignmentsSynced),
+		zap.Int("assignments_failed", assignmentsFailed),
 		zap.String("triggered_by", userCtx.Email))
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "Bulk data warehouse sync completed",
-		"synced":  synced,
-		"failed":  failed,
-		"total":   synced + failed,
+		"message":           "Bulk data warehouse sync completed",
+		"offersSynced":      offersSynced,
+		"offersFailed":      offersFailed,
+		"assignmentsSynced": assignmentsSynced,
+		"assignmentsFailed": assignmentsFailed,
+		"totalOffers":       offersSynced + offersFailed,
+		"totalAssignments":  assignmentsSynced + assignmentsFailed,
 	})
 }

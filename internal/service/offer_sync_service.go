@@ -228,6 +228,64 @@ func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (sync
 	return synced, failed, nil
 }
 
+// ForceSyncAllOffersFromDataWarehouse syncs ALL offers in "order" phase with external_reference,
+// regardless of when they were last synced. Used by admin force-sync endpoint.
+func (s *OfferService) ForceSyncAllOffersFromDataWarehouse(ctx context.Context) (synced int, failed int, err error) {
+	// Check if data warehouse client is available
+	if s.dwClient == nil || !s.dwClient.IsEnabled() {
+		s.logger.Info("data warehouse not available, skipping force sync")
+		return 0, 0, ErrDataWarehouseNotAvailable
+	}
+
+	// Get ALL "order" phase offers with external_reference (no maxAge filter)
+	offers, err := s.offerRepo.GetAllOffersForDWSync(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get offers for force DW sync: %w", err)
+	}
+
+	s.logger.Info("starting force DW sync (admin)",
+		zap.Int("offer_count", len(offers)))
+
+	for _, offer := range offers {
+		// Query the data warehouse for project financials
+		financials, err := s.dwClient.GetProjectFinancials(ctx, string(offer.CompanyID), offer.ExternalReference)
+		if err != nil {
+			s.logger.Warn("failed to query DW for offer (force sync)",
+				zap.Error(err),
+				zap.String("offer_id", offer.ID.String()),
+				zap.String("external_reference", offer.ExternalReference))
+			failed++
+			continue
+		}
+
+		// Update the offer with DW financials
+		dwFinancials := &repository.DWFinancials{
+			TotalIncome:   financials.TotalIncome,
+			MaterialCosts: financials.MaterialCosts,
+			EmployeeCosts: financials.EmployeeCosts,
+			OtherCosts:    financials.OtherCosts,
+			NetResult:     financials.NetResult,
+		}
+
+		if _, err := s.offerRepo.UpdateDWFinancials(ctx, offer.ID, dwFinancials); err != nil {
+			s.logger.Warn("failed to update offer with DW financials (force sync)",
+				zap.Error(err),
+				zap.String("offer_id", offer.ID.String()))
+			failed++
+			continue
+		}
+
+		synced++
+	}
+
+	s.logger.Info("completed force DW sync (admin)",
+		zap.Int("synced", synced),
+		zap.Int("failed", failed),
+		zap.Int("total", len(offers)))
+
+	return synced, failed, nil
+}
+
 // GetOffersForDWSync returns all offers that have an external_reference and can be synced.
 func (s *OfferService) GetOffersForDWSync(ctx context.Context) ([]domain.Offer, error) {
 	return s.offerRepo.GetOffersForDWSync(ctx)

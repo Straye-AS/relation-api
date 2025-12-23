@@ -1252,21 +1252,49 @@ func (r *OfferRepository) UpdateDWFinancials(ctx context.Context, id uuid.UUID, 
 	return &offer, nil
 }
 
+// UpdateDWTotalFixedPrice updates the sum of FixedPriceAmount from synced assignments.
+// This is called after successfully syncing assignments from the data warehouse.
+// Uses a session variable to prevent the trigger from updating updated_at.
+func (r *OfferRepository) UpdateDWTotalFixedPrice(ctx context.Context, id uuid.UUID, totalFixedPrice float64) error {
+	// Use a transaction to set session variable that tells the trigger to skip updated_at
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Set session variable to skip updated_at in the trigger
+		if err := tx.Exec("SET LOCAL app.skip_updated_at = 'true'").Error; err != nil {
+			return fmt.Errorf("failed to set session variable: %w", err)
+		}
+
+		result := tx.Model(&domain.Offer{}).
+			Where("id = ?", id).
+			Update("dw_total_fixed_price", totalFixedPrice)
+
+		if result.Error != nil {
+			return fmt.Errorf("failed to update dw_total_fixed_price: %w", result.Error)
+		}
+
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("offer not found: %s", id)
+		}
+
+		return nil
+	})
+}
+
 // ClearDWFinancials resets all data warehouse financial fields to zero.
 // Called when external_reference is cleared or changed.
 func (r *OfferRepository) ClearDWFinancials(ctx context.Context, id uuid.UUID) error {
 	now := time.Now()
 
 	updates := map[string]interface{}{
-		"dw_total_income":   0,
-		"dw_material_costs": 0,
-		"dw_employee_costs": 0,
-		"dw_other_costs":    0,
-		"dw_net_result":     0,
-		"dw_last_synced_at": nil,
-		"spent":             0,
-		"invoiced":          0,
-		"updated_at":        now,
+		"dw_total_income":      0,
+		"dw_material_costs":    0,
+		"dw_employee_costs":    0,
+		"dw_other_costs":       0,
+		"dw_net_result":        0,
+		"dw_total_fixed_price": 0,
+		"dw_last_synced_at":    nil,
+		"spent":                0,
+		"invoiced":             0,
+		"updated_at":           now,
 	}
 
 	result := r.db.WithContext(ctx).
@@ -1340,6 +1368,24 @@ func (r *OfferRepository) GetOffersNeedingDWSync(ctx context.Context, maxAge tim
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get offers needing DW sync: %w", err)
+	}
+
+	return offers, nil
+}
+
+// GetAllOffersForDWSync returns ALL offers in "order" phase with external_reference,
+// regardless of when they were last synced. Used by admin force-sync endpoint.
+func (r *OfferRepository) GetAllOffersForDWSync(ctx context.Context) ([]domain.Offer, error) {
+	var offers []domain.Offer
+
+	err := r.db.WithContext(ctx).
+		Where("external_reference IS NOT NULL").
+		Where("external_reference != ''").
+		Where("phase = ?", domain.OfferPhaseOrder).
+		Find(&offers).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all offers for DW sync: %w", err)
 	}
 
 	return offers, nil

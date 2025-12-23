@@ -153,6 +153,7 @@ func run() error {
 	companyRepo := repository.NewCompanyRepository(db)
 	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 	supplierRepo := repository.NewSupplierRepository(db)
+	assignmentRepo := repository.NewAssignmentRepository(db)
 
 	// Initialize services
 	// Company service first (other services may depend on it)
@@ -183,6 +184,11 @@ func run() error {
 	notificationService := service.NewNotificationService(notificationRepo, log)
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
 	supplierService := service.NewSupplierServiceWithDeps(supplierRepo, fileService, activityRepo, log)
+	assignmentService := service.NewAssignmentService(assignmentRepo, offerRepo, activityRepo, log)
+	// Inject data warehouse client into assignment service for DW sync functionality
+	if dwClient != nil {
+		assignmentService.SetDataWarehouseClient(dwClient)
+	}
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, userRepo, log)
@@ -194,7 +200,7 @@ func run() error {
 	customerHandler := handler.NewCustomerHandler(customerService, contactService, offerService, projectService, log)
 	contactHandler := handler.NewContactHandler(contactService, log)
 	projectHandler := handler.NewProjectHandler(projectService, offerService, log)
-	offerHandler := handler.NewOfferHandler(offerService, dwClient, log)
+	offerHandler := handler.NewOfferHandler(offerService, assignmentService, dwClient, log)
 	inquiryHandler := handler.NewInquiryHandler(inquiryService, log)
 	dealHandler := handler.NewDealHandler(dealService, log)
 	fileHandler := handler.NewFileHandler(fileService, cfg.Storage.MaxUploadSizeMB, log)
@@ -207,6 +213,7 @@ func run() error {
 	notificationHandler := handler.NewNotificationHandler(notificationService, log)
 	activityHandler := handler.NewActivityHandler(activityService, log)
 	supplierHandler := handler.NewSupplierHandler(supplierService, log)
+	assignmentHandler := handler.NewAssignmentHandler(assignmentService, log)
 
 	// Setup router
 	rt := router.NewRouter(
@@ -233,6 +240,7 @@ func run() error {
 		notificationHandler,
 		activityHandler,
 		supplierHandler,
+		assignmentHandler,
 	)
 
 	// Initialize and start scheduler for background jobs
@@ -241,19 +249,20 @@ func run() error {
 		scheduler = jobs.NewScheduler(log)
 
 		// Register the data warehouse sync job
-		// runStartupSync=true will sync stale offers (null or > 1 hour old) immediately
+		// runStartupSync=true will sync stale offers and assignments (null or > 1 hour old) immediately
 		if err := jobs.RegisterDWSyncJob(
 			scheduler,
 			offerService,
+			assignmentService, // Also sync assignments
 			log,
 			cfg.DataWarehouse.PeriodicSyncCron,
 			cfg.DataWarehouse.PeriodicSyncTimeoutDuration(),
-			true, // run startup sync for stale offers
+			true, // run startup sync for stale offers and assignments
 		); err != nil {
 			log.Error("Failed to register DW sync job", zap.Error(err))
 		} else {
 			scheduler.Start()
-			log.Info("Scheduler started with DW sync job",
+			log.Info("Scheduler started with DW sync job (offers + assignments)",
 				zap.String("cron_expr", cfg.DataWarehouse.PeriodicSyncCron),
 				zap.Duration("timeout", cfg.DataWarehouse.PeriodicSyncTimeoutDuration()),
 			)

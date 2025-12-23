@@ -318,10 +318,11 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		// Data Warehouse synced fields
 		DWTotalIncome:   offer.DWTotalIncome,
 		DWMaterialCosts: offer.DWMaterialCosts,
-		DWEmployeeCosts: offer.DWEmployeeCosts,
-		DWOtherCosts:    offer.DWOtherCosts,
-		DWNetResult:     offer.DWNetResult,
-		DWLastSyncedAt:  formatTimePointer(offer.DWLastSyncedAt),
+		DWEmployeeCosts:   offer.DWEmployeeCosts,
+		DWOtherCosts:      offer.DWOtherCosts,
+		DWNetResult:       offer.DWNetResult,
+		DWTotalFixedPrice: offer.DWTotalFixedPrice,
+		DWLastSyncedAt:    formatTimePointer(offer.DWLastSyncedAt),
 	}
 }
 
@@ -908,4 +909,32 @@ func SupplierToWithDetailsDTOWithFileCount(supplier *domain.Supplier, stats *Sup
 	}
 
 	return dto
+}
+
+// AssignmentToDTO converts Assignment to AssignmentDTO
+func AssignmentToDTO(assignment *domain.Assignment) domain.AssignmentDTO {
+	return domain.AssignmentDTO{
+		ID:               assignment.ID,
+		DWAssignmentID:   assignment.DWAssignmentID,
+		DWProjectID:      assignment.DWProjectID,
+		OfferID:          assignment.OfferID,
+		CompanyID:        assignment.CompanyID,
+		AssignmentNumber: assignment.AssignmentNumber,
+		Description:      assignment.Description,
+		FixedPriceAmount: assignment.FixedPriceAmount,
+		StatusID:         assignment.StatusID,
+		ProgressID:       assignment.ProgressID,
+		DWSyncedAt:       assignment.DWSyncedAt.UTC().Format(time.RFC3339),
+		CreatedAt:        assignment.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:        assignment.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// AssignmentsToDTOs converts a slice of Assignments to AssignmentDTOs
+func AssignmentsToDTOs(assignments []domain.Assignment) []domain.AssignmentDTO {
+	dtos := make([]domain.AssignmentDTO, len(assignments))
+	for i := range assignments {
+		dtos[i] = AssignmentToDTO(&assignments[i])
+	}
+	return dtos
 }
