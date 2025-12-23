@@ -367,6 +367,137 @@ func TestProjectHandler_Create(t *testing.T) {
 	})
 }
 
+// TestProjectHandler_CreateSimplified tests the simplified project creation endpoint
+// Projects are now containers/folders for offers with minimal required fields.
+func TestProjectHandler_CreateSimplified(t *testing.T) {
+	db := setupProjectHandlerTestDB(t)
+	h := createProjectHandler(t, db)
+	ctx := createProjectTestContext()
+
+	t.Run("create project with only name (required)", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Name: "Minimal Project",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.NotEmpty(t, rr.Header().Get("Location"))
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Minimal Project", result.Name)
+		assert.NotEqual(t, uuid.Nil, result.ID)
+		// Verify phase defaults to "tilbud"
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// No customer on creation (inferred from offers)
+		assert.Nil(t, result.CustomerID)
+		assert.Empty(t, result.CustomerName)
+		// No location on creation (inferred from offers)
+		assert.Empty(t, result.Location)
+	})
+
+	t.Run("create project with all optional fields", func(t *testing.T) {
+		startDate := time.Now()
+		endDate := startDate.AddDate(0, 6, 0)
+		reqBody := domain.CreateProjectRequest{
+			Name:        "Full Optional Project",
+			Description: "A project with all optional fields set",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Full Optional Project", result.Name)
+		assert.Equal(t, "A project with all optional fields set", result.Description)
+		// Phase still defaults to "tilbud"
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// Verify dates are set (start date and end date)
+		assert.NotEmpty(t, result.StartDate)
+		assert.NotNil(t, result.EndDate)
+	})
+
+	t.Run("phase defaults to tilbud on creation", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Name: "Phase Default Test Project",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		// This explicitly tests the default phase behavior
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase, "phase should default to 'tilbud'")
+	})
+
+	t.Run("validation error when name is missing", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Description: "Project without a name",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+		// Verify the error response mentions name field
+		var errResp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		// Should have an error message about validation
+		assert.Contains(t, rr.Body.String(), "name", "error should mention missing name field")
+	})
+
+	t.Run("validation error when name is empty string", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Name: "",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
 // TestProjectHandler_Update tests the Update endpoint
 func TestProjectHandler_Update(t *testing.T) {
 	db := setupProjectHandlerTestDB(t)
