@@ -520,6 +520,15 @@ func ToFileDTO(file *domain.File) domain.FileDTO {
 	}
 }
 
+// ToFileDTOs converts a slice of Files to a slice of FileDTOs
+func ToFileDTOs(files []domain.File) []domain.FileDTO {
+	dtos := make([]domain.FileDTO, len(files))
+	for i := range files {
+		dtos[i] = ToFileDTO(&files[i])
+	}
+	return dtos
+}
+
 // ToActivityDTO converts Activity to ActivityDTO
 func ToActivityDTO(activity *domain.Activity) domain.ActivityDTO {
 	dto := domain.ActivityDTO{
