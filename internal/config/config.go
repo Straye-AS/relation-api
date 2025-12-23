@@ -328,6 +328,18 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 		}
 	}
 
+	// Storage connection string is loaded from Key Vault regardless of environment
+	// when storage mode is "azure" or "cloud" and Key Vault is configured
+	if (cfg.Storage.Mode == "azure" || cfg.Storage.Mode == "cloud") && cfg.Secrets.KeyVaultName != "" {
+		if err := loadStorageSecrets(ctx, cfg, logger); err != nil {
+			logger.Warn("Failed to load storage secrets from Key Vault",
+				zap.Error(err),
+				zap.String("environment", cfg.App.Environment),
+			)
+			// Don't fail startup - will fall back to env var if set
+		}
+	}
+
 	if !useKeyVault {
 		logger.Info("USE_AZURE_KEY_VAULT not enabled, using environment variables for main secrets",
 			zap.String("environment", cfg.App.Environment),
@@ -413,7 +425,7 @@ func LoadWithSecrets(ctx context.Context, logger *zap.Logger) (*Config, error) {
 	}
 
 	// Storage connection string (for cloud storage)
-	if connStr, err := provider.GetSecretOrEnv(ctx, "storage-connection-string", "STORAGE_CLOUDCONNECTIONSTRING"); err == nil && connStr != "" {
+	if connStr, err := provider.GetSecretOrEnv(ctx, "STORAGE-CONNECTION-STRING-RELATION", "STORAGE_CLOUDCONNECTIONSTRING"); err == nil && connStr != "" {
 		cfg.Storage.CloudConnectionString = connStr
 	}
 
@@ -465,6 +477,38 @@ func loadDataWarehouseSecrets(ctx context.Context, cfg *Config, logger *zap.Logg
 	cfg.DataWarehouse.Password = password
 
 	logger.Info("Data warehouse credentials loaded from Key Vault successfully")
+	return nil
+}
+
+// loadStorageSecrets loads Azure Blob Storage connection string from Azure Key Vault
+// This is called regardless of environment when STORAGE_MODE is "azure" or "cloud"
+// Storage connection string ONLY comes from Key Vault, never from environment variables
+func loadStorageSecrets(ctx context.Context, cfg *Config, logger *zap.Logger) error {
+	logger.Info("Loading storage secrets from Key Vault",
+		zap.String("key_vault_name", cfg.Secrets.KeyVaultName),
+		zap.String("storage_mode", cfg.Storage.Mode),
+	)
+
+	// Initialize a vault-only provider for storage secrets
+	provider, err := secrets.NewProvider(&secrets.ProviderConfig{
+		Source:       secrets.SourceVault,
+		VaultName:    cfg.Secrets.KeyVaultName,
+		Environment:  cfg.App.Environment,
+		CacheEnabled: cfg.Secrets.CacheEnabled,
+		CacheTTL:     time.Duration(cfg.Secrets.CacheTTL) * time.Second,
+	}, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault client for storage: %w", err)
+	}
+
+	// Load connection string from Key Vault
+	connStr, err := provider.GetSecret(ctx, "STORAGE-CONNECTION-STRING-RELATION")
+	if err != nil {
+		return fmt.Errorf("failed to get STORAGE-CONNECTION-STRING-RELATION from Key Vault: %w", err)
+	}
+	cfg.Storage.CloudConnectionString = connStr
+
+	logger.Info("Storage connection string loaded from Key Vault successfully")
 	return nil
 }
 
