@@ -425,3 +425,162 @@ func TestToOfferDTO_AllHealthStatuses(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// ToFileDTO and ToFileDTOs Tests
+// ============================================================================
+
+func TestToFileDTO_WithOfferID(t *testing.T) {
+	now := time.Now()
+	offerID := uuid.New()
+
+	file := &domain.File{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+		},
+		Filename:    "document.pdf",
+		ContentType: "application/pdf",
+		Size:        1024,
+		StoragePath: "files/abc123.pdf",
+		OfferID:     &offerID,
+	}
+
+	dto := mapper.ToFileDTO(file)
+
+	assert.Equal(t, file.ID, dto.ID)
+	assert.Equal(t, "document.pdf", dto.Filename)
+	assert.Equal(t, "application/pdf", dto.ContentType)
+	assert.Equal(t, int64(1024), dto.Size)
+	assert.Equal(t, &offerID, dto.OfferID)
+	assert.Nil(t, dto.CustomerID)
+	assert.Nil(t, dto.ProjectID)
+	assert.Nil(t, dto.SupplierID)
+	assert.NotEmpty(t, dto.CreatedAt)
+}
+
+func TestToFileDTO_WithCustomerID(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	file := &domain.File{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+		},
+		Filename:    "contract.pdf",
+		ContentType: "application/pdf",
+		Size:        2048,
+		StoragePath: "files/def456.pdf",
+		CustomerID:  &customerID,
+	}
+
+	dto := mapper.ToFileDTO(file)
+
+	assert.Equal(t, file.ID, dto.ID)
+	assert.Equal(t, "contract.pdf", dto.Filename)
+	assert.Equal(t, &customerID, dto.CustomerID)
+	assert.Nil(t, dto.OfferID)
+	assert.Nil(t, dto.ProjectID)
+	assert.Nil(t, dto.SupplierID)
+}
+
+func TestToFileDTO_WithProjectID(t *testing.T) {
+	now := time.Now()
+	projectID := uuid.New()
+
+	file := &domain.File{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+		},
+		Filename:    "blueprint.dwg",
+		ContentType: "application/acad",
+		Size:        5120,
+		StoragePath: "files/ghi789.dwg",
+		ProjectID:   &projectID,
+	}
+
+	dto := mapper.ToFileDTO(file)
+
+	assert.Equal(t, file.ID, dto.ID)
+	assert.Equal(t, "blueprint.dwg", dto.Filename)
+	assert.Equal(t, &projectID, dto.ProjectID)
+	assert.Nil(t, dto.OfferID)
+	assert.Nil(t, dto.CustomerID)
+	assert.Nil(t, dto.SupplierID)
+}
+
+func TestToFileDTO_WithSupplierID(t *testing.T) {
+	now := time.Now()
+	supplierID := uuid.New()
+
+	file := &domain.File{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+		},
+		Filename:    "invoice.pdf",
+		ContentType: "application/pdf",
+		Size:        512,
+		StoragePath: "files/jkl012.pdf",
+		SupplierID:  &supplierID,
+	}
+
+	dto := mapper.ToFileDTO(file)
+
+	assert.Equal(t, file.ID, dto.ID)
+	assert.Equal(t, "invoice.pdf", dto.Filename)
+	assert.Equal(t, &supplierID, dto.SupplierID)
+	assert.Nil(t, dto.OfferID)
+	assert.Nil(t, dto.CustomerID)
+	assert.Nil(t, dto.ProjectID)
+}
+
+func TestToFileDTOs_MultipleFiles(t *testing.T) {
+	now := time.Now()
+	offerID := uuid.New()
+	customerID := uuid.New()
+
+	files := []domain.File{
+		{
+			BaseModel: domain.BaseModel{
+				ID:        uuid.New(),
+				CreatedAt: now,
+			},
+			Filename:    "file1.pdf",
+			ContentType: "application/pdf",
+			Size:        1024,
+			StoragePath: "files/file1.pdf",
+			OfferID:     &offerID,
+		},
+		{
+			BaseModel: domain.BaseModel{
+				ID:        uuid.New(),
+				CreatedAt: now,
+			},
+			Filename:    "file2.pdf",
+			ContentType: "application/pdf",
+			Size:        2048,
+			StoragePath: "files/file2.pdf",
+			CustomerID:  &customerID,
+		},
+	}
+
+	dtos := mapper.ToFileDTOs(files)
+
+	assert.Len(t, dtos, 2)
+	assert.Equal(t, "file1.pdf", dtos[0].Filename)
+	assert.Equal(t, &offerID, dtos[0].OfferID)
+	assert.Equal(t, "file2.pdf", dtos[1].Filename)
+	assert.Equal(t, &customerID, dtos[1].CustomerID)
+}
+
+func TestToFileDTOs_EmptySlice(t *testing.T) {
+	files := []domain.File{}
+
+	dtos := mapper.ToFileDTOs(files)
+
+	assert.NotNil(t, dtos)
+	assert.Len(t, dtos, 0)
+}
