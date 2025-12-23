@@ -161,7 +161,7 @@ func run() error {
 	// Number sequence service (shared between offers and projects)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
-	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
+	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, fileRepo, activityRepo, log)
 	// Inject data warehouse client into customer service for ERP sync functionality
 	if dwClient != nil {
 		customerService.SetDataWarehouseClient(&customerDWAdapter{client: dwClient})
@@ -182,7 +182,7 @@ func run() error {
 	budgetItemService := service.NewBudgetItemService(budgetItemRepo, offerRepo, projectRepo, log)
 	notificationService := service.NewNotificationService(notificationRepo, log)
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
-	supplierService := service.NewSupplierService(supplierRepo, activityRepo, log)
+	supplierService := service.NewSupplierServiceWithDeps(supplierRepo, fileService, activityRepo, log)
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, userRepo, log)
