@@ -488,6 +488,11 @@ func (h *FileHandler) handleFileUpload(r *http.Request, uploadFn func(filename, 
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		// Handle edge case where file has empty filename and is treated as form value
+		if r.MultipartForm != nil && len(r.MultipartForm.Value["file"]) > 0 {
+			content := r.MultipartForm.Value["file"][0]
+			return uploadFn("", "application/octet-stream", io.NopCloser(strings.NewReader(content)))
+		}
 		return nil, fmt.Errorf("invalid file upload: file field is required")
 	}
 	defer file.Close()
