@@ -925,12 +925,15 @@ type AuditLog struct {
 
 // File represents an uploaded file attached to an entity.
 // Exactly one of OfferID, CustomerID, ProjectID, or SupplierID should be set.
+// CompanyID is required and indicates which company the file belongs to.
 type File struct {
 	BaseModel
 	Filename        string         `gorm:"type:varchar(255);not null"`
 	ContentType     string         `gorm:"type:varchar(100);not null"`
 	Size            int64          `gorm:"not null"`
 	StoragePath     string         `gorm:"type:varchar(500);not null;unique"`
+	CompanyID       CompanyID      `gorm:"type:varchar(50);not null;index:idx_files_company_id;column:company_id"`
+	Company         *Company       `gorm:"foreignKey:CompanyID"`
 	OfferID         *uuid.UUID     `gorm:"type:uuid;index:idx_files_offer_id"`
 	Offer           *Offer         `gorm:"foreignKey:OfferID"`
 	CustomerID      *uuid.UUID     `gorm:"type:uuid;index:idx_files_customer_id"`

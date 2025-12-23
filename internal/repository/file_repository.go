@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type FileRepository struct {
@@ -17,7 +18,8 @@ func NewFileRepository(db *gorm.DB) *FileRepository {
 }
 
 func (r *FileRepository) Create(ctx context.Context, file *domain.File) error {
-	return r.db.WithContext(ctx).Create(file).Error
+	// Omit associations to avoid GORM trying to validate/create related records
+	return r.db.WithContext(ctx).Omit(clause.Associations).Create(file).Error
 }
 
 func (r *FileRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.File, error) {

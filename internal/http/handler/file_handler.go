@@ -39,6 +39,7 @@ func NewFileHandler(fileService *service.FileService, maxUploadMB int64, logger 
 // @Produce json
 // @Param id path string true "Customer ID" format(uuid)
 // @Param file formData file true "File to upload"
+// @Param company_id formData string false "Company ID (optional, inherits from customer or defaults to 'gruppen')"
 // @Success 201 {object} domain.FileDTO
 // @Failure 400 {object} domain.APIError
 // @Failure 404 {object} domain.APIError
@@ -54,8 +55,8 @@ func (h *FileHandler) UploadToCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileDTO, err := h.handleFileUpload(r, func(filename, contentType string, file io.Reader) (*domain.FileDTO, error) {
-		return h.fileService.UploadToCustomer(r.Context(), customerID, filename, contentType, file)
+	fileDTO, err := h.handleFileUploadWithCompany(r, func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
+		return h.fileService.UploadToCustomer(r.Context(), customerID, filename, contentType, file, companyID)
 	})
 	if err != nil {
 		h.handleUploadError(w, err, "customer")
@@ -67,12 +68,13 @@ func (h *FileHandler) UploadToCustomer(w http.ResponseWriter, r *http.Request) {
 
 // UploadToProject godoc
 // @Summary Upload file to project
-// @Description Upload a file and attach it to a project
+// @Description Upload a file and attach it to a project. Company ID is required since projects are cross-company.
 // @Tags Files
 // @Accept multipart/form-data
 // @Produce json
 // @Param id path string true "Project ID" format(uuid)
 // @Param file formData file true "File to upload"
+// @Param company_id formData string true "Company ID (required for projects)"
 // @Success 201 {object} domain.FileDTO
 // @Failure 400 {object} domain.APIError
 // @Failure 404 {object} domain.APIError
@@ -88,8 +90,8 @@ func (h *FileHandler) UploadToProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileDTO, err := h.handleFileUpload(r, func(filename, contentType string, file io.Reader) (*domain.FileDTO, error) {
-		return h.fileService.UploadToProject(r.Context(), projectID, filename, contentType, file)
+	fileDTO, err := h.handleFileUploadWithCompany(r, func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
+		return h.fileService.UploadToProject(r.Context(), projectID, filename, contentType, file, companyID)
 	})
 	if err != nil {
 		h.handleUploadError(w, err, "project")
@@ -107,6 +109,7 @@ func (h *FileHandler) UploadToProject(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Offer ID" format(uuid)
 // @Param file formData file true "File to upload"
+// @Param company_id formData string false "Company ID (optional, inherits from offer)"
 // @Success 201 {object} domain.FileDTO
 // @Failure 400 {object} domain.APIError
 // @Failure 404 {object} domain.APIError
@@ -122,8 +125,8 @@ func (h *FileHandler) UploadToOffer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileDTO, err := h.handleFileUpload(r, func(filename, contentType string, file io.Reader) (*domain.FileDTO, error) {
-		return h.fileService.UploadToOffer(r.Context(), offerID, filename, contentType, file)
+	fileDTO, err := h.handleFileUploadWithCompany(r, func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
+		return h.fileService.UploadToOffer(r.Context(), offerID, filename, contentType, file, companyID)
 	})
 	if err != nil {
 		h.handleUploadError(w, err, "offer")
@@ -141,6 +144,7 @@ func (h *FileHandler) UploadToOffer(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Supplier ID" format(uuid)
 // @Param file formData file true "File to upload"
+// @Param company_id formData string false "Company ID (optional, inherits from supplier or defaults to 'gruppen')"
 // @Success 201 {object} domain.FileDTO
 // @Failure 400 {object} domain.APIError
 // @Failure 404 {object} domain.APIError
@@ -156,8 +160,8 @@ func (h *FileHandler) UploadToSupplier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileDTO, err := h.handleFileUpload(r, func(filename, contentType string, file io.Reader) (*domain.FileDTO, error) {
-		return h.fileService.UploadToSupplier(r.Context(), supplierID, filename, contentType, file)
+	fileDTO, err := h.handleFileUploadWithCompany(r, func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
+		return h.fileService.UploadToSupplier(r.Context(), supplierID, filename, contentType, file, companyID)
 	})
 	if err != nil {
 		h.handleUploadError(w, err, "supplier")
@@ -300,6 +304,7 @@ func (h *FileHandler) ListSupplierFiles(w http.ResponseWriter, r *http.Request) 
 // @Param offerId path string true "Offer ID" format(uuid)
 // @Param supplierId path string true "Supplier ID" format(uuid)
 // @Param file formData file true "File to upload"
+// @Param company_id formData string false "Company ID (optional, inherits from offer)"
 // @Success 201 {object} domain.FileDTO
 // @Failure 400 {object} domain.APIError
 // @Failure 404 {object} domain.APIError
@@ -321,8 +326,8 @@ func (h *FileHandler) UploadToOfferSupplier(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	fileDTO, err := h.handleFileUpload(r, func(filename, contentType string, file io.Reader) (*domain.FileDTO, error) {
-		return h.fileService.UploadToOfferSupplier(r.Context(), offerID, supplierID, filename, contentType, file)
+	fileDTO, err := h.handleFileUploadWithCompany(r, func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
+		return h.fileService.UploadToOfferSupplier(r.Context(), offerID, supplierID, filename, contentType, file, companyID)
 	})
 	if err != nil {
 		h.handleUploadError(w, err, "offer-supplier")
@@ -477,8 +482,8 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Helper Methods
 // ============================================================================
 
-// handleFileUpload is a helper that handles common file upload logic
-func (h *FileHandler) handleFileUpload(r *http.Request, uploadFn func(filename, contentType string, file io.Reader) (*domain.FileDTO, error)) (*domain.FileDTO, error) {
+// handleFileUploadWithCompany is a helper that handles file upload logic with company_id support
+func (h *FileHandler) handleFileUploadWithCompany(r *http.Request, uploadFn func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error)) (*domain.FileDTO, error) {
 	// Limit request size
 	r.Body = http.MaxBytesReader(nil, r.Body, h.maxUploadMB*1024*1024)
 
@@ -486,18 +491,26 @@ func (h *FileHandler) handleFileUpload(r *http.Request, uploadFn func(filename, 
 		return nil, fmt.Errorf("file too large: maximum size is %dMB", h.maxUploadMB)
 	}
 
+	// Extract company_id from form data (optional for most entities)
+	companyID := domain.CompanyID(r.FormValue("company_id"))
+
+	// Validate company_id if provided
+	if companyID != "" && !domain.IsValidCompanyID(string(companyID)) {
+		return nil, fmt.Errorf("invalid company_id: must be one of: gruppen, stalbygg, hybridbygg, industri, tak, montasje")
+	}
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		// Handle edge case where file has empty filename and is treated as form value
 		if r.MultipartForm != nil && len(r.MultipartForm.Value["file"]) > 0 {
 			content := r.MultipartForm.Value["file"][0]
-			return uploadFn("", "application/octet-stream", io.NopCloser(strings.NewReader(content)))
+			return uploadFn("", "application/octet-stream", io.NopCloser(strings.NewReader(content)), companyID)
 		}
 		return nil, fmt.Errorf("invalid file upload: file field is required")
 	}
 	defer file.Close()
 
-	return uploadFn(header.Filename, header.Header.Get("Content-Type"), file)
+	return uploadFn(header.Filename, header.Header.Get("Content-Type"), file, companyID)
 }
 
 // handleUploadError handles common error cases for file uploads
@@ -512,6 +525,18 @@ func (h *FileHandler) handleUploadError(w http.ResponseWriter, err error, entity
 
 	// Check for invalid file upload
 	if strings.Contains(errMsg, "invalid file upload") {
+		respondWithError(w, http.StatusBadRequest, errMsg)
+		return
+	}
+
+	// Check for invalid company_id
+	if strings.Contains(errMsg, "invalid company_id") {
+		respondWithError(w, http.StatusBadRequest, errMsg)
+		return
+	}
+
+	// Check for company_id required
+	if strings.Contains(errMsg, "company_id is required") {
 		respondWithError(w, http.StatusBadRequest, errMsg)
 		return
 	}

@@ -443,6 +443,7 @@ func TestToFileDTO_WithOfferID(t *testing.T) {
 		ContentType: "application/pdf",
 		Size:        1024,
 		StoragePath: "files/abc123.pdf",
+		CompanyID:   domain.CompanyStalbygg,
 		OfferID:     &offerID,
 	}
 
@@ -452,6 +453,7 @@ func TestToFileDTO_WithOfferID(t *testing.T) {
 	assert.Equal(t, "document.pdf", dto.Filename)
 	assert.Equal(t, "application/pdf", dto.ContentType)
 	assert.Equal(t, int64(1024), dto.Size)
+	assert.Equal(t, domain.CompanyStalbygg, dto.CompanyID)
 	assert.Equal(t, &offerID, dto.OfferID)
 	assert.Nil(t, dto.CustomerID)
 	assert.Nil(t, dto.ProjectID)
@@ -472,6 +474,7 @@ func TestToFileDTO_WithCustomerID(t *testing.T) {
 		ContentType: "application/pdf",
 		Size:        2048,
 		StoragePath: "files/def456.pdf",
+		CompanyID:   domain.CompanyGruppen,
 		CustomerID:  &customerID,
 	}
 
@@ -479,6 +482,7 @@ func TestToFileDTO_WithCustomerID(t *testing.T) {
 
 	assert.Equal(t, file.ID, dto.ID)
 	assert.Equal(t, "contract.pdf", dto.Filename)
+	assert.Equal(t, domain.CompanyGruppen, dto.CompanyID)
 	assert.Equal(t, &customerID, dto.CustomerID)
 	assert.Nil(t, dto.OfferID)
 	assert.Nil(t, dto.ProjectID)
@@ -498,6 +502,7 @@ func TestToFileDTO_WithProjectID(t *testing.T) {
 		ContentType: "application/acad",
 		Size:        5120,
 		StoragePath: "files/ghi789.dwg",
+		CompanyID:   domain.CompanyHybridbygg,
 		ProjectID:   &projectID,
 	}
 
@@ -505,6 +510,7 @@ func TestToFileDTO_WithProjectID(t *testing.T) {
 
 	assert.Equal(t, file.ID, dto.ID)
 	assert.Equal(t, "blueprint.dwg", dto.Filename)
+	assert.Equal(t, domain.CompanyHybridbygg, dto.CompanyID)
 	assert.Equal(t, &projectID, dto.ProjectID)
 	assert.Nil(t, dto.OfferID)
 	assert.Nil(t, dto.CustomerID)
@@ -524,6 +530,7 @@ func TestToFileDTO_WithSupplierID(t *testing.T) {
 		ContentType: "application/pdf",
 		Size:        512,
 		StoragePath: "files/jkl012.pdf",
+		CompanyID:   domain.CompanyTak,
 		SupplierID:  &supplierID,
 	}
 
@@ -531,6 +538,7 @@ func TestToFileDTO_WithSupplierID(t *testing.T) {
 
 	assert.Equal(t, file.ID, dto.ID)
 	assert.Equal(t, "invoice.pdf", dto.Filename)
+	assert.Equal(t, domain.CompanyTak, dto.CompanyID)
 	assert.Equal(t, &supplierID, dto.SupplierID)
 	assert.Nil(t, dto.OfferID)
 	assert.Nil(t, dto.CustomerID)
@@ -552,6 +560,7 @@ func TestToFileDTOs_MultipleFiles(t *testing.T) {
 			ContentType: "application/pdf",
 			Size:        1024,
 			StoragePath: "files/file1.pdf",
+			CompanyID:   domain.CompanyStalbygg,
 			OfferID:     &offerID,
 		},
 		{
@@ -563,6 +572,7 @@ func TestToFileDTOs_MultipleFiles(t *testing.T) {
 			ContentType: "application/pdf",
 			Size:        2048,
 			StoragePath: "files/file2.pdf",
+			CompanyID:   domain.CompanyGruppen,
 			CustomerID:  &customerID,
 		},
 	}
@@ -571,8 +581,10 @@ func TestToFileDTOs_MultipleFiles(t *testing.T) {
 
 	assert.Len(t, dtos, 2)
 	assert.Equal(t, "file1.pdf", dtos[0].Filename)
+	assert.Equal(t, domain.CompanyStalbygg, dtos[0].CompanyID)
 	assert.Equal(t, &offerID, dtos[0].OfferID)
 	assert.Equal(t, "file2.pdf", dtos[1].Filename)
+	assert.Equal(t, domain.CompanyGruppen, dtos[1].CompanyID)
 	assert.Equal(t, &customerID, dtos[1].CustomerID)
 }
 

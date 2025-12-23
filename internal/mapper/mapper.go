@@ -512,6 +512,7 @@ func ToFileDTO(file *domain.File) domain.FileDTO {
 		Filename:        file.Filename,
 		ContentType:     file.ContentType,
 		Size:            file.Size,
+		CompanyID:       file.CompanyID,
 		OfferID:         file.OfferID,
 		CustomerID:      file.CustomerID,
 		ProjectID:       file.ProjectID,
