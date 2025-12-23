@@ -947,8 +947,10 @@ func TestFileHandler_EdgeCases(t *testing.T) {
 	t.Run("upload empty file name handled", func(t *testing.T) {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
-		part, _ := writer.CreateFormFile("file", "")
-		part.Write([]byte("content"))
+		part, err := writer.CreateFormFile("file", "")
+		require.NoError(t, err)
+		_, err = part.Write([]byte("content"))
+		require.NoError(t, err)
 		writer.Close()
 
 		req := httptest.NewRequest(http.MethodPost, "/customers/"+customer.ID.String()+"/files", body)

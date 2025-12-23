@@ -309,7 +309,7 @@ func (h *FileHandler) ListSupplierFiles(w http.ResponseWriter, r *http.Request) 
 // @Security ApiKeyAuth
 // @Router /offers/{offerId}/suppliers/{supplierId}/files [post]
 func (h *FileHandler) UploadToOfferSupplier(w http.ResponseWriter, r *http.Request) {
-	offerID, err := uuid.Parse(chi.URLParam(r, "offerId"))
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
@@ -347,7 +347,7 @@ func (h *FileHandler) UploadToOfferSupplier(w http.ResponseWriter, r *http.Reque
 // @Security ApiKeyAuth
 // @Router /offers/{offerId}/suppliers/{supplierId}/files [get]
 func (h *FileHandler) ListOfferSupplierFiles(w http.ResponseWriter, r *http.Request) {
-	offerID, err := uuid.Parse(chi.URLParam(r, "offerId"))
+	offerID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
 		return
