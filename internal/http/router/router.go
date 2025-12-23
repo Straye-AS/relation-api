@@ -409,6 +409,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/suppliers/{supplierId}/status", rt.offerHandler.UpdateSupplierStatus)
 				r.Put("/{id}/suppliers/{supplierId}/notes", rt.offerHandler.UpdateSupplierNotes)
 				r.Put("/{id}/suppliers/{supplierId}/contact", rt.offerHandler.UpdateSupplierContact)
+				r.Get("/{id}/suppliers/{supplierId}/files", rt.fileHandler.ListOfferSupplierFiles)
+				r.Post("/{id}/suppliers/{supplierId}/files", rt.fileHandler.UploadToOfferSupplier)
 
 				// Budget endpoints
 				r.Get("/{id}/detail", rt.offerHandler.GetWithBudgetItems)

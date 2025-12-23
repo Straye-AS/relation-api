@@ -508,15 +508,16 @@ func UpdateDealDenormalizedFields(deal *domain.Deal, customerName, ownerName str
 // ToFileDTO converts File to FileDTO
 func ToFileDTO(file *domain.File) domain.FileDTO {
 	return domain.FileDTO{
-		ID:          file.ID,
-		Filename:    file.Filename,
-		ContentType: file.ContentType,
-		Size:        file.Size,
-		OfferID:     file.OfferID,
-		CustomerID:  file.CustomerID,
-		ProjectID:   file.ProjectID,
-		SupplierID:  file.SupplierID,
-		CreatedAt:   file.CreatedAt.UTC().Format(time.RFC3339),
+		ID:              file.ID,
+		Filename:        file.Filename,
+		ContentType:     file.ContentType,
+		Size:            file.Size,
+		OfferID:         file.OfferID,
+		CustomerID:      file.CustomerID,
+		ProjectID:       file.ProjectID,
+		SupplierID:      file.SupplierID,
+		OfferSupplierID: file.OfferSupplierID,
+		CreatedAt:       file.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 

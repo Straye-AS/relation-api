@@ -288,6 +288,87 @@ func (h *FileHandler) ListSupplierFiles(w http.ResponseWriter, r *http.Request) 
 }
 
 // ============================================================================
+// Offer-Supplier File Handlers
+// ============================================================================
+
+// UploadToOfferSupplier godoc
+// @Summary Upload file to offer-supplier relationship
+// @Description Upload a file and attach it to a specific supplier within an offer
+// @Tags Files
+// @Accept multipart/form-data
+// @Produce json
+// @Param offerId path string true "Offer ID" format(uuid)
+// @Param supplierId path string true "Supplier ID" format(uuid)
+// @Param file formData file true "File to upload"
+// @Success 201 {object} domain.FileDTO
+// @Failure 400 {object} domain.APIError
+// @Failure 404 {object} domain.APIError
+// @Failure 413 {object} domain.APIError
+// @Failure 500 {object} domain.APIError
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{offerId}/suppliers/{supplierId}/files [post]
+func (h *FileHandler) UploadToOfferSupplier(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "offerId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	fileDTO, err := h.handleFileUpload(r, func(filename, contentType string, file io.Reader) (*domain.FileDTO, error) {
+		return h.fileService.UploadToOfferSupplier(r.Context(), offerID, supplierID, filename, contentType, file)
+	})
+	if err != nil {
+		h.handleUploadError(w, err, "offer-supplier")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, fileDTO)
+}
+
+// ListOfferSupplierFiles godoc
+// @Summary List offer-supplier files
+// @Description Get all files attached to a specific supplier within an offer
+// @Tags Files
+// @Produce json
+// @Param offerId path string true "Offer ID" format(uuid)
+// @Param supplierId path string true "Supplier ID" format(uuid)
+// @Success 200 {array} domain.FileDTO
+// @Failure 400 {object} domain.APIError
+// @Failure 404 {object} domain.APIError
+// @Failure 500 {object} domain.APIError
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{offerId}/suppliers/{supplierId}/files [get]
+func (h *FileHandler) ListOfferSupplierFiles(w http.ResponseWriter, r *http.Request) {
+	offerID, err := uuid.Parse(chi.URLParam(r, "offerId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	supplierID, err := uuid.Parse(chi.URLParam(r, "supplierId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid supplier ID: must be a valid UUID")
+		return
+	}
+
+	files, err := h.fileService.ListByOfferSupplier(r.Context(), offerID, supplierID)
+	if err != nil {
+		h.handleListError(w, err, "offer-supplier")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, files)
+}
+
+// ============================================================================
 // Generic File Operations
 // ============================================================================
 

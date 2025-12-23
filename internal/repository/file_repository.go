@@ -112,3 +112,23 @@ func (r *FileRepository) CountBySupplier(ctx context.Context, supplierID uuid.UU
 		Count(&count).Error
 	return count, err
 }
+
+// ListByOfferSupplier returns all files attached to an offer-supplier relationship
+func (r *FileRepository) ListByOfferSupplier(ctx context.Context, offerSupplierID uuid.UUID) ([]domain.File, error) {
+	var files []domain.File
+	err := r.db.WithContext(ctx).
+		Where("offer_supplier_id = ?", offerSupplierID).
+		Order("created_at DESC").
+		Find(&files).Error
+	return files, err
+}
+
+// CountByOfferSupplier returns the count of files attached to an offer-supplier relationship
+func (r *FileRepository) CountByOfferSupplier(ctx context.Context, offerSupplierID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&domain.File{}).
+		Where("offer_supplier_id = ?", offerSupplierID).
+		Count(&count).Error
+	return count, err
+}

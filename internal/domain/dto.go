@@ -1078,15 +1078,16 @@ type AuditLogDTO struct {
 }
 
 type FileDTO struct {
-	ID          uuid.UUID  `json:"id"`
-	Filename    string     `json:"filename"`
-	ContentType string     `json:"contentType"`
-	Size        int64      `json:"size"`
-	OfferID     *uuid.UUID `json:"offerId,omitempty"`
-	CustomerID  *uuid.UUID `json:"customerId,omitempty"`
-	ProjectID   *uuid.UUID `json:"projectId,omitempty"`
-	SupplierID  *uuid.UUID `json:"supplierId,omitempty"`
-	CreatedAt   string     `json:"createdAt"`
+	ID              uuid.UUID  `json:"id"`
+	Filename        string     `json:"filename"`
+	ContentType     string     `json:"contentType"`
+	Size            int64      `json:"size"`
+	OfferID         *uuid.UUID `json:"offerId,omitempty"`
+	CustomerID      *uuid.UUID `json:"customerId,omitempty"`
+	ProjectID       *uuid.UUID `json:"projectId,omitempty"`
+	SupplierID      *uuid.UUID `json:"supplierId,omitempty"`
+	OfferSupplierID *uuid.UUID `json:"offerSupplierId,omitempty"`
+	CreatedAt       string     `json:"createdAt"`
 }
 
 type SearchResult struct {

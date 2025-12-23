@@ -927,23 +927,27 @@ type AuditLog struct {
 // Exactly one of OfferID, CustomerID, ProjectID, or SupplierID should be set.
 type File struct {
 	BaseModel
-	Filename    string     `gorm:"type:varchar(255);not null"`
-	ContentType string     `gorm:"type:varchar(100);not null"`
-	Size        int64      `gorm:"not null"`
-	StoragePath string     `gorm:"type:varchar(500);not null;unique"`
-	OfferID     *uuid.UUID `gorm:"type:uuid;index:idx_files_offer_id"`
-	Offer       *Offer     `gorm:"foreignKey:OfferID"`
-	CustomerID  *uuid.UUID `gorm:"type:uuid;index:idx_files_customer_id"`
-	Customer    *Customer  `gorm:"foreignKey:CustomerID"`
-	ProjectID   *uuid.UUID `gorm:"type:uuid;index:idx_files_project_id"`
-	Project     *Project   `gorm:"foreignKey:ProjectID"`
-	SupplierID  *uuid.UUID `gorm:"type:uuid;index:idx_files_supplier_id"`
-	Supplier    *Supplier  `gorm:"foreignKey:SupplierID"`
+	Filename        string         `gorm:"type:varchar(255);not null"`
+	ContentType     string         `gorm:"type:varchar(100);not null"`
+	Size            int64          `gorm:"not null"`
+	StoragePath     string         `gorm:"type:varchar(500);not null;unique"`
+	OfferID         *uuid.UUID     `gorm:"type:uuid;index:idx_files_offer_id"`
+	Offer           *Offer         `gorm:"foreignKey:OfferID"`
+	CustomerID      *uuid.UUID     `gorm:"type:uuid;index:idx_files_customer_id"`
+	Customer        *Customer      `gorm:"foreignKey:CustomerID"`
+	ProjectID       *uuid.UUID     `gorm:"type:uuid;index:idx_files_project_id"`
+	Project         *Project       `gorm:"foreignKey:ProjectID"`
+	SupplierID      *uuid.UUID     `gorm:"type:uuid;index:idx_files_supplier_id"`
+	Supplier        *Supplier      `gorm:"foreignKey:SupplierID"`
+	OfferSupplierID *uuid.UUID     `gorm:"type:uuid;index:idx_files_offer_supplier_id;column:offer_supplier_id"`
+	OfferSupplier   *OfferSupplier `gorm:"foreignKey:OfferSupplierID"`
 }
 
 // GetEntityType returns the type of entity this file is attached to
 func (f *File) GetEntityType() string {
 	switch {
+	case f.OfferSupplierID != nil:
+		return "offer_supplier"
 	case f.CustomerID != nil:
 		return "customer"
 	case f.ProjectID != nil:
@@ -960,6 +964,8 @@ func (f *File) GetEntityType() string {
 // GetEntityID returns the ID of the entity this file is attached to
 func (f *File) GetEntityID() *uuid.UUID {
 	switch {
+	case f.OfferSupplierID != nil:
+		return f.OfferSupplierID
 	case f.CustomerID != nil:
 		return f.CustomerID
 	case f.ProjectID != nil:
@@ -986,6 +992,9 @@ func (f *File) HasExactlyOneEntityID() bool {
 		count++
 	}
 	if f.SupplierID != nil {
+		count++
+	}
+	if f.OfferSupplierID != nil {
 		count++
 	}
 	return count == 1

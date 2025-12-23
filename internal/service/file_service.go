@@ -137,6 +137,28 @@ func (s *FileService) UploadToSupplier(ctx context.Context, supplierID uuid.UUID
 	return dto, nil
 }
 
+// UploadToOfferSupplier uploads a file and attaches it to an offer-supplier relationship
+func (s *FileService) UploadToOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID, filename, contentType string, data io.Reader) (*domain.FileDTO, error) {
+	// Verify offer-supplier relationship exists
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("offer-supplier relationship not found: %w", err)
+	}
+
+	// Upload file
+	file := &domain.File{
+		OfferSupplierID: &offerSupplier.ID,
+	}
+
+	entityName := fmt.Sprintf("%s - %s", offerSupplier.OfferTitle, offerSupplier.SupplierName)
+	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "offer-supplier", entityName)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
 // uploadFile is a helper method that handles the common upload logic
 func (s *FileService) uploadFile(ctx context.Context, file *domain.File, filename, contentType string, data io.Reader, entityType, entityName string) (*domain.FileDTO, error) {
 	// Upload to storage
@@ -230,6 +252,22 @@ func (s *FileService) ListBySupplier(ctx context.Context, supplierID uuid.UUID) 
 	files, err := s.fileRepo.ListBySupplier(ctx, supplierID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list supplier files: %w", err)
+	}
+
+	return mapper.ToFileDTOs(files), nil
+}
+
+// ListByOfferSupplier returns all files attached to an offer-supplier relationship
+func (s *FileService) ListByOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID) ([]domain.FileDTO, error) {
+	// Verify offer-supplier relationship exists
+	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("offer-supplier relationship not found: %w", err)
+	}
+
+	files, err := s.fileRepo.ListByOfferSupplier(ctx, offerSupplier.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list offer-supplier files: %w", err)
 	}
 
 	return mapper.ToFileDTOs(files), nil
