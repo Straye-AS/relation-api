@@ -80,6 +80,7 @@ func createOfferTestFile(t *testing.T, db *gorm.DB, offerID uuid.UUID, filename 
 		Size:        1024,
 		StoragePath: "/test/path/" + filename,
 		OfferID:     &offerID,
+		CompanyID:   domain.CompanyStalbygg, // Required for FK constraint
 	}
 	err := db.Create(file).Error
 	require.NoError(t, err)
