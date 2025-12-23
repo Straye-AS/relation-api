@@ -175,7 +175,7 @@ func run() error {
 	}
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
-	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
+	fileService := service.NewFileService(fileRepo, offerRepo, customerRepo, projectRepo, supplierRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, supplierRepo, log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 	auditLogService := service.NewAuditLogService(auditLogRepo, log)

@@ -14,17 +14,25 @@ import (
 	"go.uber.org/zap"
 )
 
+// FileService handles file operations with entity validation and activity logging
 type FileService struct {
 	fileRepo     *repository.FileRepository
 	offerRepo    *repository.OfferRepository
+	customerRepo *repository.CustomerRepository
+	projectRepo  *repository.ProjectRepository
+	supplierRepo *repository.SupplierRepository
 	activityRepo *repository.ActivityRepository
 	storage      storage.Storage
 	logger       *zap.Logger
 }
 
+// NewFileService creates a new FileService instance with all required dependencies
 func NewFileService(
 	fileRepo *repository.FileRepository,
 	offerRepo *repository.OfferRepository,
+	customerRepo *repository.CustomerRepository,
+	projectRepo *repository.ProjectRepository,
+	supplierRepo *repository.SupplierRepository,
 	activityRepo *repository.ActivityRepository,
 	storage storage.Storage,
 	logger *zap.Logger,
@@ -32,18 +40,216 @@ func NewFileService(
 	return &FileService{
 		fileRepo:     fileRepo,
 		offerRepo:    offerRepo,
+		customerRepo: customerRepo,
+		projectRepo:  projectRepo,
+		supplierRepo: supplierRepo,
 		activityRepo: activityRepo,
 		storage:      storage,
 		logger:       logger,
 	}
 }
 
+// ============================================================================
+// Entity-Specific Upload Methods
+// ============================================================================
+
+// UploadToCustomer uploads a file and attaches it to a customer
+func (s *FileService) UploadToCustomer(ctx context.Context, customerID uuid.UUID, filename, contentType string, data io.Reader) (*domain.FileDTO, error) {
+	// Verify customer exists
+	customer, err := s.customerRepo.GetByID(ctx, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("customer not found: %w", err)
+	}
+
+	// Upload file
+	file := &domain.File{
+		CustomerID: &customerID,
+	}
+
+	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "customer", customer.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+// UploadToProject uploads a file and attaches it to a project
+func (s *FileService) UploadToProject(ctx context.Context, projectID uuid.UUID, filename, contentType string, data io.Reader) (*domain.FileDTO, error) {
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	// Upload file
+	file := &domain.File{
+		ProjectID: &projectID,
+	}
+
+	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "project", project.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+// UploadToOffer uploads a file and attaches it to an offer
+func (s *FileService) UploadToOffer(ctx context.Context, offerID uuid.UUID, filename, contentType string, data io.Reader) (*domain.FileDTO, error) {
+	// Verify offer exists
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil {
+		return nil, fmt.Errorf("offer not found: %w", err)
+	}
+
+	// Upload file
+	file := &domain.File{
+		OfferID: &offerID,
+	}
+
+	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "offer", offer.Title)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+// UploadToSupplier uploads a file and attaches it to a supplier
+func (s *FileService) UploadToSupplier(ctx context.Context, supplierID uuid.UUID, filename, contentType string, data io.Reader) (*domain.FileDTO, error) {
+	// Verify supplier exists
+	supplier, err := s.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("supplier not found: %w", err)
+	}
+
+	// Upload file
+	file := &domain.File{
+		SupplierID: &supplierID,
+	}
+
+	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "supplier", supplier.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+// uploadFile is a helper method that handles the common upload logic
+func (s *FileService) uploadFile(ctx context.Context, file *domain.File, filename, contentType string, data io.Reader, entityType, entityName string) (*domain.FileDTO, error) {
+	// Upload to storage
+	storagePath, size, err := s.storage.Upload(ctx, filename, contentType, data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	// Set file properties
+	file.Filename = filename
+	file.ContentType = contentType
+	file.Size = size
+	file.StoragePath = storagePath
+
+	// Create file record
+	if err := s.fileRepo.Create(ctx, file); err != nil {
+		// Try to delete from storage (best effort cleanup)
+		if delErr := s.storage.Delete(ctx, storagePath); delErr != nil {
+			s.logger.Warn("failed to cleanup file from storage after DB error",
+				zap.Error(delErr),
+				zap.String("storagePath", storagePath),
+			)
+		}
+		return nil, fmt.Errorf("failed to create file record: %w", err)
+	}
+
+	// Log activity
+	s.logFileActivity(ctx, file, "Fil lastet opp",
+		fmt.Sprintf("Filen '%s' ble lastet opp til %s '%s'", filename, entityType, entityName))
+
+	dto := mapper.ToFileDTO(file)
+	return &dto, nil
+}
+
+// ============================================================================
+// Entity-Specific List Methods
+// ============================================================================
+
+// ListByCustomer returns all files attached to a customer
+func (s *FileService) ListByCustomer(ctx context.Context, customerID uuid.UUID) ([]domain.FileDTO, error) {
+	// Verify customer exists
+	if _, err := s.customerRepo.GetByID(ctx, customerID); err != nil {
+		return nil, fmt.Errorf("customer not found: %w", err)
+	}
+
+	files, err := s.fileRepo.ListByCustomer(ctx, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list customer files: %w", err)
+	}
+
+	return mapper.ToFileDTOs(files), nil
+}
+
+// ListByProject returns all files attached to a project
+func (s *FileService) ListByProject(ctx context.Context, projectID uuid.UUID) ([]domain.FileDTO, error) {
+	// Verify project exists
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	files, err := s.fileRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project files: %w", err)
+	}
+
+	return mapper.ToFileDTOs(files), nil
+}
+
+// ListByOffer returns all files attached to an offer
+func (s *FileService) ListByOffer(ctx context.Context, offerID uuid.UUID) ([]domain.FileDTO, error) {
+	// Verify offer exists
+	if _, err := s.offerRepo.GetByID(ctx, offerID); err != nil {
+		return nil, fmt.Errorf("offer not found: %w", err)
+	}
+
+	files, err := s.fileRepo.ListByOffer(ctx, offerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list offer files: %w", err)
+	}
+
+	return mapper.ToFileDTOs(files), nil
+}
+
+// ListBySupplier returns all files attached to a supplier
+func (s *FileService) ListBySupplier(ctx context.Context, supplierID uuid.UUID) ([]domain.FileDTO, error) {
+	// Verify supplier exists
+	if _, err := s.supplierRepo.GetByID(ctx, supplierID); err != nil {
+		return nil, fmt.Errorf("supplier not found: %w", err)
+	}
+
+	files, err := s.fileRepo.ListBySupplier(ctx, supplierID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list supplier files: %w", err)
+	}
+
+	return mapper.ToFileDTOs(files), nil
+}
+
+// ============================================================================
+// Generic File Operations
+// ============================================================================
+
+// Upload uploads a file with optional offer ID (legacy method for backward compatibility)
+// Deprecated: Use entity-specific upload methods (UploadToCustomer, UploadToProject, etc.)
 func (s *FileService) Upload(ctx context.Context, filename, contentType string, data io.Reader, offerID *uuid.UUID) (*domain.FileDTO, error) {
 	// Verify offer exists if provided
+	var entityName string
 	if offerID != nil {
-		if _, err := s.offerRepo.GetByID(ctx, *offerID); err != nil {
+		offer, err := s.offerRepo.GetByID(ctx, *offerID)
+		if err != nil {
 			return nil, fmt.Errorf("offer not found: %w", err)
 		}
+		entityName = offer.Title
 	}
 
 	// Upload to storage
@@ -67,23 +273,20 @@ func (s *FileService) Upload(ctx context.Context, filename, contentType string, 
 		return nil, fmt.Errorf("failed to create file record: %w", err)
 	}
 
-	// Create activity
-	if userCtx, ok := auth.FromContext(ctx); ok {
-		activity := &domain.Activity{
-			TargetType:  domain.ActivityTargetFile,
-			TargetID:    file.ID,
-			TargetName:  filename,
-			Title:       "Fil lastet opp",
-			Body:        fmt.Sprintf("Filen '%s' ble lastet opp", filename),
-			CreatorName: userCtx.DisplayName,
-		}
-		_ = s.activityRepo.Create(ctx, activity)
+	// Log activity
+	if offerID != nil {
+		s.logFileActivity(ctx, file, "Fil lastet opp",
+			fmt.Sprintf("Filen '%s' ble lastet opp til tilbud '%s'", filename, entityName))
+	} else {
+		s.logFileActivity(ctx, file, "Fil lastet opp",
+			fmt.Sprintf("Filen '%s' ble lastet opp", filename))
 	}
 
 	dto := mapper.ToFileDTO(file)
 	return &dto, nil
 }
 
+// GetByID retrieves a file by its ID
 func (s *FileService) GetByID(ctx context.Context, id uuid.UUID) (*domain.FileDTO, error) {
 	file, err := s.fileRepo.GetByID(ctx, id)
 	if err != nil {
@@ -94,29 +297,36 @@ func (s *FileService) GetByID(ctx context.Context, id uuid.UUID) (*domain.FileDT
 	return &dto, nil
 }
 
-func (s *FileService) Download(ctx context.Context, id uuid.UUID) (io.ReadCloser, string, error) {
+// Download retrieves a file's content for download
+// Returns: reader, filename, content-type, error
+func (s *FileService) Download(ctx context.Context, id uuid.UUID) (io.ReadCloser, string, string, error) {
 	file, err := s.fileRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get file: %w", err)
+		return nil, "", "", fmt.Errorf("failed to get file: %w", err)
 	}
 
 	reader, err := s.storage.Download(ctx, file.StoragePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to download file: %w", err)
+		return nil, "", "", fmt.Errorf("failed to download file: %w", err)
 	}
 
-	return reader, file.Filename, nil
+	return reader, file.Filename, file.ContentType, nil
 }
 
+// Delete removes a file from both storage and database
 func (s *FileService) Delete(ctx context.Context, id uuid.UUID) error {
 	file, err := s.fileRepo.GetByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get file: %w", err)
 	}
 
-	// Delete from storage
+	// Delete from storage (log warning if fails, continue)
 	if err := s.storage.Delete(ctx, file.StoragePath); err != nil {
-		s.logger.Warn("failed to delete file from storage", zap.Error(err))
+		s.logger.Warn("failed to delete file from storage",
+			zap.Error(err),
+			zap.String("storagePath", file.StoragePath),
+			zap.String("fileID", id.String()),
+		)
 	}
 
 	// Delete from database
@@ -124,5 +334,53 @@ func (s *FileService) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("failed to delete file record: %w", err)
 	}
 
+	// Log activity
+	s.logFileActivity(ctx, file, "Fil slettet",
+		fmt.Sprintf("Filen '%s' ble slettet", file.Filename))
+
 	return nil
+}
+
+// ============================================================================
+// Helper Methods
+// ============================================================================
+
+// logFileActivity creates an activity log entry for file operations
+func (s *FileService) logFileActivity(ctx context.Context, file *domain.File, title, body string) {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		// System operation, create activity without user context
+		activity := &domain.Activity{
+			TargetType: domain.ActivityTargetFile,
+			TargetID:   file.ID,
+			TargetName: file.Filename,
+			Title:      title,
+			Body:       body,
+		}
+		if err := s.activityRepo.Create(ctx, activity); err != nil {
+			s.logger.Warn("failed to create file activity",
+				zap.Error(err),
+				zap.String("fileID", file.ID.String()),
+			)
+		}
+		return
+	}
+
+	activity := &domain.Activity{
+		TargetType:  domain.ActivityTargetFile,
+		TargetID:    file.ID,
+		TargetName:  file.Filename,
+		Title:       title,
+		Body:        body,
+		CreatorName: userCtx.DisplayName,
+		CreatorID:   userCtx.UserID.String(),
+	}
+
+	if err := s.activityRepo.Create(ctx, activity); err != nil {
+		s.logger.Warn("failed to create file activity",
+			zap.Error(err),
+			zap.String("fileID", file.ID.String()),
+			zap.String("userID", userCtx.UserID.String()),
+		)
+	}
 }

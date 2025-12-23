@@ -111,7 +111,7 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reader, filename, err := h.fileService.Download(r.Context(), id)
+	reader, filename, contentType, err := h.fileService.Download(r.Context(), id)
 	if err != nil {
 		h.logger.Error("failed to download file", zap.Error(err), zap.String("file_id", id.String()))
 		respondWithError(w, http.StatusNotFound, "File not found")
@@ -120,7 +120,12 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	defer reader.Close()
 
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
-	w.Header().Set("Content-Type", "application/octet-stream")
+	// Use actual content type from file, fallback to octet-stream if empty
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	} else {
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
 
 	_, _ = io.Copy(w, reader)
 }
