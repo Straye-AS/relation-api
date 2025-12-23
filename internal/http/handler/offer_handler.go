@@ -296,31 +296,6 @@ func (h *OfferHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, item)
 }
 
-// @Summary Get offer files
-// @Tags Offers
-// @Produce json
-// @Param id path string true "Offer ID"
-// @Success 200 {array} domain.FileDTO
-// @Security BearerAuth
-// @Security ApiKeyAuth
-// @Router /offers/{id}/files [get]
-func (h *OfferHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
-		return
-	}
-
-	files, err := h.offerService.GetFiles(r.Context(), id)
-	if err != nil {
-		h.logger.Error("failed to get offer files", zap.Error(err), zap.String("offer_id", id.String()))
-		h.handleOfferError(w, err)
-		return
-	}
-
-	respondJSON(w, http.StatusOK, files)
-}
-
 // @Summary Get offer activities
 // @Tags Offers
 // @Produce json

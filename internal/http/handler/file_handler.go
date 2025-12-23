@@ -288,60 +288,8 @@ func (h *FileHandler) ListSupplierFiles(w http.ResponseWriter, r *http.Request) 
 }
 
 // ============================================================================
-// Generic File Operations (existing)
+// Generic File Operations
 // ============================================================================
-
-// Upload godoc
-// @Summary Upload file (legacy)
-// @Description Upload a file with optional offer attachment. Deprecated: Use entity-specific upload endpoints instead.
-// @Tags Files
-// @Accept multipart/form-data
-// @Produce json
-// @Param file formData file true "File to upload"
-// @Param offerId formData string false "Offer ID to attach file to"
-// @Success 201 {object} domain.FileDTO
-// @Failure 400 {object} domain.APIError
-// @Failure 413 {object} domain.APIError
-// @Failure 500 {object} domain.APIError
-// @Security BearerAuth
-// @Security ApiKeyAuth
-// @Router /files/upload [post]
-// @Deprecated
-func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
-	// Limit request size
-	r.Body = http.MaxBytesReader(w, r.Body, h.maxUploadMB*1024*1024)
-
-	if err := r.ParseMultipartForm(h.maxUploadMB * 1024 * 1024); err != nil {
-		respondWithError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("File too large: maximum size is %dMB", h.maxUploadMB))
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid file upload: file field is required")
-		return
-	}
-	defer file.Close()
-
-	var offerID *uuid.UUID
-	if oid := r.FormValue("offerId"); oid != "" {
-		id, err := uuid.Parse(oid)
-		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Invalid offerId: must be a valid UUID")
-			return
-		}
-		offerID = &id
-	}
-
-	fileDTO, err := h.fileService.Upload(r.Context(), header.Filename, header.Header.Get("Content-Type"), file, offerID)
-	if err != nil {
-		h.logger.Error("failed to upload file", zap.Error(err))
-		respondWithError(w, http.StatusInternalServerError, "Failed to upload file")
-		return
-	}
-
-	respondJSON(w, http.StatusCreated, fileDTO)
-}
 
 // GetByID godoc
 // @Summary Get file metadata

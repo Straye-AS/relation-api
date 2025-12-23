@@ -450,9 +450,8 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 			})
 
-			// Files
+			// Files (generic operations - entity-specific uploads are under /customers, /projects, /offers, /suppliers)
 			r.Route("/files", func(r chi.Router) {
-				r.Post("/upload", rt.fileHandler.Upload) // Legacy upload endpoint
 				r.Get("/{id}", rt.fileHandler.GetByID)
 				r.Get("/{id}/download", rt.fileHandler.Download)
 				r.Delete("/{id}", rt.fileHandler.Delete)
