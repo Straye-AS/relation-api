@@ -923,15 +923,72 @@ type AuditLog struct {
 	CreatedAt   time.Time   `gorm:"not null;default:CURRENT_TIMESTAMP"`
 }
 
-// File represents an uploaded file
+// File represents an uploaded file attached to an entity.
+// Exactly one of OfferID, CustomerID, ProjectID, or SupplierID should be set.
 type File struct {
 	BaseModel
 	Filename    string     `gorm:"type:varchar(255);not null"`
 	ContentType string     `gorm:"type:varchar(100);not null"`
 	Size        int64      `gorm:"not null"`
 	StoragePath string     `gorm:"type:varchar(500);not null;unique"`
-	OfferID     *uuid.UUID `gorm:"type:uuid;index"`
+	OfferID     *uuid.UUID `gorm:"type:uuid;index:idx_files_offer_id"`
 	Offer       *Offer     `gorm:"foreignKey:OfferID"`
+	CustomerID  *uuid.UUID `gorm:"type:uuid;index:idx_files_customer_id"`
+	Customer    *Customer  `gorm:"foreignKey:CustomerID"`
+	ProjectID   *uuid.UUID `gorm:"type:uuid;index:idx_files_project_id"`
+	Project     *Project   `gorm:"foreignKey:ProjectID"`
+	SupplierID  *uuid.UUID `gorm:"type:uuid;index:idx_files_supplier_id"`
+	Supplier    *Supplier  `gorm:"foreignKey:SupplierID"`
+}
+
+// GetEntityType returns the type of entity this file is attached to
+func (f *File) GetEntityType() string {
+	switch {
+	case f.CustomerID != nil:
+		return "customer"
+	case f.ProjectID != nil:
+		return "project"
+	case f.OfferID != nil:
+		return "offer"
+	case f.SupplierID != nil:
+		return "supplier"
+	default:
+		return ""
+	}
+}
+
+// GetEntityID returns the ID of the entity this file is attached to
+func (f *File) GetEntityID() *uuid.UUID {
+	switch {
+	case f.CustomerID != nil:
+		return f.CustomerID
+	case f.ProjectID != nil:
+		return f.ProjectID
+	case f.OfferID != nil:
+		return f.OfferID
+	case f.SupplierID != nil:
+		return f.SupplierID
+	default:
+		return nil
+	}
+}
+
+// HasExactlyOneEntityID returns true if exactly one entity ID is set
+func (f *File) HasExactlyOneEntityID() bool {
+	count := 0
+	if f.OfferID != nil {
+		count++
+	}
+	if f.CustomerID != nil {
+		count++
+	}
+	if f.ProjectID != nil {
+		count++
+	}
+	if f.SupplierID != nil {
+		count++
+	}
+	return count == 1
 }
 
 // NotificationType represents the type of notification

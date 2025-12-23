@@ -513,6 +513,9 @@ func ToFileDTO(file *domain.File) domain.FileDTO {
 		ContentType: file.ContentType,
 		Size:        file.Size,
 		OfferID:     file.OfferID,
+		CustomerID:  file.CustomerID,
+		ProjectID:   file.ProjectID,
+		SupplierID:  file.SupplierID,
 		CreatedAt:   file.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
