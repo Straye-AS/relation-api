@@ -64,6 +64,7 @@ type CustomerStatsDTO struct {
 	ActiveProjects   int     `json:"activeProjects"`
 	TotalProjects    int     `json:"totalProjects"`
 	TotalContacts    int     `json:"totalContacts"`
+	FileCount        int     `json:"fileCount"` // Count of files attached to the customer
 }
 
 // ErrorResponse represents an API error response
@@ -277,6 +278,7 @@ type ProjectDTO struct {
 	DealID            *uuid.UUID   `json:"dealId,omitempty"`
 	ExternalReference string       `json:"externalReference,omitempty"`
 	OfferCount        int          `json:"offerCount"` // Count of offers linked to this project
+	FileCount         int          `json:"fileCount"`  // Count of files attached to this project
 	CreatedAt         string       `json:"createdAt"`  // ISO 8601
 	UpdatedAt         string       `json:"updatedAt"`  // ISO 8601
 	// User tracking fields
@@ -1668,6 +1670,7 @@ type SupplierDTO struct {
 	Notes         string         `json:"notes,omitempty"`
 	PaymentTerms  string         `json:"paymentTerms,omitempty"`
 	Website       string         `json:"website,omitempty"`
+	FileCount     int            `json:"fileCount"` // Count of files attached to this supplier
 	CreatedAt     string         `json:"createdAt"`
 	UpdatedAt     string         `json:"updatedAt"`
 	CreatedByID   string         `json:"createdById,omitempty"`

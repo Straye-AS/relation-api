@@ -58,7 +58,7 @@ func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 		logger,
 	)
 
-	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, activityRepo, logger)
+	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, fileRepo, activityRepo, logger)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, logger)
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, logger)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)

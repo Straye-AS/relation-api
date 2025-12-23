@@ -89,6 +89,17 @@ func (r *FileRepository) CountByOffer(ctx context.Context, offerID uuid.UUID) (i
 	return count, err
 }
 
+// CountByOfferWithCompanyFilter returns the count of files attached to an offer, filtered by company access
+// If companyFilter is nil, all files are returned (for gruppen users)
+// If companyFilter is provided, only files matching that company OR "gruppen" are counted
+func (r *FileRepository) CountByOfferWithCompanyFilter(ctx context.Context, offerID uuid.UUID, companyFilter *domain.CompanyID) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&domain.File{}).Where("offer_id = ?", offerID)
+	query = r.applyCompanyFilter(query, companyFilter)
+	err := query.Count(&count).Error
+	return count, err
+}
+
 // CountByCustomer returns the count of files attached to a customer
 func (r *FileRepository) CountByCustomer(ctx context.Context, customerID uuid.UUID) (int64, error) {
 	var count int64
@@ -96,6 +107,17 @@ func (r *FileRepository) CountByCustomer(ctx context.Context, customerID uuid.UU
 		Model(&domain.File{}).
 		Where("customer_id = ?", customerID).
 		Count(&count).Error
+	return count, err
+}
+
+// CountByCustomerWithCompanyFilter returns the count of files attached to a customer, filtered by company access
+// If companyFilter is nil, all files are returned (for gruppen users)
+// If companyFilter is provided, only files matching that company OR "gruppen" are counted
+func (r *FileRepository) CountByCustomerWithCompanyFilter(ctx context.Context, customerID uuid.UUID, companyFilter *domain.CompanyID) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&domain.File{}).Where("customer_id = ?", customerID)
+	query = r.applyCompanyFilter(query, companyFilter)
+	err := query.Count(&count).Error
 	return count, err
 }
 
@@ -109,6 +131,17 @@ func (r *FileRepository) CountByProject(ctx context.Context, projectID uuid.UUID
 	return count, err
 }
 
+// CountByProjectWithCompanyFilter returns the count of files attached to a project, filtered by company access
+// If companyFilter is nil, all files are returned (for gruppen users)
+// If companyFilter is provided, only files matching that company OR "gruppen" are counted
+func (r *FileRepository) CountByProjectWithCompanyFilter(ctx context.Context, projectID uuid.UUID, companyFilter *domain.CompanyID) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&domain.File{}).Where("project_id = ?", projectID)
+	query = r.applyCompanyFilter(query, companyFilter)
+	err := query.Count(&count).Error
+	return count, err
+}
+
 // CountBySupplier returns the count of files attached to a supplier
 func (r *FileRepository) CountBySupplier(ctx context.Context, supplierID uuid.UUID) (int64, error) {
 	var count int64
@@ -116,6 +149,17 @@ func (r *FileRepository) CountBySupplier(ctx context.Context, supplierID uuid.UU
 		Model(&domain.File{}).
 		Where("supplier_id = ?", supplierID).
 		Count(&count).Error
+	return count, err
+}
+
+// CountBySupplierWithCompanyFilter returns the count of files attached to a supplier, filtered by company access
+// If companyFilter is nil, all files are returned (for gruppen users)
+// If companyFilter is provided, only files matching that company OR "gruppen" are counted
+func (r *FileRepository) CountBySupplierWithCompanyFilter(ctx context.Context, supplierID uuid.UUID, companyFilter *domain.CompanyID) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&domain.File{}).Where("supplier_id = ?", supplierID)
+	query = r.applyCompanyFilter(query, companyFilter)
+	err := query.Count(&count).Error
 	return count, err
 }
 

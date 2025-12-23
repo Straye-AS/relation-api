@@ -159,12 +159,18 @@ func ToDealStageHistoryDTO(history *domain.DealStageHistory) domain.DealStageHis
 // ToProjectDTO converts Project to ProjectDTO
 // Projects are now simplified containers for offers - economic tracking moved to Offer
 func ToProjectDTO(project *domain.Project) domain.ProjectDTO {
-	return ToProjectDTOWithOfferCount(project, 0)
+	return ToProjectDTOWithCounts(project, 0, 0)
 }
 
 // ToProjectDTOWithOfferCount converts Project to ProjectDTO with offer count
 // This is used when listing projects to include the count of linked offers
 func ToProjectDTOWithOfferCount(project *domain.Project, offerCount int) domain.ProjectDTO {
+	return ToProjectDTOWithCounts(project, offerCount, 0)
+}
+
+// ToProjectDTOWithCounts converts Project to ProjectDTO with offer and file counts
+// This is used when retrieving project details to include the count of linked offers and files
+func ToProjectDTOWithCounts(project *domain.Project, offerCount, fileCount int) domain.ProjectDTO {
 	// Set default phase for backwards compatibility if not set
 	phase := project.Phase
 	if phase == "" {
@@ -186,6 +192,7 @@ func ToProjectDTOWithOfferCount(project *domain.Project, offerCount int) domain.
 		DealID:            project.DealID,
 		ExternalReference: project.ExternalReference,
 		OfferCount:        offerCount,
+		FileCount:         fileCount,
 		CreatedByID:       project.CreatedByID,
 		CreatedByName:     project.CreatedByName,
 		UpdatedByID:       project.UpdatedByID,
@@ -659,10 +666,10 @@ func ToProjectWithDetailsDTO(
 	offer *domain.Offer,
 	deal *domain.Deal,
 ) domain.ProjectWithDetailsDTO {
-	return ToProjectWithDetailsDTOWithOfferCount(project, budgetSummary, activities, offer, deal, 0)
+	return ToProjectWithDetailsDTOWithOfferCount(project, budgetSummary, activities, offer, deal, 0, 0)
 }
 
-// ToProjectWithDetailsDTOWithOfferCount converts Project with related data to ProjectWithDetailsDTO with offer count
+// ToProjectWithDetailsDTOWithOfferCount converts Project with related data to ProjectWithDetailsDTO with offer and file counts
 func ToProjectWithDetailsDTOWithOfferCount(
 	project *domain.Project,
 	budgetSummary *domain.BudgetSummaryDTO,
@@ -670,9 +677,10 @@ func ToProjectWithDetailsDTOWithOfferCount(
 	offer *domain.Offer,
 	deal *domain.Deal,
 	offerCount int,
+	fileCount int,
 ) domain.ProjectWithDetailsDTO {
 	dto := domain.ProjectWithDetailsDTO{
-		ProjectDTO:    ToProjectDTOWithOfferCount(project, offerCount),
+		ProjectDTO:    ToProjectDTOWithCounts(project, offerCount, fileCount),
 		BudgetSummary: budgetSummary,
 	}
 
@@ -737,6 +745,12 @@ func formatTimePointer(t *time.Time) *string {
 
 // SupplierToDTO converts Supplier to SupplierDTO
 func SupplierToDTO(supplier *domain.Supplier) domain.SupplierDTO {
+	return SupplierToDTOWithFileCount(supplier, 0)
+}
+
+// SupplierToDTOWithFileCount converts Supplier to SupplierDTO with file count
+// This is used when retrieving supplier details to include the count of attached files
+func SupplierToDTOWithFileCount(supplier *domain.Supplier, fileCount int) domain.SupplierDTO {
 	return domain.SupplierDTO{
 		ID:            supplier.ID,
 		Name:          supplier.Name,
@@ -757,6 +771,7 @@ func SupplierToDTO(supplier *domain.Supplier) domain.SupplierDTO {
 		Notes:         supplier.Notes,
 		PaymentTerms:  supplier.PaymentTerms,
 		Website:       supplier.Website,
+		FileCount:     fileCount,
 		CreatedAt:     supplier.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:     supplier.UpdatedAt.UTC().Format(time.RFC3339),
 		CreatedByID:   supplier.CreatedByID,
@@ -857,8 +872,13 @@ type SupplierStatsInput struct {
 // SupplierToWithDetailsDTO converts Supplier to SupplierWithDetailsDTO with stats and related data
 // stats should be of type *repository.SupplierStats or *SupplierStatsInput
 func SupplierToWithDetailsDTO(supplier *domain.Supplier, stats *SupplierStatsInput, recentOffers []domain.OfferSupplier) domain.SupplierWithDetailsDTO {
+	return SupplierToWithDetailsDTOWithFileCount(supplier, stats, recentOffers, 0)
+}
+
+// SupplierToWithDetailsDTOWithFileCount converts Supplier to SupplierWithDetailsDTO with stats, related data, and file count
+func SupplierToWithDetailsDTOWithFileCount(supplier *domain.Supplier, stats *SupplierStatsInput, recentOffers []domain.OfferSupplier, fileCount int) domain.SupplierWithDetailsDTO {
 	dto := domain.SupplierWithDetailsDTO{
-		SupplierDTO: SupplierToDTO(supplier),
+		SupplierDTO: SupplierToDTOWithFileCount(supplier, fileCount),
 	}
 
 	// Map stats if provided

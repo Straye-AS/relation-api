@@ -482,3 +482,35 @@ func (s *FileService) getCompanyFilter(ctx context.Context) *domain.CompanyID {
 	// Regular users see only their company's files (plus gruppen files via repository filter)
 	return &userCtx.CompanyID
 }
+
+// ============================================================================
+// Count Methods
+// ============================================================================
+
+// CountByCustomer returns the count of files attached to a customer, respecting company access
+func (s *FileService) CountByCustomer(ctx context.Context, customerID uuid.UUID) (int, error) {
+	companyFilter := s.getCompanyFilter(ctx)
+	count, err := s.fileRepo.CountByCustomerWithCompanyFilter(ctx, customerID, companyFilter)
+	return int(count), err
+}
+
+// CountByProject returns the count of files attached to a project, respecting company access
+func (s *FileService) CountByProject(ctx context.Context, projectID uuid.UUID) (int, error) {
+	companyFilter := s.getCompanyFilter(ctx)
+	count, err := s.fileRepo.CountByProjectWithCompanyFilter(ctx, projectID, companyFilter)
+	return int(count), err
+}
+
+// CountByOffer returns the count of files attached to an offer, respecting company access
+func (s *FileService) CountByOffer(ctx context.Context, offerID uuid.UUID) (int, error) {
+	companyFilter := s.getCompanyFilter(ctx)
+	count, err := s.fileRepo.CountByOfferWithCompanyFilter(ctx, offerID, companyFilter)
+	return int(count), err
+}
+
+// CountBySupplier returns the count of files attached to a supplier, respecting company access
+func (s *FileService) CountBySupplier(ctx context.Context, supplierID uuid.UUID) (int, error) {
+	companyFilter := s.getCompanyFilter(ctx)
+	count, err := s.fileRepo.CountBySupplierWithCompanyFilter(ctx, supplierID, companyFilter)
+	return int(count), err
+}

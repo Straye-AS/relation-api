@@ -88,6 +88,7 @@ type CustomerService struct {
 	customerRepo *repository.CustomerRepository
 	dealRepo     *repository.DealRepository
 	projectRepo  *repository.ProjectRepository
+	fileRepo     *repository.FileRepository
 	activityRepo *repository.ActivityRepository
 	dwClient     DataWarehouseClient
 	logger       *zap.Logger
@@ -122,6 +123,7 @@ func NewCustomerServiceWithDeps(
 	customerRepo *repository.CustomerRepository,
 	dealRepo *repository.DealRepository,
 	projectRepo *repository.ProjectRepository,
+	fileRepo *repository.FileRepository,
 	activityRepo *repository.ActivityRepository,
 	logger *zap.Logger,
 ) *CustomerService {
@@ -129,6 +131,7 @@ func NewCustomerServiceWithDeps(
 		customerRepo: customerRepo,
 		dealRepo:     dealRepo,
 		projectRepo:  projectRepo,
+		fileRepo:     fileRepo,
 		activityRepo: activityRepo,
 		logger:       logger,
 	}
@@ -307,6 +310,24 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 		stats = &repository.CustomerStats{}
 	}
 
+	// Get file count with company filter from user context
+	var fileCount int
+	if s.fileRepo != nil {
+		var companyFilter *domain.CompanyID
+		if userCtx, ok := auth.FromContext(ctx); ok {
+			// Only apply company filter for non-gruppen users
+			if userCtx.CompanyID != domain.CompanyGruppen {
+				companyFilter = &userCtx.CompanyID
+			}
+		}
+		count, err := s.fileRepo.CountByCustomerWithCompanyFilter(ctx, id, companyFilter)
+		if err != nil {
+			s.logger.Warn("failed to get file count for customer", zap.Error(err), zap.String("customer_id", id.String()))
+		} else {
+			fileCount = int(count)
+		}
+	}
+
 	// Auto-update tier based on total value
 	s.updateTierIfNeeded(ctx, customer, stats.TotalValueWon)
 
@@ -326,6 +347,7 @@ func (s *CustomerService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 			ActiveProjects:   stats.ActiveProjects,
 			TotalProjects:    stats.TotalProjects,
 			TotalContacts:    stats.TotalContacts,
+			FileCount:        fileCount,
 		},
 	}
 

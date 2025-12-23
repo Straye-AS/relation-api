@@ -172,7 +172,18 @@ func (s *ProjectService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pro
 		}
 	}
 
-	dto := mapper.ToProjectDTOWithOfferCount(project, offerCount)
+	// Get file count for this project
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
+	dto := mapper.ToProjectDTOWithCounts(project, offerCount, fileCount)
 	return &dto, nil
 }
 
@@ -197,7 +208,18 @@ func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID)
 		}
 	}
 
-	projectDTO := mapper.ToProjectDTOWithOfferCount(project, offerCount)
+	// Get file count for this project
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
+	projectDTO := mapper.ToProjectDTOWithCounts(project, offerCount, fileCount)
 
 	itemDTOs := make([]domain.BudgetItemDTO, len(budgetItems))
 	for i, item := range budgetItems {
@@ -233,9 +255,20 @@ func (s *ProjectService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) (
 		}
 	}
 
+	// Get file count for this project
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
 	// Note: Offers link to projects (project_id on offer), not the other way around.
 	// For backward compatibility, we pass nil for offer. Use GetProjectOffers to get linked offers.
-	dto := mapper.ToProjectWithDetailsDTOWithOfferCount(project, nil, activities, nil, project.Deal, offerCount)
+	dto := mapper.ToProjectWithDetailsDTOWithOfferCount(project, nil, activities, nil, project.Deal, offerCount, fileCount)
 	return &dto, nil
 }
 
