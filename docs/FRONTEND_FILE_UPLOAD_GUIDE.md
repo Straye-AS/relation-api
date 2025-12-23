@@ -1,0 +1,492 @@
+# Frontend File Upload Implementation Guide
+
+This guide explains how to integrate file upload functionality into the Straye Relation frontend application.
+
+## Overview
+
+The file upload system allows attaching files to:
+- **Customers** - Documents, contracts, correspondence
+- **Projects** - Project documents, plans, reports
+- **Offers** - Proposals, quotes, specifications
+- **Suppliers** - Agreements, certifications, invoices
+- **Offer-Supplier** - Supplier quotes/documents specific to an offer
+
+Files are stored in Azure Blob Storage (production) or local filesystem (development).
+
+## Company Association (Required)
+
+**All files must be associated with a company.** This enables proper multi-tenant filtering and access control.
+
+### How Company is Determined
+
+**The file's company is determined from the `X-Company-Id` header** - the same header used for all API requests to establish company context. This ensures consistency across the application.
+
+- If no company context is provided in the header, the upload will be rejected with a 400 error
+- Use `gruppen` for files that should be visible across all companies
+
+### Valid Company IDs
+
+| ID | Company |
+|----|---------|
+| `gruppen` | Straye Gruppen (visible to all companies) |
+| `stalbygg` | Stålbygg |
+| `hybridbygg` | Hybridbygg |
+| `industri` | Industri |
+| `tak` | Tak |
+| `montasje` | Montasje |
+
+## API Endpoints
+
+### Entity-Specific Endpoints
+
+Each entity type has dedicated upload and list endpoints:
+
+| Entity | Upload | List |
+|--------|--------|------|
+| Customer | `POST /customers/{id}/files` | `GET /customers/{id}/files` |
+| Project | `POST /projects/{id}/files` | `GET /projects/{id}/files` |
+| Offer | `POST /offers/{id}/files` | `GET /offers/{id}/files` |
+| Supplier | `POST /suppliers/{id}/files` | `GET /suppliers/{id}/files` |
+| Offer-Supplier | `POST /offers/{offerId}/suppliers/{supplierId}/files` | `GET /offers/{offerId}/suppliers/{supplierId}/files` |
+
+### Generic File Operations
+
+| Operation | Endpoint | Description |
+|-----------|----------|-------------|
+| Get metadata | `GET /files/{id}` | Get file details without downloading |
+| Download | `GET /files/{id}/download` | Download file content |
+| Delete | `DELETE /files/{id}` | Delete file permanently |
+
+## Response Format
+
+### FileDTO
+
+All file operations return this structure:
+
+```typescript
+interface FileDTO {
+  id: string;              // UUID
+  filename: string;        // Original filename
+  contentType: string;     // MIME type (e.g., "application/pdf")
+  size: number;            // File size in bytes
+  companyId: string;       // Company ID (gruppen, stalbygg, etc.)
+  offerId?: string;        // UUID if attached to offer
+  customerId?: string;     // UUID if attached to customer
+  projectId?: string;      // UUID if attached to project
+  supplierId?: string;     // UUID if attached to supplier
+  offerSupplierId?: string; // UUID if attached to offer-supplier relationship
+  createdAt: string;       // ISO 8601 timestamp
+}
+```
+
+## Implementation Examples
+
+### 1. Upload File to Entity
+
+```typescript
+// Valid company IDs
+type CompanyID = 'gruppen' | 'stalbygg' | 'hybridbygg' | 'industri' | 'tak' | 'montasje';
+
+// Generic upload function for any entity type
+// Company is determined by the X-Company-Id header (set globally in your API client)
+async function uploadFile(
+  entityType: 'customers' | 'projects' | 'offers' | 'suppliers',
+  entityId: string,
+  file: File
+): Promise<FileDTO> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`/api/${entityType}/${entityId}/files`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Company-Id': currentCompanyId,  // REQUIRED: determines file's company
+      // Note: Do NOT set Content-Type header - browser sets it with boundary
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Upload failed');
+  }
+
+  return response.json();
+}
+
+// Usage examples - company comes from X-Company-Id header
+await uploadFile('customers', customerId, file);
+await uploadFile('offers', offerId, file);
+await uploadFile('projects', projectId, file);
+await uploadFile('suppliers', supplierId, file);
+```
+
+### 1b. Upload File to Offer-Supplier (Supplier within an Offer)
+
+```typescript
+// Upload a file specific to a supplier's involvement in an offer
+// Company is determined by the X-Company-Id header
+async function uploadOfferSupplierFile(
+  offerId: string,
+  supplierId: string,
+  file: File
+): Promise<FileDTO> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`/api/offers/${offerId}/suppliers/${supplierId}/files`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Company-Id': currentCompanyId,  // REQUIRED: determines file's company
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Upload failed');
+  }
+
+  return response.json();
+}
+
+// List files for a specific supplier within an offer
+async function listOfferSupplierFiles(
+  offerId: string,
+  supplierId: string
+): Promise<FileDTO[]> {
+  const response = await fetch(`/api/offers/${offerId}/suppliers/${supplierId}/files`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Company-Id': currentCompanyId,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to load files');
+  }
+
+  return response.json();
+}
+```
+
+### 2. List Entity Files
+
+```typescript
+async function listFiles(
+  entityType: 'customers' | 'projects' | 'offers' | 'suppliers',
+  entityId: string
+): Promise<FileDTO[]> {
+  const response = await fetch(`/api/${entityType}/${entityId}/files`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to load files');
+  }
+
+  return response.json();
+}
+```
+
+### 3. Download File
+
+```typescript
+async function downloadFile(fileId: string, filename: string): Promise<void> {
+  const response = await fetch(`/api/files/${fileId}/download`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Download failed');
+  }
+
+  // Create download link
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+```
+
+### 4. Delete File
+
+```typescript
+async function deleteFile(fileId: string): Promise<void> {
+  const response = await fetch(`/api/files/${fileId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Delete failed');
+  }
+}
+```
+
+## React Component Example
+
+```tsx
+import { useState, useCallback } from 'react';
+import { useCompanyContext } from './CompanyContext'; // Your app's company context
+
+interface FileUploadProps {
+  entityType: 'customers' | 'projects' | 'offers' | 'suppliers';
+  entityId: string;
+  onUploadComplete?: (file: FileDTO) => void;
+}
+
+export function FileUpload({
+  entityType,
+  entityId,
+  onUploadComplete
+}: FileUploadProps) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { currentCompanyId } = useCompanyContext(); // Get company from app context
+
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Company context is required
+    if (!currentCompanyId) {
+      setError('Please select a company before uploading files');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/${entityType}/${entityId}/files`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getAccessToken()}`,
+          'X-Company-Id': currentCompanyId,  // Company from app context
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Upload failed');
+      }
+
+      const uploadedFile = await response.json();
+      onUploadComplete?.(uploadedFile);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      e.target.value = ''; // Reset input
+    }
+  }, [entityType, entityId, currentCompanyId, onUploadComplete]);
+
+  return (
+    <div className="file-upload">
+      <input
+        type="file"
+        onChange={handleUpload}
+        disabled={uploading || !currentCompanyId}
+      />
+      {uploading && <span>Uploading...</span>}
+      {error && <span className="error">{error}</span>}
+      {!currentCompanyId && <span className="warning">Select a company to upload files</span>}
+    </div>
+  );
+}
+```
+
+## File List Component Example
+
+```tsx
+interface FileListProps {
+  entityType: 'customers' | 'projects' | 'offers' | 'suppliers';
+  entityId: string;
+}
+
+export function FileList({ entityType, entityId }: FileListProps) {
+  const [files, setFiles] = useState<FileDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadFiles();
+  }, [entityType, entityId]);
+
+  const loadFiles = async () => {
+    try {
+      const response = await fetch(`/api/${entityType}/${entityId}/files`, {
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
+      });
+      if (response.ok) {
+        setFiles(await response.json());
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async (file: FileDTO) => {
+    const response = await fetch(`/api/files/${file.id}/download`, {
+      headers: { 'Authorization': `Bearer ${getAccessToken()}` },
+    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDelete = async (fileId: string) => {
+    if (!confirm('Are you sure you want to delete this file?')) return;
+
+    await fetch(`/api/files/${fileId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getAccessToken()}` },
+    });
+    setFiles(files.filter(f => f.id !== fileId));
+  };
+
+  const getCompanyName = (companyId: string): string => {
+    const names: Record<string, string> = {
+      gruppen: 'Straye Gruppen',
+      stalbygg: 'Stålbygg',
+      hybridbygg: 'Hybridbygg',
+      industri: 'Industri',
+      tak: 'Tak',
+      montasje: 'Montasje',
+    };
+    return names[companyId] || companyId;
+  };
+
+  if (loading) return <div>Loading files...</div>;
+
+  return (
+    <div>
+      <h3>Files ({files.length})</h3>
+      {files.length === 0 ? (
+        <p>No files attached</p>
+      ) : (
+        <ul>
+          {files.map(file => (
+            <li key={file.id}>
+              <span>{file.filename}</span>
+              <span className="company-badge">{getCompanyName(file.companyId)}</span>
+              <span>{formatFileSize(file.size)}</span>
+              <button onClick={() => handleDownload(file)}>Download</button>
+              <button onClick={() => handleDelete(file.id)}>Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+```
+
+## Error Handling
+
+The API returns standard error responses:
+
+| Status | Meaning |
+|--------|---------|
+| 400 | Bad request (invalid UUID, missing file, invalid company_id) |
+| 404 | Entity or file not found |
+| 413 | File too large (default limit: 50MB) |
+| 500 | Server error |
+
+Error response format:
+```json
+{
+  "error": "Error message here"
+}
+```
+
+### Common Errors
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `company context is required for file uploads` | Missing X-Company-Id header | Set the X-Company-Id header with a valid company ID |
+| `file is required` | No file in form data | Ensure `file` field is populated |
+
+## Best Practices
+
+1. **Always set X-Company-Id header** - All file uploads require the company header
+2. **Use a global API client** - Configure X-Company-Id once in your HTTP client/interceptor
+3. **Show upload progress** - For large files, consider using `XMLHttpRequest` with progress events
+4. **Validate file types** - Check file extensions/MIME types before upload if needed
+5. **Handle errors gracefully** - Display user-friendly error messages
+6. **Confirm deletes** - Always confirm before deleting files
+7. **Refresh lists** - Reload file list after upload/delete operations
+8. **File size display** - Format file sizes in human-readable format (KB, MB)
+9. **Show company badge** - Display the company association in file lists
+
+## Integration Points
+
+Add file upload/list components to these views:
+
+| View | Entity Type | Company Handling |
+|------|-------------|------------------|
+| Customer Detail | `customers` | From X-Company-Id header |
+| Project Detail | `projects` | From X-Company-Id header |
+| Offer Detail | `offers` | From X-Company-Id header |
+| Supplier Detail | `suppliers` | From X-Company-Id header |
+| Offer Supplier Section | `offer-supplier` | From X-Company-Id header |
+
+### Offer-Supplier Files Use Case
+
+When viewing an offer with suppliers, each supplier card/section should have its own file upload area. These files are specific to that supplier's involvement in THIS offer (e.g., supplier quotes, contracts for this job) - not global supplier documents.
+
+```tsx
+// Example: Supplier section within offer detail page
+function OfferSupplierCard({ offerId, supplier }: { offerId: string; supplier: OfferSupplier }) {
+  return (
+    <div className="supplier-card">
+      <h4>{supplier.name}</h4>
+      <p>Status: {supplier.status}</p>
+
+      {/* Files specific to this supplier for this offer */}
+      {/* Company comes from X-Company-Id header (set in your API client) */}
+      <FileList
+        endpoint={`/api/offers/${offerId}/suppliers/${supplier.id}/files`}
+      />
+      <FileUpload
+        endpoint={`/api/offers/${offerId}/suppliers/${supplier.id}/files`}
+      />
+    </div>
+  );
+}
+```
+
+## Authentication
+
+All endpoints require authentication via:
+- **Bearer Token**: `Authorization: Bearer <jwt_token>` (user requests)
+- **API Key**: `x-api-key: <api_key>` (system/integration requests)
+
+Use the same authentication method as other API calls in your application.

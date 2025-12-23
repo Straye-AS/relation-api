@@ -27,6 +27,7 @@ var ErrSupplierHasActiveRelations = errors.New("cannot delete supplier with acti
 // SupplierService handles business logic for suppliers
 type SupplierService struct {
 	supplierRepo *repository.SupplierRepository
+	fileService  *FileService
 	activityRepo *repository.ActivityRepository
 	logger       *zap.Logger
 }
@@ -39,6 +40,21 @@ func NewSupplierService(
 ) *SupplierService {
 	return &SupplierService{
 		supplierRepo: supplierRepo,
+		activityRepo: activityRepo,
+		logger:       logger,
+	}
+}
+
+// NewSupplierServiceWithDeps creates a SupplierService with all dependencies for full feature support
+func NewSupplierServiceWithDeps(
+	supplierRepo *repository.SupplierRepository,
+	fileService *FileService,
+	activityRepo *repository.ActivityRepository,
+	logger *zap.Logger,
+) *SupplierService {
+	return &SupplierService{
+		supplierRepo: supplierRepo,
+		fileService:  fileService,
 		activityRepo: activityRepo,
 		logger:       logger,
 	}
@@ -134,7 +150,18 @@ func (s *SupplierService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Su
 		return nil, fmt.Errorf("failed to get supplier: %w", err)
 	}
 
-	dto := mapper.SupplierToDTO(supplier)
+	// Get file count for this supplier
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountBySupplier(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for supplier", zap.Error(err), zap.String("supplier_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
+	dto := mapper.SupplierToDTOWithFileCount(supplier, fileCount)
 	return &dto, nil
 }
 
@@ -155,6 +182,17 @@ func (s *SupplierService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 		repoStats = &repository.SupplierStats{}
 	}
 
+	// Get file count for this supplier
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountBySupplier(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for supplier", zap.Error(err), zap.String("supplier_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
 	// Convert to mapper input type
 	stats := &mapper.SupplierStatsInput{
 		TotalOffers:     repoStats.TotalOffers,
@@ -170,7 +208,7 @@ func (s *SupplierService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) 
 		recentOffers = []domain.OfferSupplier{}
 	}
 
-	dto := mapper.SupplierToWithDetailsDTO(supplier, stats, recentOffers)
+	dto := mapper.SupplierToWithDetailsDTOWithFileCount(supplier, stats, recentOffers, fileCount)
 	return &dto, nil
 }
 

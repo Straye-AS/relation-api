@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -68,6 +70,19 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, log)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, log)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		log,
+	)
+
 	svc := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
@@ -79,6 +94,7 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 		userRepo,
 		companyService,
 		numberSequenceService,
+		fileService,
 		log,
 		db,
 	)
@@ -1321,5 +1337,167 @@ func TestOfferService_CompleteOffer(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.ErrorIs(t, err, service.ErrOfferNotFound)
+	})
+}
+
+// ============================================================================
+// Project Location Inference Tests
+// ============================================================================
+
+// TestOfferService_SyncProjectLocation tests that project location is inferred from offers
+func TestOfferService_SyncProjectLocation(t *testing.T) {
+	db := setupOfferTestDB(t)
+	svc, fixtures := setupOfferTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createOfferTestContext()
+
+	// Helper to create project directly in DB
+	createProject := func(name string) *domain.Project {
+		project := &domain.Project{
+			Name:  name,
+			Phase: domain.ProjectPhaseTilbud,
+		}
+		err := fixtures.db.Create(project).Error
+		require.NoError(t, err)
+		return project
+	}
+
+	// Helper to get project location from DB
+	getProjectLocation := func(projectID uuid.UUID) string {
+		var project domain.Project
+		err := fixtures.db.First(&project, "id = ?", projectID).Error
+		require.NoError(t, err)
+		return project.Location
+	}
+
+	t.Run("location inferred when all offers have same location", func(t *testing.T) {
+		project := createProject("Test Same Location Project")
+		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Same Location")
+
+		// Create first offer with location and link to project
+		req1 := &domain.CreateOfferRequest{
+			Title:      "Test Offer 1 Same Location",
+			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			Phase:      domain.OfferPhaseDraft,
+			ProjectID:  &project.ID,
+			Location:   "Oslo",
+		}
+		_, err := svc.Create(ctx, req1)
+		require.NoError(t, err)
+
+		// Verify project location is set to "Oslo"
+		location := getProjectLocation(project.ID)
+		assert.Equal(t, "Oslo", location, "project location should be 'Oslo' when only offer has location 'Oslo'")
+
+		// Create second offer with same location
+		req2 := &domain.CreateOfferRequest{
+			Title:      "Test Offer 2 Same Location",
+			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			Phase:      domain.OfferPhaseDraft,
+			ProjectID:  &project.ID,
+			Location:   "Oslo",
+		}
+		_, err = svc.Create(ctx, req2)
+		require.NoError(t, err)
+
+		// Verify project location is still "Oslo"
+		location = getProjectLocation(project.ID)
+		assert.Equal(t, "Oslo", location, "project location should still be 'Oslo' when all offers have location 'Oslo'")
+	})
+
+	t.Run("location cleared when offers have different locations", func(t *testing.T) {
+		project := createProject("Test Different Locations Project")
+		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Different Locations")
+
+		// Create first offer with location "Oslo"
+		req1 := &domain.CreateOfferRequest{
+			Title:      "Test Offer 1 Different",
+			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			Phase:      domain.OfferPhaseDraft,
+			ProjectID:  &project.ID,
+			Location:   "Oslo",
+		}
+		_, err := svc.Create(ctx, req1)
+		require.NoError(t, err)
+
+		// Verify project location is set to "Oslo"
+		location := getProjectLocation(project.ID)
+		assert.Equal(t, "Oslo", location)
+
+		// Create second offer with different location "Bergen"
+		req2 := &domain.CreateOfferRequest{
+			Title:      "Test Offer 2 Different",
+			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			Phase:      domain.OfferPhaseDraft,
+			ProjectID:  &project.ID,
+			Location:   "Bergen",
+		}
+		_, err = svc.Create(ctx, req2)
+		require.NoError(t, err)
+
+		// Verify project location is cleared (different locations)
+		location = getProjectLocation(project.ID)
+		assert.Empty(t, location, "project location should be cleared when offers have different locations")
+	})
+
+	t.Run("location cleared when no offers have location", func(t *testing.T) {
+		project := createProject("Test No Location Offers Project")
+		customer := fixtures.createTestCustomer(t, ctx, "Test Customer No Location")
+
+		// Create offer without location
+		req := &domain.CreateOfferRequest{
+			Title:      "Test Offer No Location",
+			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			Phase:      domain.OfferPhaseDraft,
+			ProjectID:  &project.ID,
+			// Location not set
+		}
+		_, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+
+		// Verify project location is empty
+		location := getProjectLocation(project.ID)
+		assert.Empty(t, location, "project location should be empty when offers have no location")
+	})
+
+	t.Run("location updated when offer location changes via update", func(t *testing.T) {
+		project := createProject("Test Location Update Project")
+		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Location Update")
+
+		// Create offer with location "Oslo"
+		createReq := &domain.CreateOfferRequest{
+			Title:      "Test Offer Location Update",
+			CustomerID: &customer.ID,
+			CompanyID:  domain.CompanyStalbygg,
+			Phase:      domain.OfferPhaseDraft,
+			ProjectID:  &project.ID,
+			Location:   "Oslo",
+		}
+		offer, err := svc.Create(ctx, createReq)
+		require.NoError(t, err)
+
+		// Verify project location is "Oslo"
+		location := getProjectLocation(project.ID)
+		assert.Equal(t, "Oslo", location)
+
+		// Update offer location to "Trondheim"
+		// Note: UpdateOfferRequest uses Location field; ProjectID is already linked
+		updateReq := &domain.UpdateOfferRequest{
+			Title:    "Test Offer Location Update",
+			Phase:    domain.OfferPhaseDraft,
+			Location: "Trondheim",
+		}
+		_, err = svc.Update(ctx, offer.ID, updateReq)
+		require.NoError(t, err)
+
+		// Verify project location is now "Trondheim"
+		location = getProjectLocation(project.ID)
+		assert.Equal(t, "Trondheim", location, "project location should update when offer location changes")
 	})
 }

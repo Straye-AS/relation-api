@@ -97,11 +97,11 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Create godoc
 // @Summary Create project
-// @Description Create a new project (simplified container for offers)
+// @Description Create a new project (simplified container for offers). Only name, description, startDate, and endDate can be set on creation. Phase defaults to "tilbud". Location and customer are inferred from linked offers.
 // @Tags Projects
 // @Accept json
 // @Produce json
-// @Param request body domain.CreateProjectRequest true "Project data"
+// @Param request body domain.CreateProjectRequest true "Project data (name required, description/startDate/endDate optional)"
 // @Success 201 {object} domain.ProjectDTO
 // @Failure 400 {object} domain.APIError
 // @Failure 401 {object} domain.APIError

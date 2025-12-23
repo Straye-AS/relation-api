@@ -178,8 +178,8 @@ func (s *OfferService) SyncAllOffersFromDataWarehouse(ctx context.Context) (sync
 	}
 
 	// Get "order" phase offers with external_reference that need syncing
-	// Only sync offers not synced in the last hour (DW only updates hourly)
-	maxAge := time.Hour
+	// Sync offers not synced in the last 55 minutes (allows buffer for hourly cron timing variations)
+	maxAge := 55 * time.Minute
 	offers, err := s.offerRepo.GetOffersNeedingDWSync(ctx, maxAge)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get offers for DW sync: %w", err)

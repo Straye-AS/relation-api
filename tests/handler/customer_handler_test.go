@@ -6,16 +6,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/straye-as/relation-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,12 +45,25 @@ func createCustomerHandler(t *testing.T, db *gorm.DB) *handler.CustomerHandler {
 	userRepo := repository.NewUserRepository(db)
 	numberSequenceRepo := repository.NewNumberSequenceRepository(db)
 
-	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, activityRepo, logger)
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, logger)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		logger,
+	)
+
+	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, fileRepo, activityRepo, logger)
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, logger)
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, logger)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, logger)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, logger, db)
-	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, logger, db)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, fileService, logger, db)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, fileService, logger, db)
 
 	return handler.NewCustomerHandler(customerService, contactService, offerService, projectService, logger)
 }

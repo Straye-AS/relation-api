@@ -6,16 +6,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/straye-as/relation-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +47,19 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, logger)
 	userRepo := repository.NewUserRepository(db)
 
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, logger)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		logger,
+	)
+
 	offerService := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
@@ -55,6 +71,7 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 		userRepo,
 		companyService,
 		numberSequenceService,
+		fileService,
 		logger,
 		db,
 	)
@@ -270,12 +287,9 @@ func TestProjectHandler_Create(t *testing.T) {
 
 	t.Run("create valid project", func(t *testing.T) {
 		startDate := time.Now()
-		customerID := customer.ID
 		reqBody := domain.CreateProjectRequest{
-			Name:       "New Project",
-			CustomerID: &customerID,
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:      "New Project",
+			StartDate: &startDate,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -293,10 +307,15 @@ func TestProjectHandler_Create(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.Equal(t, "New Project", result.Name)
-		assert.NotNil(t, result.CustomerID)
-		assert.Equal(t, customer.ID, *result.CustomerID)
+		// Phase defaults to "tilbud" on creation
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// Customer is now inferred from offers, not set on creation
+		assert.Nil(t, result.CustomerID)
 		assert.NotEqual(t, uuid.Nil, result.ID)
 	})
+
+	// Keep customer for cleanup
+	_ = customer
 
 	t.Run("create with invalid body", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader([]byte("invalid json")))
@@ -326,14 +345,145 @@ func TestProjectHandler_Create(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("create with non-existent customer", func(t *testing.T) {
+	t.Run("create with description and dates", func(t *testing.T) {
 		startDate := time.Now()
-		nonExistentID := uuid.New()
+		endDate := startDate.AddDate(0, 3, 0)
 		reqBody := domain.CreateProjectRequest{
-			Name:       "Project Without Customer",
-			CustomerID: &nonExistentID, // Non-existent customer
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:        "Project With Description",
+			Description: "Test description for project",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+	})
+}
+
+// TestProjectHandler_CreateSimplified tests the simplified project creation endpoint
+// Projects are now containers/folders for offers with minimal required fields.
+func TestProjectHandler_CreateSimplified(t *testing.T) {
+	db := setupProjectHandlerTestDB(t)
+	h := createProjectHandler(t, db)
+	ctx := createProjectTestContext()
+
+	t.Run("create project with only name (required)", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Name: "Minimal Project",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.NotEmpty(t, rr.Header().Get("Location"))
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Minimal Project", result.Name)
+		assert.NotEqual(t, uuid.Nil, result.ID)
+		// Verify phase defaults to "tilbud"
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// No customer on creation (inferred from offers)
+		assert.Nil(t, result.CustomerID)
+		assert.Empty(t, result.CustomerName)
+		// No location on creation (inferred from offers)
+		assert.Empty(t, result.Location)
+	})
+
+	t.Run("create project with all optional fields", func(t *testing.T) {
+		startDate := time.Now()
+		endDate := startDate.AddDate(0, 6, 0)
+		reqBody := domain.CreateProjectRequest{
+			Name:        "Full Optional Project",
+			Description: "A project with all optional fields set",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Full Optional Project", result.Name)
+		assert.Equal(t, "A project with all optional fields set", result.Description)
+		// Phase still defaults to "tilbud"
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// Verify dates are set (start date and end date)
+		assert.NotEmpty(t, result.StartDate)
+		assert.NotNil(t, result.EndDate)
+	})
+
+	t.Run("phase defaults to tilbud on creation", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Name: "Phase Default Test Project",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		var result domain.ProjectDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		// This explicitly tests the default phase behavior
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase, "phase should default to 'tilbud'")
+	})
+
+	t.Run("validation error when name is missing", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Description: "Project without a name",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		h.Create(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+		// Verify the error response mentions name field
+		var errResp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		// Should have an error message about validation
+		assert.Contains(t, rr.Body.String(), "name", "error should mention missing name field")
+	})
+
+	t.Run("validation error when name is empty string", func(t *testing.T) {
+		reqBody := domain.CreateProjectRequest{
+			Name: "",
 		}
 		body, _ := json.Marshal(reqBody)
 

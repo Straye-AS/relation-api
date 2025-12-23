@@ -42,14 +42,32 @@ func (s *NumberSequenceService) GenerateOfferNumber(ctx context.Context, company
 	return s.generateNumber(ctx, companyID, "offer")
 }
 
-// GenerateProjectNumber generates a unique project number for a company.
-// This should be called when a new project is created.
-// Format: {PREFIX}-{YEAR}-{SEQUENCE} e.g., "ST-2025-002"
-//
-// The number is SHARED with offers - both use the same sequence counter
-// per company/year to ensure global uniqueness.
-func (s *NumberSequenceService) GenerateProjectNumber(ctx context.Context, companyID domain.CompanyID) (string, error) {
-	return s.generateNumber(ctx, companyID, "project")
+// GenerateProjectNumber generates a unique project number.
+// Project numbers use a global sequence with "PROJECT" prefix, independent of offers/companies.
+// Format: PROJECT-{YEAR}-{SEQUENCE} e.g., "PROJECT-2025-001"
+func (s *NumberSequenceService) GenerateProjectNumber(ctx context.Context, _ domain.CompanyID) (string, error) {
+	// Project numbers use a global sequence with "PROJECT" prefix
+	// We use a special ID to track this global sequence, ignoring the CompanyID.
+	projectSequenceID := domain.CompanyID("PROJECTS_GLOBAL")
+	year := time.Now().Year()
+
+	nextSeq, err := s.repo.GetNextNumber(ctx, projectSequenceID, year)
+	if err != nil {
+		s.logger.Error("failed to get next sequence number for projects",
+			zap.Int("year", year),
+			zap.Error(err))
+		return "", fmt.Errorf("failed to generate project number: %w", err)
+	}
+
+	// Format: PROJECT-YYYY-NNN (zero-padded to 3 digits)
+	number := fmt.Sprintf("PROJECT-%d-%03d", year, nextSeq)
+
+	s.logger.Info("generated project number",
+		zap.String("number", number),
+		zap.Int("year", year),
+		zap.Int("sequence", nextSeq))
+
+	return number, nil
 }
 
 // generateNumber is the internal method that generates a formatted number.

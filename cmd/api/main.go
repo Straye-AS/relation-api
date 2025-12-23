@@ -105,7 +105,7 @@ func run() error {
 	}
 
 	// Initialize storage
-	fileStorage, err := storage.NewStorage(&cfg.Storage)
+	fileStorage, err := storage.NewStorage(&cfg.Storage, log)
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
@@ -161,28 +161,28 @@ func run() error {
 	// Number sequence service (shared between offers and projects)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
-	customerService := service.NewCustomerService(customerRepo, activityRepo, log)
+	customerService := service.NewCustomerServiceWithDeps(customerRepo, dealRepo, projectRepo, fileRepo, activityRepo, log)
 	// Inject data warehouse client into customer service for ERP sync functionality
 	if dwClient != nil {
 		customerService.SetDataWarehouseClient(&customerDWAdapter{client: dwClient})
 	}
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
-	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, log, db)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, log, db)
+	fileService := service.NewFileService(fileRepo, offerRepo, customerRepo, projectRepo, supplierRepo, activityRepo, fileStorage, log)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, fileService, log, db)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, fileService, log, db)
 	// Inject data warehouse client into offer service for DW sync functionality
 	if dwClient != nil {
 		offerService.SetDataWarehouseClient(dwClient)
 	}
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
-	fileService := service.NewFileService(fileRepo, offerRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, supplierRepo, log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 	auditLogService := service.NewAuditLogService(auditLogRepo, log)
 	budgetItemService := service.NewBudgetItemService(budgetItemRepo, offerRepo, projectRepo, log)
 	notificationService := service.NewNotificationService(notificationRepo, log)
 	activityService := service.NewActivityService(activityRepo, notificationService, log)
-	supplierService := service.NewSupplierService(supplierRepo, activityRepo, log)
+	supplierService := service.NewSupplierServiceWithDeps(supplierRepo, fileService, activityRepo, log)
 
 	// Initialize middleware
 	authMiddleware := auth.NewMiddleware(cfg, userRepo, log)

@@ -10,8 +10,9 @@ import (
 // DWSyncJobName is the name of the data warehouse sync job
 const DWSyncJobName = "dw_sync"
 
-// DefaultStaleMaxAge is the default maximum age before an offer is considered stale (1 hour)
-const DefaultStaleMaxAge = time.Hour
+// DefaultStaleMaxAge is the default maximum age before an offer is considered stale (55 minutes)
+// This is slightly less than 1 hour to allow buffer for hourly cron timing variations
+const DefaultStaleMaxAge = 55 * time.Minute
 
 // OfferSyncService defines the interface for syncing offers from the data warehouse.
 // This interface allows the job to call the service without importing the service package directly.

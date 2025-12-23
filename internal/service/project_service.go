@@ -34,6 +34,7 @@ type ProjectService struct {
 	offerRepo    *repository.OfferRepository
 	customerRepo *repository.CustomerRepository
 	activityRepo *repository.ActivityRepository
+	fileService  *FileService
 	logger       *zap.Logger
 	db           *gorm.DB
 }
@@ -59,6 +60,7 @@ func NewProjectServiceWithDeps(
 	offerRepo *repository.OfferRepository,
 	customerRepo *repository.CustomerRepository,
 	activityRepo *repository.ActivityRepository,
+	fileService *FileService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *ProjectService {
@@ -67,45 +69,22 @@ func NewProjectServiceWithDeps(
 		offerRepo:    offerRepo,
 		customerRepo: customerRepo,
 		activityRepo: activityRepo,
+		fileService:  fileService,
 		logger:       logger,
 		db:           db,
 	}
 }
 
 // Create creates a new project with activity logging
-// Projects are now simplified containers for offers - no economics or management fields
+// Projects are simplified containers/folders for offers.
+// Only basic fields (name, description, startDate, endDate) are settable on creation.
+// Phase defaults to "tilbud". Customer, location, etc. are inferred from linked offers.
 func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRequest) (*domain.ProjectDTO, error) {
-	// Verify customer exists and get name for denormalized field (only if CustomerID provided)
-	var customerName string
-	if req.CustomerID != nil {
-		customer, err := s.customerRepo.GetByID(ctx, *req.CustomerID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrCustomerNotFound
-			}
-			return nil, fmt.Errorf("failed to verify customer: %w", err)
-		}
-		customerName = customer.Name
-	}
-
-	// Set default phase if not provided
-	phase := req.Phase
-	if phase == "" {
-		phase = domain.ProjectPhaseTilbud
-	}
-
 	project := &domain.Project{
-		Name:              req.Name,
-		ProjectNumber:     req.ProjectNumber,
-		Summary:           req.Summary,
-		Description:       req.Description,
-		CustomerID:        req.CustomerID,
-		CustomerName:      customerName,
-		Phase:             phase,
-		EndDate:           req.EndDate,
-		Location:          req.Location,
-		DealID:            req.DealID,
-		ExternalReference: req.ExternalReference,
+		Name:        req.Name,
+		Description: req.Description,
+		Phase:       domain.ProjectPhaseTilbud, // Always default to tilbud phase
+		EndDate:     req.EndDate,
 	}
 
 	// Set StartDate if provided
@@ -125,23 +104,14 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
-	// Reload with customer relation
+	// Reload project
 	project, err := s.projectRepo.GetByID(ctx, project.ID)
 	if err != nil {
 		s.logger.Warn("failed to reload project after create", zap.Error(err))
 	}
 
-	// Log activity with project number if available
+	// Log activity
 	activityBody := fmt.Sprintf("Prosjektet '%s' ble opprettet", project.Name)
-	if project.CustomerName != "" {
-		activityBody = fmt.Sprintf("Prosjektet '%s' ble opprettet for kunde %s", project.Name, project.CustomerName)
-	}
-	if project.ProjectNumber != "" {
-		activityBody = fmt.Sprintf("Prosjektet '%s' (%s) ble opprettet", project.Name, project.ProjectNumber)
-		if project.CustomerName != "" {
-			activityBody = fmt.Sprintf("Prosjektet '%s' (%s) ble opprettet for kunde %s", project.Name, project.ProjectNumber, project.CustomerName)
-		}
-	}
 	s.logActivity(ctx, project.ID, project.Name, "Prosjekt opprettet", activityBody)
 
 	dto := mapper.ToProjectDTO(project)
@@ -169,7 +139,18 @@ func (s *ProjectService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pro
 		}
 	}
 
-	dto := mapper.ToProjectDTOWithOfferCount(project, offerCount)
+	// Get file count for this project
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
+	dto := mapper.ToProjectDTOWithCounts(project, offerCount, fileCount)
 	return &dto, nil
 }
 
@@ -194,7 +175,18 @@ func (s *ProjectService) GetByIDWithRelations(ctx context.Context, id uuid.UUID)
 		}
 	}
 
-	projectDTO := mapper.ToProjectDTOWithOfferCount(project, offerCount)
+	// Get file count for this project
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
+	projectDTO := mapper.ToProjectDTOWithCounts(project, offerCount, fileCount)
 
 	itemDTOs := make([]domain.BudgetItemDTO, len(budgetItems))
 	for i, item := range budgetItems {
@@ -230,9 +222,20 @@ func (s *ProjectService) GetByIDWithDetails(ctx context.Context, id uuid.UUID) (
 		}
 	}
 
+	// Get file count for this project
+	fileCount := 0
+	if s.fileService != nil {
+		count, err := s.fileService.CountByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get file count for project", zap.Error(err), zap.String("project_id", id.String()))
+		} else {
+			fileCount = count
+		}
+	}
+
 	// Note: Offers link to projects (project_id on offer), not the other way around.
 	// For backward compatibility, we pass nil for offer. Use GetProjectOffers to get linked offers.
-	dto := mapper.ToProjectWithDetailsDTOWithOfferCount(project, nil, activities, nil, project.Deal, offerCount)
+	dto := mapper.ToProjectWithDetailsDTOWithOfferCount(project, nil, activities, nil, project.Deal, offerCount, fileCount)
 	return &dto, nil
 }
 
@@ -339,6 +342,26 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 	projectName := project.Name
 	customerID := project.CustomerID
 	customerName := project.CustomerName
+
+	// Delete files associated with the project
+	// This ensures files are removed from both storage and database
+	if s.fileService != nil {
+		files, err := s.fileService.ListByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to list files for project deletion",
+				zap.String("projectID", id.String()),
+				zap.Error(err))
+		} else {
+			for _, file := range files {
+				if err := s.fileService.Delete(ctx, file.ID); err != nil {
+					s.logger.Warn("failed to delete file during project deletion",
+						zap.String("fileID", file.ID.String()),
+						zap.String("projectID", id.String()),
+						zap.Error(err))
+				}
+			}
+		}
+	}
 
 	if err := s.projectRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)

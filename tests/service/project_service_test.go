@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -62,11 +64,26 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 	customerRepo := repository.NewCustomerRepository(db)
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, log)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		log,
+	)
+
 	svc := service.NewProjectServiceWithDeps(
 		projectRepo,
 		offerRepo,
 		customerRepo,
 		activityRepo,
+		fileService,
 		log,
 		db,
 	)
@@ -165,40 +182,132 @@ func TestProjectService_Create(t *testing.T) {
 	ctx := createProjectTestContext()
 
 	t.Run("create project successfully", func(t *testing.T) {
+		// Keep customer for other tests that might need it
 		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Create")
+		_ = customer // Customer is now inferred from offers, not set on creation
 
 		startDate := time.Now()
-		customerID := customer.ID
 		req := &domain.CreateProjectRequest{
-			Name:       "Test Project Create",
-			CustomerID: &customerID,
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:        "Test Project Create",
+			Description: "Test description",
+			StartDate:   &startDate,
 		}
 
 		result, err := svc.Create(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "Test Project Create", result.Name)
-		assert.Equal(t, &customer.ID, result.CustomerID)
-		assert.Equal(t, customer.Name, result.CustomerName)
+		assert.Equal(t, "Test description", result.Description)
+		// Customer is now inferred from offers, not set on creation
+		assert.Nil(t, result.CustomerID)
+		// Phase defaults to "tilbud"
 		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
 	})
 
-	t.Run("create fails with non-existent customer", func(t *testing.T) {
+	t.Run("create with all optional fields", func(t *testing.T) {
 		startDate := time.Now()
-		nonExistentID := uuid.New()
+		endDate := startDate.AddDate(0, 6, 0)
 		req := &domain.CreateProjectRequest{
-			Name:       "Test Project Bad Customer",
-			CustomerID: &nonExistentID,
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:        "Test Project Full",
+			Description: "Full description",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
 		}
 
 		result, err := svc.Create(ctx, req)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrCustomerNotFound)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "Test Project Full", result.Name)
+		assert.Equal(t, "Full description", result.Description)
+		assert.NotNil(t, result.EndDate)
+	})
+}
+
+// TestProjectService_CreateSimplified tests the simplified project creation
+// Projects are containers/folders for offers with minimal required fields.
+func TestProjectService_CreateSimplified(t *testing.T) {
+	db := setupProjectTestDB(t)
+	svc, fixtures := setupProjectTestService(t, db)
+	t.Cleanup(func() { fixtures.cleanup(t) })
+
+	ctx := createProjectTestContext()
+
+	t.Run("create sets default phase to tilbud", func(t *testing.T) {
+		req := &domain.CreateProjectRequest{
+			Name: "Test Default Phase Project",
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		// Verify phase is set to default "tilbud"
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase, "phase should default to 'tilbud'")
+	})
+
+	t.Run("create with minimal fields (name only)", func(t *testing.T) {
+		req := &domain.CreateProjectRequest{
+			Name: "Test Minimal Project",
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "Test Minimal Project", result.Name)
+		// Verify defaults
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		assert.Nil(t, result.CustomerID)
+		assert.Empty(t, result.CustomerName)
+		assert.Empty(t, result.Location)
+		assert.Empty(t, result.Description)
+		// ID should be generated
+		assert.NotEqual(t, uuid.Nil, result.ID)
+	})
+
+	t.Run("create with all fields", func(t *testing.T) {
+		startDate := time.Now()
+		endDate := startDate.AddDate(1, 0, 0)
+		req := &domain.CreateProjectRequest{
+			Name:        "Test All Fields Project",
+			Description: "Comprehensive project description",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "Test All Fields Project", result.Name)
+		assert.Equal(t, "Comprehensive project description", result.Description)
+		// Phase still defaults to "tilbud" even when all other fields are provided
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// Dates should be set
+		assert.NotEmpty(t, result.StartDate)
+		assert.NotNil(t, result.EndDate)
+	})
+
+	t.Run("create without customer sets nil customer fields", func(t *testing.T) {
+		req := &domain.CreateProjectRequest{
+			Name: "Test No Customer Project",
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		// Customer should be nil (inferred from offers later)
+		assert.Nil(t, result.CustomerID)
+		assert.Empty(t, result.CustomerName)
+	})
+
+	t.Run("create without location sets empty location", func(t *testing.T) {
+		req := &domain.CreateProjectRequest{
+			Name: "Test No Location Project",
+		}
+
+		result, err := svc.Create(ctx, req)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		// Location should be empty (inferred from offers later)
+		assert.Empty(t, result.Location)
 	})
 }
 

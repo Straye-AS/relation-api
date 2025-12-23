@@ -328,6 +328,27 @@ func (r *ProjectRepository) UpdateCustomer(ctx context.Context, projectID uuid.U
 	return nil
 }
 
+// UpdateLocation updates the project's location field
+// This is used when offers are linked/unlinked to infer location from offers.
+// Pass empty string to clear the location.
+func (r *ProjectRepository) UpdateLocation(ctx context.Context, projectID uuid.UUID, location string) error {
+	updates := map[string]interface{}{
+		"location": location,
+	}
+
+	query := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("id = ?", projectID)
+	// Note: No company filter - projects are cross-company
+	result := query.Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update project location: %w", result.Error)
+	}
+
+	return nil
+}
+
 // GetByCustomerID returns all projects for a specific customer
 func (r *ProjectRepository) GetByCustomerID(ctx context.Context, customerID uuid.UUID) ([]domain.Project, error) {
 	var projects []domain.Project
@@ -364,4 +385,23 @@ func (r *ProjectRepository) GetByProjectNumber(ctx context.Context, projectNumbe
 		return nil, err
 	}
 	return &project, nil
+}
+
+// GetHighestProjectNumber finds the highest project number for a given year
+// Assumes format PROJECT-YYYY-NNN
+func (r *ProjectRepository) GetHighestProjectNumber(ctx context.Context, year int) (string, error) {
+	var projectNumber string
+	prefix := fmt.Sprintf("PROJECT-%d-%%", year)
+
+	err := r.db.WithContext(ctx).
+		Model(&domain.Project{}).
+		Where("project_number LIKE ?", prefix).
+		Order("length(project_number) DESC, project_number DESC").
+		Limit(1).
+		Pluck("project_number", &projectNumber).Error
+
+	if err != nil {
+		return "", err
+	}
+	return projectNumber, nil
 }
