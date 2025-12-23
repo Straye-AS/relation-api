@@ -1525,6 +1525,8 @@ definitions:
         type: string
       offerId:
         type: string
+      offerSupplierId:
+        type: string
       projectId:
         type: string
       size:
@@ -9465,6 +9467,100 @@ paths:
       summary: Win an offer within a project
       tags:
       - Offers
+  /offers/{offerId}/suppliers/{supplierId}/files:
+    get:
+      description: Get all files attached to a specific supplier within an offer
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: offerId
+        required: true
+        type: string
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: supplierId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileDTO'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List offer-supplier files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file and attach it to a specific supplier within an offer
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: offerId
+        required: true
+        type: string
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: supplierId
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Upload file to offer-supplier relationship
+      tags:
+      - Files
   /offers/admin/trigger-dw-sync:
     post:
       description: |-
