@@ -30,14 +30,14 @@ run-dev: dev ## Alias for `make dev`
 api: run ## Alias for `make run`
 
 test: ## Run fast unit tests (no database required)
-	$(GO) test -v -race -cover ./tests/auth ./tests/mapper ./tests/domain
+	$(GO) test -v -race -cover ./tests/auth ./tests/mapper ./tests/domain ./tests/storage
 
 test-all: ## Run all tests including integration tests (uses test database on port 5433)
-	$(GO) test -v -race -cover ./tests/auth ./tests/mapper ./tests/domain
+	$(GO) test -v -race -cover ./tests/auth ./tests/mapper ./tests/domain ./tests/storage
 	DATABASE_PORT=5433 DATABASE_NAME=relation_test $(GO) test -v -p 1 -cover ./tests/repository ./tests/service ./tests/handler ./tests/middleware
 
 test-coverage: ## Run tests with coverage report
-	$(GO) test -v -race -coverprofile=coverage.out ./tests/auth ./tests/mapper ./tests/domain
+	$(GO) test -v -race -coverprofile=coverage.out ./tests/auth ./tests/mapper ./tests/domain ./tests/storage
 	$(GO) tool cover -html=coverage.out -o coverage.html
 
 test-integration: ## Run integration tests (uses test database on port 5433)
