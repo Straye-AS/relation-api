@@ -34,6 +34,7 @@ type ProjectService struct {
 	offerRepo    *repository.OfferRepository
 	customerRepo *repository.CustomerRepository
 	activityRepo *repository.ActivityRepository
+	fileService  *FileService
 	logger       *zap.Logger
 	db           *gorm.DB
 }
@@ -59,6 +60,7 @@ func NewProjectServiceWithDeps(
 	offerRepo *repository.OfferRepository,
 	customerRepo *repository.CustomerRepository,
 	activityRepo *repository.ActivityRepository,
+	fileService *FileService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *ProjectService {
@@ -67,6 +69,7 @@ func NewProjectServiceWithDeps(
 		offerRepo:    offerRepo,
 		customerRepo: customerRepo,
 		activityRepo: activityRepo,
+		fileService:  fileService,
 		logger:       logger,
 		db:           db,
 	}
@@ -339,6 +342,26 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 	projectName := project.Name
 	customerID := project.CustomerID
 	customerName := project.CustomerName
+
+	// Delete files associated with the project
+	// This ensures files are removed from both storage and database
+	if s.fileService != nil {
+		files, err := s.fileService.ListByProject(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to list files for project deletion",
+				zap.String("projectID", id.String()),
+				zap.Error(err))
+		} else {
+			for _, file := range files {
+				if err := s.fileService.Delete(ctx, file.ID); err != nil {
+					s.logger.Warn("failed to delete file during project deletion",
+						zap.String("fileID", file.ID.String()),
+						zap.String("projectID", id.String()),
+						zap.Error(err))
+				}
+			}
+		}
+	}
 
 	if err := s.projectRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)

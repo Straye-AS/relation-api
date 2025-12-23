@@ -167,15 +167,15 @@ func run() error {
 		customerService.SetDataWarehouseClient(&customerDWAdapter{client: dwClient})
 	}
 	contactService := service.NewContactService(contactRepo, customerRepo, activityRepo, log)
-	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, log, db)
-	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, log, db)
+	fileService := service.NewFileService(fileRepo, offerRepo, customerRepo, projectRepo, supplierRepo, activityRepo, fileStorage, log)
+	projectService := service.NewProjectServiceWithDeps(projectRepo, offerRepo, customerRepo, activityRepo, fileService, log, db)
+	offerService := service.NewOfferService(offerRepo, offerItemRepo, customerRepo, projectRepo, budgetItemRepo, fileRepo, activityRepo, userRepo, companyService, numberSequenceService, fileService, log, db)
 	// Inject data warehouse client into offer service for DW sync functionality
 	if dwClient != nil {
 		offerService.SetDataWarehouseClient(dwClient)
 	}
 	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
-	fileService := service.NewFileService(fileRepo, offerRepo, customerRepo, projectRepo, supplierRepo, activityRepo, fileStorage, log)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, supplierRepo, log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)
 	auditLogService := service.NewAuditLogService(auditLogRepo, log)

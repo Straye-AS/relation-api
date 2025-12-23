@@ -6,16 +6,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/http/handler"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/straye-as/relation-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +47,19 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 	projectService := service.NewProjectService(projectRepo, customerRepo, activityRepo, logger)
 	userRepo := repository.NewUserRepository(db)
 
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, logger)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		logger,
+	)
+
 	offerService := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
@@ -55,6 +71,7 @@ func createProjectHandler(t *testing.T, db *gorm.DB) *handler.ProjectHandler {
 		userRepo,
 		companyService,
 		numberSequenceService,
+		fileService,
 		logger,
 		db,
 	)

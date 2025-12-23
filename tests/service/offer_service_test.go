@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -68,6 +70,19 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 	companyService := service.NewCompanyServiceWithRepo(companyRepo, userRepo, log)
 	numberSequenceService := service.NewNumberSequenceService(numberSequenceRepo, log)
 
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, log)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		log,
+	)
+
 	svc := service.NewOfferService(
 		offerRepo,
 		offerItemRepo,
@@ -79,6 +94,7 @@ func setupOfferTestService(t *testing.T, db *gorm.DB) (*service.OfferService, *o
 		userRepo,
 		companyService,
 		numberSequenceService,
+		fileService,
 		log,
 		db,
 	)

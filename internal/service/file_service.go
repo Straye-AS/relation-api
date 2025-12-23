@@ -249,14 +249,18 @@ func (s *FileService) uploadFile(ctx context.Context, file *domain.File, filenam
 // Entity-Specific List Methods
 // ============================================================================
 
-// ListByCustomer returns all files attached to a customer
+// ListByCustomer returns all files attached to a customer, filtered by company access
+// Files from the user's company and "gruppen" are returned; gruppen users see all files
 func (s *FileService) ListByCustomer(ctx context.Context, customerID uuid.UUID) ([]domain.FileDTO, error) {
 	// Verify customer exists
 	if _, err := s.customerRepo.GetByID(ctx, customerID); err != nil {
 		return nil, fmt.Errorf("customer not found: %w", err)
 	}
 
-	files, err := s.fileRepo.ListByCustomer(ctx, customerID)
+	// Get company filter based on user context
+	companyFilter := s.getCompanyFilter(ctx)
+
+	files, err := s.fileRepo.ListByCustomer(ctx, customerID, companyFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list customer files: %w", err)
 	}
@@ -264,14 +268,18 @@ func (s *FileService) ListByCustomer(ctx context.Context, customerID uuid.UUID) 
 	return mapper.ToFileDTOs(files), nil
 }
 
-// ListByProject returns all files attached to a project
+// ListByProject returns all files attached to a project, filtered by company access
+// Files from the user's company and "gruppen" are returned; gruppen users see all files
 func (s *FileService) ListByProject(ctx context.Context, projectID uuid.UUID) ([]domain.FileDTO, error) {
 	// Verify project exists
 	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
 		return nil, fmt.Errorf("project not found: %w", err)
 	}
 
-	files, err := s.fileRepo.ListByProject(ctx, projectID)
+	// Get company filter based on user context
+	companyFilter := s.getCompanyFilter(ctx)
+
+	files, err := s.fileRepo.ListByProject(ctx, projectID, companyFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list project files: %w", err)
 	}
@@ -279,14 +287,18 @@ func (s *FileService) ListByProject(ctx context.Context, projectID uuid.UUID) ([
 	return mapper.ToFileDTOs(files), nil
 }
 
-// ListByOffer returns all files attached to an offer
+// ListByOffer returns all files attached to an offer, filtered by company access
+// Files from the user's company and "gruppen" are returned; gruppen users see all files
 func (s *FileService) ListByOffer(ctx context.Context, offerID uuid.UUID) ([]domain.FileDTO, error) {
 	// Verify offer exists
 	if _, err := s.offerRepo.GetByID(ctx, offerID); err != nil {
 		return nil, fmt.Errorf("offer not found: %w", err)
 	}
 
-	files, err := s.fileRepo.ListByOffer(ctx, offerID)
+	// Get company filter based on user context
+	companyFilter := s.getCompanyFilter(ctx)
+
+	files, err := s.fileRepo.ListByOffer(ctx, offerID, companyFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list offer files: %w", err)
 	}
@@ -294,14 +306,18 @@ func (s *FileService) ListByOffer(ctx context.Context, offerID uuid.UUID) ([]dom
 	return mapper.ToFileDTOs(files), nil
 }
 
-// ListBySupplier returns all files attached to a supplier
+// ListBySupplier returns all files attached to a supplier, filtered by company access
+// Files from the user's company and "gruppen" are returned; gruppen users see all files
 func (s *FileService) ListBySupplier(ctx context.Context, supplierID uuid.UUID) ([]domain.FileDTO, error) {
 	// Verify supplier exists
 	if _, err := s.supplierRepo.GetByID(ctx, supplierID); err != nil {
 		return nil, fmt.Errorf("supplier not found: %w", err)
 	}
 
-	files, err := s.fileRepo.ListBySupplier(ctx, supplierID)
+	// Get company filter based on user context
+	companyFilter := s.getCompanyFilter(ctx)
+
+	files, err := s.fileRepo.ListBySupplier(ctx, supplierID, companyFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list supplier files: %w", err)
 	}
@@ -309,7 +325,8 @@ func (s *FileService) ListBySupplier(ctx context.Context, supplierID uuid.UUID) 
 	return mapper.ToFileDTOs(files), nil
 }
 
-// ListByOfferSupplier returns all files attached to an offer-supplier relationship
+// ListByOfferSupplier returns all files attached to an offer-supplier relationship, filtered by company access
+// Files from the user's company and "gruppen" are returned; gruppen users see all files
 func (s *FileService) ListByOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID) ([]domain.FileDTO, error) {
 	// Verify offer-supplier relationship exists
 	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
@@ -317,7 +334,10 @@ func (s *FileService) ListByOfferSupplier(ctx context.Context, offerID, supplier
 		return nil, fmt.Errorf("offer-supplier relationship not found: %w", err)
 	}
 
-	files, err := s.fileRepo.ListByOfferSupplier(ctx, offerSupplier.ID)
+	// Get company filter based on user context
+	companyFilter := s.getCompanyFilter(ctx)
+
+	files, err := s.fileRepo.ListByOfferSupplier(ctx, offerSupplier.ID, companyFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list offer-supplier files: %w", err)
 	}
@@ -485,4 +505,22 @@ func (s *FileService) logFileActivity(ctx context.Context, file *domain.File, ti
 			zap.String("userID", userCtx.UserID.String()),
 		)
 	}
+}
+
+// getCompanyFilter extracts the company filter from context for file visibility
+// Returns nil for gruppen users (can see all files), or the user's company ID for filtering
+func (s *FileService) getCompanyFilter(ctx context.Context) *domain.CompanyID {
+	userCtx, ok := auth.FromContext(ctx)
+	if !ok {
+		// No user context - system operation, no filtering
+		return nil
+	}
+
+	// Gruppen users and super admins can see all files
+	if userCtx.IsGruppenUser() {
+		return nil
+	}
+
+	// Regular users see only their company's files (plus gruppen files via repository filter)
+	return &userCtx.CompanyID
 }

@@ -27,6 +27,7 @@ type OfferService struct {
 	userRepo         *repository.UserRepository
 	companyService   *CompanyService
 	numberSeqService *NumberSequenceService
+	fileService      *FileService
 	dwClient         *datawarehouse.Client
 	logger           *zap.Logger
 	db               *gorm.DB
@@ -43,6 +44,7 @@ func NewOfferService(
 	userRepo *repository.UserRepository,
 	companyService *CompanyService,
 	numberSeqService *NumberSequenceService,
+	fileService *FileService,
 	logger *zap.Logger,
 	db *gorm.DB,
 ) *OfferService {
@@ -57,6 +59,7 @@ func NewOfferService(
 		userRepo:         userRepo,
 		companyService:   companyService,
 		numberSeqService: numberSeqService,
+		fileService:      fileService,
 		logger:           logger,
 		db:               db,
 	}
@@ -130,6 +133,11 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 	companyID := req.CompanyID
 	if companyID == "" && customer != nil && customer.CompanyID != nil {
 		companyID = *customer.CompanyID
+	}
+	if companyID == "" {
+		if userCtx, ok := auth.FromContext(ctx); ok {
+			companyID = userCtx.CompanyID
+		}
 	}
 	if companyID == "" {
 		companyID = domain.CompanyGruppen // Default fallback
@@ -257,9 +265,11 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 	}
 
 	// Reload with relations
-	offer, err = s.offerRepo.GetByID(ctx, offer.ID)
+	reloadedOffer, err := s.offerRepo.GetByID(ctx, offer.ID)
 	if err != nil {
 		s.logger.Warn("failed to reload offer after create", zap.Error(err))
+	} else {
+		offer = reloadedOffer
 	}
 
 	// Log activity
@@ -508,6 +518,25 @@ func (s *OfferService) Delete(ctx context.Context, id uuid.UUID) error {
 	projectID := offer.ProjectID
 	projectName := offer.ProjectName
 
+	// Delete files associated with the offer
+	// This ensures files are removed from both storage and database
+	// Use nil for company filter since we're deleting ALL files regardless of company
+	files, err := s.fileRepo.ListByOffer(ctx, id, nil)
+	if err != nil {
+		s.logger.Warn("failed to list files for offer deletion",
+			zap.String("offerID", id.String()),
+			zap.Error(err))
+	} else {
+		for _, file := range files {
+			if err := s.fileService.Delete(ctx, file.ID); err != nil {
+				s.logger.Warn("failed to delete file during offer deletion",
+					zap.String("fileID", file.ID.String()),
+					zap.String("offerID", id.String()),
+					zap.Error(err))
+			}
+		}
+	}
+
 	if err := s.offerRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete offer: %w", err)
 	}
@@ -725,19 +754,10 @@ func (s *OfferService) AddItem(ctx context.Context, offerID uuid.UUID, req *doma
 // File Methods
 // ============================================================================
 
-// GetFiles returns all files for an offer
+// GetFiles returns all files for an offer, filtered by company access
+// Delegates to FileService which handles company-based filtering
 func (s *OfferService) GetFiles(ctx context.Context, offerID uuid.UUID) ([]domain.FileDTO, error) {
-	files, err := s.fileRepo.ListByOffer(ctx, offerID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get offer files: %w", err)
-	}
-
-	dtos := make([]domain.FileDTO, len(files))
-	for i, file := range files {
-		dtos[i] = mapper.ToFileDTO(&file)
-	}
-
-	return dtos, nil
+	return s.fileService.ListByOffer(ctx, offerID)
 }
 
 // ============================================================================
@@ -835,10 +855,63 @@ func (s *OfferService) ensureProjectForOffer(ctx context.Context, offer *domain.
 		return nil, ErrUnauthorized
 	}
 
+	// Generate project number if possible
+	var projectNumber string
+	if s.numberSeqService != nil && domain.IsValidCompanyID(string(offer.CompanyID)) {
+		// Proactively sync sequence with DB to avoid collisions
+		year := time.Now().Year()
+		maxNum, err := s.projectRepo.GetHighestProjectNumber(ctx, year)
+		if err == nil && maxNum != "" {
+			var pYear, pSeq int
+			// Parse PROJECT-YYYY-SEQ
+			if _, err := fmt.Sscanf(maxNum, "PROJECT-%d-%d", &pYear, &pSeq); err == nil {
+				// Ensure sequence is at least this high
+				_ = s.numberSeqService.InitializeSequence(ctx, domain.CompanyID("PROJECTS_GLOBAL"), year, pSeq)
+			}
+		}
+
+		// Retry loop to handle race conditions
+		maxRetries := 5
+		for i := 0; i < maxRetries; i++ {
+			var err error
+			projectNumber, err = s.numberSeqService.GenerateProjectNumber(ctx, offer.CompanyID)
+			if err != nil {
+				s.logger.Warn("failed to generate project number for auto-created project",
+					zap.Error(err),
+					zap.String("companyID", string(offer.CompanyID)))
+				return nil, fmt.Errorf("failed to generate project number: %w", err)
+			}
+
+			// Check if this number is already in use (collision handling)
+			exists, err := s.projectRepo.ExistsByProjectNumber(ctx, projectNumber)
+			if err != nil {
+				s.logger.Warn("failed to check project number uniqueness", zap.Error(err))
+				return nil, fmt.Errorf("failed to check project number uniqueness: %w", err)
+			}
+
+			if !exists {
+				// Number is unique/safe to use
+				break
+			}
+
+			// If exists, loop continues to generate next number
+			s.logger.Warn("generated project number already exists, retrying with next sequence",
+				zap.String("duplicateNumber", projectNumber))
+
+			// If we're retrying, it means our proactive sync wasn't enough (race condition or gap fill)
+			// We can try to sync again if needed, but usually just incrementing is enough.
+
+			if i == maxRetries-1 {
+				return nil, fmt.Errorf("failed to generate unique project number after %d attempts", maxRetries)
+			}
+		}
+	}
+
 	// Auto-create project (as a folder/container for offers)
 	// Projects are now simplified - no manager or company fields
 	project := &domain.Project{
 		Name:          fmt.Sprintf("[AUTO] %s", offer.Title),
+		ProjectNumber: projectNumber,
 		CustomerID:    offer.CustomerID, // Already a pointer, use directly
 		CustomerName:  offer.CustomerName,
 		Phase:         domain.ProjectPhaseTilbud,

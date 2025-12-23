@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
+	"github.com/straye-as/relation-api/internal/config"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/repository"
 	"github.com/straye-as/relation-api/internal/service"
+	"github.com/straye-as/relation-api/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -62,11 +64,26 @@ func setupProjectTestService(t *testing.T, db *gorm.DB) (*service.ProjectService
 	customerRepo := repository.NewCustomerRepository(db)
 	budgetItemRepo := repository.NewBudgetItemRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	fileRepo := repository.NewFileRepository(db)
+	supplierRepo := repository.NewSupplierRepository(db)
+	fileStorage, _ := storage.NewStorage(&config.StorageConfig{Mode: "disk", LocalBasePath: os.TempDir()}, log)
+	fileService := service.NewFileService(
+		fileRepo,
+		offerRepo,
+		customerRepo,
+		projectRepo,
+		supplierRepo,
+		activityRepo,
+		fileStorage,
+		log,
+	)
+
 	svc := service.NewProjectServiceWithDeps(
 		projectRepo,
 		offerRepo,
 		customerRepo,
 		activityRepo,
+		fileService,
 		log,
 		db,
 	)
