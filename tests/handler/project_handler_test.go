@@ -287,12 +287,9 @@ func TestProjectHandler_Create(t *testing.T) {
 
 	t.Run("create valid project", func(t *testing.T) {
 		startDate := time.Now()
-		customerID := customer.ID
 		reqBody := domain.CreateProjectRequest{
-			Name:       "New Project",
-			CustomerID: &customerID,
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:      "New Project",
+			StartDate: &startDate,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -310,10 +307,15 @@ func TestProjectHandler_Create(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		assert.NoError(t, err)
 		assert.Equal(t, "New Project", result.Name)
-		assert.NotNil(t, result.CustomerID)
-		assert.Equal(t, customer.ID, *result.CustomerID)
+		// Phase defaults to "tilbud" on creation
+		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
+		// Customer is now inferred from offers, not set on creation
+		assert.Nil(t, result.CustomerID)
 		assert.NotEqual(t, uuid.Nil, result.ID)
 	})
+
+	// Keep customer for cleanup
+	_ = customer
 
 	t.Run("create with invalid body", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader([]byte("invalid json")))
@@ -343,14 +345,14 @@ func TestProjectHandler_Create(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("create with non-existent customer", func(t *testing.T) {
+	t.Run("create with description and dates", func(t *testing.T) {
 		startDate := time.Now()
-		nonExistentID := uuid.New()
+		endDate := startDate.AddDate(0, 3, 0)
 		reqBody := domain.CreateProjectRequest{
-			Name:       "Project Without Customer",
-			CustomerID: &nonExistentID, // Non-existent customer
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:        "Project With Description",
+			Description: "Test description for project",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -361,7 +363,7 @@ func TestProjectHandler_Create(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.Create(rr, req)
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, http.StatusCreated, rr.Code)
 	})
 }
 

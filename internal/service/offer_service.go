@@ -255,9 +255,15 @@ func (s *OfferService) CreateWithProjectResponse(ctx context.Context, req *domai
 		if err := s.offerRepo.LinkToProject(ctx, offer.ID, projectLinkRes.ProjectID); err != nil {
 			s.logger.Warn("failed to link offer to project", zap.Error(err))
 		}
-		// Sync project customer after linking new offer
+		// Sync project customer and location after linking new offer
 		if err := s.syncProjectCustomer(ctx, projectLinkRes.ProjectID); err != nil {
 			s.logger.Warn("failed to sync project customer after offer creation",
+				zap.String("offerID", offer.ID.String()),
+				zap.String("projectID", projectLinkRes.ProjectID.String()),
+				zap.Error(err))
+		}
+		if err := s.syncProjectLocation(ctx, projectLinkRes.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project location after offer creation",
 				zap.String("offerID", offer.ID.String()),
 				zap.String("projectID", projectLinkRes.ProjectID.String()),
 				zap.Error(err))
@@ -490,6 +496,16 @@ func (s *OfferService) Update(ctx context.Context, id uuid.UUID, req *domain.Upd
 		return nil, fmt.Errorf("failed to update offer: %w", err)
 	}
 
+	// Sync project location if offer is linked to a project
+	if offer.ProjectID != nil {
+		if err := s.syncProjectLocation(ctx, *offer.ProjectID); err != nil {
+			s.logger.Warn("failed to sync project location after offer update",
+				zap.String("offerID", id.String()),
+				zap.String("projectID", offer.ProjectID.String()),
+				zap.Error(err))
+		}
+	}
+
 	// Reload with relations
 	offer, err = s.offerRepo.GetByID(ctx, id)
 	if err != nil {
@@ -566,9 +582,15 @@ func (s *OfferService) Delete(ctx context.Context, id uuid.UUID) error {
 				}
 			}
 		} else {
-			// Still has offers - sync project customer
+			// Still has offers - sync project customer and location
 			if err := s.syncProjectCustomer(ctx, *projectID); err != nil {
 				s.logger.Warn("failed to sync project customer after offer deletion",
+					zap.String("offerID", id.String()),
+					zap.String("projectID", projectID.String()),
+					zap.Error(err))
+			}
+			if err := s.syncProjectLocation(ctx, *projectID); err != nil {
+				s.logger.Warn("failed to sync project location after offer deletion",
 					zap.String("offerID", id.String()),
 					zap.String("projectID", projectID.String()),
 					zap.Error(err))
@@ -1068,6 +1090,61 @@ func (s *OfferService) syncProjectCustomer(ctx context.Context, projectID uuid.U
 	// Update the project's customer
 	if err := s.projectRepo.UpdateCustomer(ctx, projectID, customerID, customerName); err != nil {
 		return fmt.Errorf("failed to update project customer: %w", err)
+	}
+
+	return nil
+}
+
+// syncProjectLocation updates the project's location based on its offers' locations.
+// If all offers with a non-empty location have the same location, the project gets that location.
+// If offers have different locations (or no offers with location), the project location is cleared.
+// This should be called whenever:
+//   - An offer is created with a project link
+//   - An offer is linked to a project
+//   - An offer is unlinked from a project
+//   - An offer's location is changed (if it's linked to a project)
+//   - An offer is deleted (if it was linked to a project)
+func (s *OfferService) syncProjectLocation(ctx context.Context, projectID uuid.UUID) error {
+	// Get all offers for this project
+	offers, err := s.offerRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("failed to list offers for project: %w", err)
+	}
+
+	// Collect unique non-empty locations
+	locationSet := make(map[string]bool)
+	for _, offer := range offers {
+		if offer.Location != "" {
+			locationSet[offer.Location] = true
+		}
+	}
+
+	var location string
+
+	// Only set location if exactly one unique location exists across all offers
+	if len(locationSet) == 1 {
+		// Get the single location from the set
+		for loc := range locationSet {
+			location = loc
+			break
+		}
+		s.logger.Debug("syncing project location - all offers have same location",
+			zap.String("projectID", projectID.String()),
+			zap.String("location", location))
+	} else if len(locationSet) > 1 {
+		// Multiple different locations - clear project location
+		s.logger.Info("syncing project location - offers have different locations, clearing project location",
+			zap.String("projectID", projectID.String()),
+			zap.Int("uniqueLocationCount", len(locationSet)))
+	} else {
+		// No offers with location - clear project location
+		s.logger.Debug("syncing project location - no offers with location, clearing project location",
+			zap.String("projectID", projectID.String()))
+	}
+
+	// Update the project's location
+	if err := s.projectRepo.UpdateLocation(ctx, projectID, location); err != nil {
+		return fmt.Errorf("failed to update project location: %w", err)
 	}
 
 	return nil

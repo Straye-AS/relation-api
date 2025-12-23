@@ -719,20 +719,15 @@ type LoseDealRequest struct {
 	Notes  string             `json:"notes" validate:"required,min=10,max=500" example:"Lost to competitor XYZ who offered lower price"`
 }
 
-// CreateProjectRequest is simplified since projects are now containers for offers.
-// Economic tracking has moved to offers.
+// CreateProjectRequest is simplified - projects are containers/folders for offers.
+// Only basic fields are settable on creation. Other fields (phase, location, customer, etc.)
+// are set automatically or inferred from linked offers.
+// Phase defaults to "tilbud". Location is inferred from offers when they share the same location.
 type CreateProjectRequest struct {
-	Name              string       `json:"name" validate:"required,max=200"`
-	ProjectNumber     string       `json:"projectNumber,omitempty" validate:"max=50"`
-	Summary           string       `json:"summary,omitempty"`
-	Description       string       `json:"description,omitempty"`
-	CustomerID        *uuid.UUID   `json:"customerId,omitempty"`                                                                  // Optional - projects can be cross-company
-	Phase             ProjectPhase `json:"phase,omitempty" validate:"omitempty,oneof=tilbud working on_hold completed cancelled"` // Updated phases
-	StartDate         *time.Time   `json:"startDate,omitempty"`
-	EndDate           *time.Time   `json:"endDate,omitempty"`
-	Location          string       `json:"location,omitempty" validate:"max=200"`
-	DealID            *uuid.UUID   `json:"dealId,omitempty"`
-	ExternalReference string       `json:"externalReference,omitempty" validate:"max=100"`
+	Name        string     `json:"name" validate:"required,max=200"`
+	Description string     `json:"description,omitempty"`
+	StartDate   *time.Time `json:"startDate,omitempty"`
+	EndDate     *time.Time `json:"endDate,omitempty"`
 }
 
 // UpdateProjectRequest is simplified since projects are now containers for offers.

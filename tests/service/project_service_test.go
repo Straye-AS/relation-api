@@ -182,40 +182,44 @@ func TestProjectService_Create(t *testing.T) {
 	ctx := createProjectTestContext()
 
 	t.Run("create project successfully", func(t *testing.T) {
+		// Keep customer for other tests that might need it
 		customer := fixtures.createTestCustomer(t, ctx, "Test Customer Create")
+		_ = customer // Customer is now inferred from offers, not set on creation
 
 		startDate := time.Now()
-		customerID := customer.ID
 		req := &domain.CreateProjectRequest{
-			Name:       "Test Project Create",
-			CustomerID: &customerID,
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:        "Test Project Create",
+			Description: "Test description",
+			StartDate:   &startDate,
 		}
 
 		result, err := svc.Create(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "Test Project Create", result.Name)
-		assert.Equal(t, &customer.ID, result.CustomerID)
-		assert.Equal(t, customer.Name, result.CustomerName)
+		assert.Equal(t, "Test description", result.Description)
+		// Customer is now inferred from offers, not set on creation
+		assert.Nil(t, result.CustomerID)
+		// Phase defaults to "tilbud"
 		assert.Equal(t, domain.ProjectPhaseTilbud, result.Phase)
 	})
 
-	t.Run("create fails with non-existent customer", func(t *testing.T) {
+	t.Run("create with all optional fields", func(t *testing.T) {
 		startDate := time.Now()
-		nonExistentID := uuid.New()
+		endDate := startDate.AddDate(0, 6, 0)
 		req := &domain.CreateProjectRequest{
-			Name:       "Test Project Bad Customer",
-			CustomerID: &nonExistentID,
-			Phase:      domain.ProjectPhaseTilbud,
-			StartDate:  &startDate,
+			Name:        "Test Project Full",
+			Description: "Full description",
+			StartDate:   &startDate,
+			EndDate:     &endDate,
 		}
 
 		result, err := svc.Create(ctx, req)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.ErrorIs(t, err, service.ErrCustomerNotFound)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "Test Project Full", result.Name)
+		assert.Equal(t, "Full description", result.Description)
+		assert.NotNil(t, result.EndDate)
 	})
 }
 

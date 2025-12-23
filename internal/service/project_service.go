@@ -76,39 +76,15 @@ func NewProjectServiceWithDeps(
 }
 
 // Create creates a new project with activity logging
-// Projects are now simplified containers for offers - no economics or management fields
+// Projects are simplified containers/folders for offers.
+// Only basic fields (name, description, startDate, endDate) are settable on creation.
+// Phase defaults to "tilbud". Customer, location, etc. are inferred from linked offers.
 func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRequest) (*domain.ProjectDTO, error) {
-	// Verify customer exists and get name for denormalized field (only if CustomerID provided)
-	var customerName string
-	if req.CustomerID != nil {
-		customer, err := s.customerRepo.GetByID(ctx, *req.CustomerID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrCustomerNotFound
-			}
-			return nil, fmt.Errorf("failed to verify customer: %w", err)
-		}
-		customerName = customer.Name
-	}
-
-	// Set default phase if not provided
-	phase := req.Phase
-	if phase == "" {
-		phase = domain.ProjectPhaseTilbud
-	}
-
 	project := &domain.Project{
-		Name:              req.Name,
-		ProjectNumber:     req.ProjectNumber,
-		Summary:           req.Summary,
-		Description:       req.Description,
-		CustomerID:        req.CustomerID,
-		CustomerName:      customerName,
-		Phase:             phase,
-		EndDate:           req.EndDate,
-		Location:          req.Location,
-		DealID:            req.DealID,
-		ExternalReference: req.ExternalReference,
+		Name:        req.Name,
+		Description: req.Description,
+		Phase:       domain.ProjectPhaseTilbud, // Always default to tilbud phase
+		EndDate:     req.EndDate,
 	}
 
 	// Set StartDate if provided
@@ -128,23 +104,14 @@ func (s *ProjectService) Create(ctx context.Context, req *domain.CreateProjectRe
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
-	// Reload with customer relation
+	// Reload project
 	project, err := s.projectRepo.GetByID(ctx, project.ID)
 	if err != nil {
 		s.logger.Warn("failed to reload project after create", zap.Error(err))
 	}
 
-	// Log activity with project number if available
+	// Log activity
 	activityBody := fmt.Sprintf("Prosjektet '%s' ble opprettet", project.Name)
-	if project.CustomerName != "" {
-		activityBody = fmt.Sprintf("Prosjektet '%s' ble opprettet for kunde %s", project.Name, project.CustomerName)
-	}
-	if project.ProjectNumber != "" {
-		activityBody = fmt.Sprintf("Prosjektet '%s' (%s) ble opprettet", project.Name, project.ProjectNumber)
-		if project.CustomerName != "" {
-			activityBody = fmt.Sprintf("Prosjektet '%s' (%s) ble opprettet for kunde %s", project.Name, project.ProjectNumber, project.CustomerName)
-		}
-	}
 	s.logActivity(ctx, project.ID, project.Name, "Prosjekt opprettet", activityBody)
 
 	dto := mapper.ToProjectDTO(project)
