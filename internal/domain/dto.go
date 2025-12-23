@@ -1083,6 +1083,9 @@ type FileDTO struct {
 	ContentType string     `json:"contentType"`
 	Size        int64      `json:"size"`
 	OfferID     *uuid.UUID `json:"offerId,omitempty"`
+	CustomerID  *uuid.UUID `json:"customerId,omitempty"`
+	ProjectID   *uuid.UUID `json:"projectId,omitempty"`
+	SupplierID  *uuid.UUID `json:"supplierId,omitempty"`
 	CreatedAt   string     `json:"createdAt"`
 }
 
