@@ -4,11 +4,12 @@ This guide explains how to integrate file upload functionality into the Straye R
 
 ## Overview
 
-The file upload system allows attaching files to four entity types:
+The file upload system allows attaching files to:
 - **Customers** - Documents, contracts, correspondence
 - **Projects** - Project documents, plans, reports
 - **Offers** - Proposals, quotes, specifications
 - **Suppliers** - Agreements, certifications, invoices
+- **Offer-Supplier** - Supplier quotes/documents specific to an offer
 
 Files are stored in Azure Blob Storage (production) or local filesystem (development).
 
@@ -24,6 +25,7 @@ Each entity type has dedicated upload and list endpoints:
 | Project | `POST /projects/{id}/files` | `GET /projects/{id}/files` |
 | Offer | `POST /offers/{id}/files` | `GET /offers/{id}/files` |
 | Supplier | `POST /suppliers/{id}/files` | `GET /suppliers/{id}/files` |
+| Offer-Supplier | `POST /offers/{offerId}/suppliers/{supplierId}/files` | `GET /offers/{offerId}/suppliers/{supplierId}/files` |
 
 ### Generic File Operations
 
@@ -41,15 +43,16 @@ All file operations return this structure:
 
 ```typescript
 interface FileDTO {
-  id: string;           // UUID
-  filename: string;     // Original filename
-  contentType: string;  // MIME type (e.g., "application/pdf")
-  size: number;         // File size in bytes
-  offerId?: string;     // UUID if attached to offer
-  customerId?: string;  // UUID if attached to customer
-  projectId?: string;   // UUID if attached to project
-  supplierId?: string;  // UUID if attached to supplier
-  createdAt: string;    // ISO 8601 timestamp
+  id: string;              // UUID
+  filename: string;        // Original filename
+  contentType: string;     // MIME type (e.g., "application/pdf")
+  size: number;            // File size in bytes
+  offerId?: string;        // UUID if attached to offer
+  customerId?: string;     // UUID if attached to customer
+  projectId?: string;      // UUID if attached to project
+  supplierId?: string;     // UUID if attached to supplier
+  offerSupplierId?: string; // UUID if attached to offer-supplier relationship
+  createdAt: string;       // ISO 8601 timestamp
 }
 ```
 
@@ -89,6 +92,53 @@ await uploadFile('customers', customerId, file);
 await uploadFile('offers', offerId, file);
 await uploadFile('projects', projectId, file);
 await uploadFile('suppliers', supplierId, file);
+```
+
+### 1b. Upload File to Offer-Supplier (Supplier within an Offer)
+
+```typescript
+// Upload a file specific to a supplier's involvement in an offer
+async function uploadOfferSupplierFile(
+  offerId: string,
+  supplierId: string,
+  file: File
+): Promise<FileDTO> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`/api/offers/${offerId}/suppliers/${supplierId}/files`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Upload failed');
+  }
+
+  return response.json();
+}
+
+// List files for a specific supplier within an offer
+async function listOfferSupplierFiles(
+  offerId: string,
+  supplierId: string
+): Promise<FileDTO[]> {
+  const response = await fetch(`/api/offers/${offerId}/suppliers/${supplierId}/files`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to load files');
+  }
+
+  return response.json();
+}
 ```
 
 ### 2. List Entity Files
@@ -338,6 +388,31 @@ Add file upload/list components to these views:
 | Project Detail | `projects` | Documents section |
 | Offer Detail | `offers` | Attachments section |
 | Supplier Detail | `suppliers` | Documents section |
+| Offer Supplier Section | `offer-supplier` | Within supplier card in offer detail |
+
+### Offer-Supplier Files Use Case
+
+When viewing an offer with suppliers, each supplier card/section should have its own file upload area. These files are specific to that supplier's involvement in THIS offer (e.g., supplier quotes, contracts for this job) - not global supplier documents.
+
+```tsx
+// Example: Supplier section within offer detail page
+function OfferSupplierCard({ offerId, supplier }: { offerId: string; supplier: OfferSupplier }) {
+  return (
+    <div className="supplier-card">
+      <h4>{supplier.name}</h4>
+      <p>Status: {supplier.status}</p>
+
+      {/* Files specific to this supplier for this offer */}
+      <FileList
+        endpoint={`/api/offers/${offerId}/suppliers/${supplier.id}/files`}
+      />
+      <FileUpload
+        endpoint={`/api/offers/${offerId}/suppliers/${supplier.id}/files`}
+      />
+    </div>
+  );
+}
+```
 
 ## Authentication
 
