@@ -924,40 +924,14 @@ definitions:
     type: object
   domain.CreateProjectRequest:
     properties:
-      customerId:
-        description: Optional - projects can be cross-company
-        type: string
-      dealId:
-        type: string
       description:
         type: string
       endDate:
         type: string
-      externalReference:
-        maxLength: 100
-        type: string
-      location:
-        maxLength: 200
-        type: string
       name:
         maxLength: 200
         type: string
-      phase:
-        allOf:
-        - $ref: '#/definitions/domain.ProjectPhase'
-        description: Updated phases
-        enum:
-        - tilbud
-        - working
-        - on_hold
-        - completed
-        - cancelled
-      projectNumber:
-        maxLength: 50
-        type: string
       startDate:
-        type: string
-      summary:
         type: string
     required:
     - name
@@ -1177,6 +1151,9 @@ definitions:
         type: integer
       completedOffers:
         description: Count of offers in completed phase
+        type: integer
+      fileCount:
+        description: Count of files attached to the customer
         type: integer
       totalContacts:
         type: integer
@@ -1513,6 +1490,8 @@ definitions:
     type: object
   domain.FileDTO:
     properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
       contentType:
         type: string
       createdAt:
@@ -2225,6 +2204,9 @@ definitions:
         type: string
       externalReference:
         type: string
+      fileCount:
+        description: Count of files attached to this project
+        type: integer
       id:
         type: string
       location:
@@ -2293,6 +2275,9 @@ definitions:
         type: string
       externalReference:
         type: string
+      fileCount:
+        description: Count of files attached to this project
+        type: integer
       id:
         type: string
       location:
@@ -2467,6 +2452,9 @@ definitions:
         type: string
       email:
         type: string
+      fileCount:
+        description: Count of files attached to this supplier
+        type: integer
       id:
         type: string
       municipality:
@@ -2547,6 +2535,9 @@ definitions:
         type: string
       email:
         type: string
+      fileCount:
+        description: Count of files attached to this supplier
+        type: integer
       id:
         type: string
       municipality:
@@ -5591,7 +5582,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload a file and attach it to a customer
+      description: Upload a file and attach it to a customer. Company is determined
+        from the X-Company-Id header.
       parameters:
       - description: Customer ID
         format: uuid
@@ -5612,7 +5604,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.FileDTO'
         "400":
-          description: Bad Request
+          description: Missing company context or invalid request
           schema:
             $ref: '#/definitions/domain.APIError'
         "404":
@@ -8330,7 +8322,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload a file and attach it to an offer
+      description: Upload a file and attach it to an offer. Company is determined
+        from the X-Company-Id header.
       parameters:
       - description: Offer ID
         format: uuid
@@ -8351,7 +8344,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.FileDTO'
         "400":
-          description: Bad Request
+          description: Missing company context or invalid request
           schema:
             $ref: '#/definitions/domain.APIError'
         "404":
@@ -9513,7 +9506,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload a file and attach it to a specific supplier within an offer
+      description: Upload a file and attach it to a specific supplier within an offer.
+        Company is determined from the X-Company-Id header.
       parameters:
       - description: Offer ID
         format: uuid
@@ -9540,7 +9534,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.FileDTO'
         "400":
-          description: Bad Request
+          description: Missing company context or invalid request
           schema:
             $ref: '#/definitions/domain.APIError'
         "404":
@@ -9712,9 +9706,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new project (simplified container for offers)
+      description: Create a new project (simplified container for offers). Only name,
+        description, startDate, and endDate can be set on creation. Phase defaults
+        to "tilbud". Location and customer are inferred from linked offers.
       parameters:
-      - description: Project data
+      - description: Project data (name required, description/startDate/endDate optional)
         in: body
         name: request
         required: true
@@ -10061,7 +10057,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload a file and attach it to a project
+      description: Upload a file and attach it to a project. Company is determined
+        from the X-Company-Id header.
       parameters:
       - description: Project ID
         format: uuid
@@ -10082,7 +10079,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.FileDTO'
         "400":
-          description: Bad Request
+          description: Missing company context or invalid request
           schema:
             $ref: '#/definitions/domain.APIError'
         "404":
@@ -11082,7 +11079,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload a file and attach it to a supplier
+      description: Upload a file and attach it to a supplier. Company is determined
+        from the X-Company-Id header.
       parameters:
       - description: Supplier ID
         format: uuid
@@ -11103,7 +11101,7 @@ paths:
           schema:
             $ref: '#/definitions/domain.FileDTO'
         "400":
-          description: Bad Request
+          description: Missing company context or invalid request
           schema:
             $ref: '#/definitions/domain.APIError'
         "404":

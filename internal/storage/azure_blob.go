@@ -58,19 +58,12 @@ func (s *AzureBlobStorage) Upload(ctx context.Context, filename string, contentT
 		},
 	}
 
-	resp, err := s.client.UploadStream(ctx, s.containerName, blobName, data, uploadOptions)
+	// Wrap data in counting reader to track size
+	reader := &countingReader{r: data}
+
+	_, err := s.client.UploadStream(ctx, s.containerName, blobName, reader, uploadOptions)
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to upload blob: %w", err)
-	}
-
-	// Get the content length from response headers if available
-	// Note: For stream uploads, we may not have the exact size in the response
-	// The caller typically knows the size from the original file
-	var size int64
-	if resp.ContentMD5 != nil {
-		// Size is typically tracked by the caller for stream uploads
-		// We return 0 here as the actual size should be tracked by the File record
-		size = 0
 	}
 
 	s.logger.Info("File uploaded to Azure Blob Storage",
@@ -78,9 +71,22 @@ func (s *AzureBlobStorage) Upload(ctx context.Context, filename string, contentT
 		zap.String("container", s.containerName),
 		zap.String("contentType", contentType),
 		zap.String("originalFilename", filename),
+		zap.Int64("size", reader.count),
 	)
 
-	return blobName, size, nil
+	return blobName, reader.count, nil
+}
+
+// countingReader wraps an io.Reader and counts the number of bytes read
+type countingReader struct {
+	r     io.Reader
+	count int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.count += int64(n)
+	return n, err
 }
 
 // Download downloads a file from Azure Blob Storage

@@ -3151,7 +3151,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Upload a file and attach it to a customer",
+                "description": "Upload a file and attach it to a customer. Company is determined from the X-Company-Id header.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3187,7 +3187,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Missing company context or invalid request",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -7374,7 +7374,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Upload a file and attach it to an offer",
+                "description": "Upload a file and attach it to an offer. Company is determined from the X-Company-Id header.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -7410,7 +7410,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Missing company context or invalid request",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -9237,7 +9237,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Upload a file and attach it to a specific supplier within an offer",
+                "description": "Upload a file and attach it to a specific supplier within an offer. Company is determined from the X-Company-Id header.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -9281,7 +9281,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Missing company context or invalid request",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -9441,7 +9441,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new project (simplified container for offers)",
+                "description": "Create a new project (simplified container for offers). Only name, description, startDate, and endDate can be set on creation. Phase defaults to \"tilbud\". Location and customer are inferred from linked offers.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9454,7 +9454,7 @@ const docTemplate = `{
                 "summary": "Create project",
                 "parameters": [
                     {
-                        "description": "Project data",
+                        "description": "Project data (name required, description/startDate/endDate optional)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9991,7 +9991,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Upload a file and attach it to a project",
+                "description": "Upload a file and attach it to a project. Company is determined from the X-Company-Id header.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -10027,7 +10027,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Missing company context or invalid request",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -11587,7 +11587,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Upload a file and attach it to a supplier",
+                "description": "Upload a file and attach it to a supplier. Company is determined from the X-Company-Id header.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -11623,7 +11623,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Missing company context or invalid request",
                         "schema": {
                             "$ref": "#/definitions/domain.APIError"
                         }
@@ -13656,54 +13656,17 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
-                "customerId": {
-                    "description": "Optional - projects can be cross-company",
-                    "type": "string"
-                },
-                "dealId": {
-                    "type": "string"
-                },
                 "description": {
                     "type": "string"
                 },
                 "endDate": {
                     "type": "string"
                 },
-                "externalReference": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "location": {
-                    "type": "string",
-                    "maxLength": 200
-                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
                 },
-                "phase": {
-                    "description": "Updated phases",
-                    "enum": [
-                        "tilbud",
-                        "working",
-                        "on_hold",
-                        "completed",
-                        "cancelled"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/domain.ProjectPhase"
-                        }
-                    ]
-                },
-                "projectNumber": {
-                    "type": "string",
-                    "maxLength": 50
-                },
                 "startDate": {
-                    "type": "string"
-                },
-                "summary": {
                     "type": "string"
                 }
             }
@@ -14008,6 +13971,10 @@ const docTemplate = `{
                 },
                 "completedOffers": {
                     "description": "Count of offers in completed phase",
+                    "type": "integer"
+                },
+                "fileCount": {
+                    "description": "Count of files attached to the customer",
                     "type": "integer"
                 },
                 "totalContacts": {
@@ -14487,6 +14454,9 @@ const docTemplate = `{
         "domain.FileDTO": {
             "type": "object",
             "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
                 "contentType": {
                     "type": "string"
                 },
@@ -15504,6 +15474,10 @@ const docTemplate = `{
                 "externalReference": {
                     "type": "string"
                 },
+                "fileCount": {
+                    "description": "Count of files attached to this project",
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -15598,6 +15572,10 @@ const docTemplate = `{
                 },
                 "externalReference": {
                     "type": "string"
+                },
+                "fileCount": {
+                    "description": "Count of files attached to this project",
+                    "type": "integer"
                 },
                 "id": {
                     "type": "string"
@@ -15864,6 +15842,10 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "fileCount": {
+                    "description": "Count of files attached to this supplier",
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -15981,6 +15963,10 @@ const docTemplate = `{
                 },
                 "email": {
                     "type": "string"
+                },
+                "fileCount": {
+                    "description": "Count of files attached to this supplier",
+                    "type": "integer"
                 },
                 "id": {
                     "type": "string"
