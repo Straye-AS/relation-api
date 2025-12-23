@@ -73,11 +73,16 @@ func createFileHandler(t *testing.T, db *gorm.DB, store storage.Storage) *handle
 }
 
 func createFileTestContext() context.Context {
+	return createFileTestContextWithCompany(domain.CompanyGruppen)
+}
+
+func createFileTestContextWithCompany(companyID domain.CompanyID) context.Context {
 	userCtx := &auth.UserContext{
 		UserID:      uuid.New(),
 		DisplayName: "Test User",
 		Email:       "test@example.com",
 		Roles:       []domain.UserRoleType{domain.RoleSuperAdmin},
+		CompanyID:   companyID,
 	}
 	return auth.WithUserContext(context.Background(), userCtx)
 }
@@ -141,29 +146,6 @@ func createMultipartFormFile(t *testing.T, fieldName, filename, content string) 
 	return body, writer.FormDataContentType()
 }
 
-// createMultipartFormFileWithCompany creates a multipart form request with a file and company_id
-func createMultipartFormFileWithCompany(t *testing.T, fieldName, filename, content, companyID string) (*bytes.Buffer, string) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add company_id field first
-	if companyID != "" {
-		err := writer.WriteField("company_id", companyID)
-		require.NoError(t, err)
-	}
-
-	part, err := writer.CreateFormFile(fieldName, filename)
-	require.NoError(t, err)
-
-	_, err = part.Write([]byte(content))
-	require.NoError(t, err)
-
-	err = writer.Close()
-	require.NoError(t, err)
-
-	return body, writer.FormDataContentType()
-}
-
 // ============================================================================
 // Upload Tests
 // ============================================================================
@@ -202,11 +184,13 @@ func TestFileHandler_UploadToCustomer(t *testing.T) {
 		assert.Equal(t, domain.CompanyGruppen, result.CompanyID)
 	})
 
-	t.Run("upload file to customer with explicit company_id", func(t *testing.T) {
-		body, contentType := createMultipartFormFileWithCompany(t, "file", "test-stalbygg.txt", "Stalbygg content", "stalbygg")
+	t.Run("upload file to customer with explicit company_id from context", func(t *testing.T) {
+		// Use stalbygg company context
+		stalbyggCtx := createFileTestContextWithCompany(domain.CompanyStalbygg)
+		body, contentType := createMultipartFormFile(t, "file", "test-stalbygg.txt", "Stalbygg content")
 
 		req := httptest.NewRequest(http.MethodPost, "/customers/"+customer.ID.String()+"/files", body)
-		req = req.WithContext(withFileChiContext(ctx, map[string]string{"id": customer.ID.String()}))
+		req = req.WithContext(withFileChiContext(stalbyggCtx, map[string]string{"id": customer.ID.String()}))
 		req.Header.Set("Content-Type", contentType)
 
 		rr := httptest.NewRecorder()
@@ -218,19 +202,6 @@ func TestFileHandler_UploadToCustomer(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &result)
 		require.NoError(t, err)
 		assert.Equal(t, domain.CompanyStalbygg, result.CompanyID)
-	})
-
-	t.Run("upload with invalid company_id returns 400", func(t *testing.T) {
-		body, contentType := createMultipartFormFileWithCompany(t, "file", "test.txt", "content", "invalid_company")
-
-		req := httptest.NewRequest(http.MethodPost, "/customers/"+customer.ID.String()+"/files", body)
-		req = req.WithContext(withFileChiContext(ctx, map[string]string{"id": customer.ID.String()}))
-		req.Header.Set("Content-Type", contentType)
-
-		rr := httptest.NewRecorder()
-		h.UploadToCustomer(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("upload to non-existent customer returns 404", func(t *testing.T) {
@@ -286,12 +257,13 @@ func TestFileHandler_UploadToProject(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
 	project := createTestProjectForFiles(t, db, customer, "Test Project")
 
-	t.Run("upload file to project successfully with company_id", func(t *testing.T) {
-		// Projects require company_id since they are cross-company
-		body, contentType := createMultipartFormFileWithCompany(t, "file", "project-spec.pdf", "PDF content here", "stalbygg")
+	t.Run("upload file to project successfully with company from context", func(t *testing.T) {
+		// Use stalbygg company context for cross-company project files
+		stalbyggCtx := createFileTestContextWithCompany(domain.CompanyStalbygg)
+		body, contentType := createMultipartFormFile(t, "file", "project-spec.pdf", "PDF content here")
 
 		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/files", body)
-		req = req.WithContext(withFileChiContext(ctx, map[string]string{"id": project.ID.String()}))
+		req = req.WithContext(withFileChiContext(stalbyggCtx, map[string]string{"id": project.ID.String()}))
 		req.Header.Set("Content-Type", contentType)
 
 		rr := httptest.NewRecorder()
@@ -311,7 +283,8 @@ func TestFileHandler_UploadToProject(t *testing.T) {
 		assert.Equal(t, domain.CompanyStalbygg, result.CompanyID)
 	})
 
-	t.Run("upload without company_id returns 400 for projects", func(t *testing.T) {
+	t.Run("upload to project with default gruppen context", func(t *testing.T) {
+		// Default context uses gruppen company
 		body, contentType := createMultipartFormFile(t, "file", "test.txt", "content")
 
 		req := httptest.NewRequest(http.MethodPost, "/projects/"+project.ID.String()+"/files", body)
@@ -321,11 +294,16 @@ func TestFileHandler_UploadToProject(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.UploadToProject(rr, req)
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		var result domain.FileDTO
+		err := json.Unmarshal(rr.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, domain.CompanyGruppen, result.CompanyID)
 	})
 
 	t.Run("upload to non-existent project returns 404", func(t *testing.T) {
-		body, contentType := createMultipartFormFileWithCompany(t, "file", "test.txt", "content", "stalbygg")
+		body, contentType := createMultipartFormFile(t, "file", "test.txt", "content")
 		fakeID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodPost, "/projects/"+fakeID.String()+"/files", body)
@@ -339,7 +317,7 @@ func TestFileHandler_UploadToProject(t *testing.T) {
 	})
 
 	t.Run("upload with invalid project ID returns 400", func(t *testing.T) {
-		body, contentType := createMultipartFormFileWithCompany(t, "file", "test.txt", "content", "stalbygg")
+		body, contentType := createMultipartFormFile(t, "file", "test.txt", "content")
 
 		req := httptest.NewRequest(http.MethodPost, "/projects/not-a-uuid/files", body)
 		req = req.WithContext(withFileChiContext(ctx, map[string]string{"id": "not-a-uuid"}))
@@ -361,11 +339,13 @@ func TestFileHandler_UploadToOffer(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
 	offer := createTestOfferForFiles(t, db, customer)
 
-	t.Run("upload file to offer successfully (inherits company from offer)", func(t *testing.T) {
+	t.Run("upload file to offer successfully (uses company from context)", func(t *testing.T) {
+		// Use stalbygg context to match the offer's company
+		stalbyggCtx := createFileTestContextWithCompany(domain.CompanyStalbygg)
 		body, contentType := createMultipartFormFile(t, "file", "offer-attachment.docx", "Word doc content")
 
 		req := httptest.NewRequest(http.MethodPost, "/offers/"+offer.ID.String()+"/files", body)
-		req = req.WithContext(withFileChiContext(ctx, map[string]string{"id": offer.ID.String()}))
+		req = req.WithContext(withFileChiContext(stalbyggCtx, map[string]string{"id": offer.ID.String()}))
 		req.Header.Set("Content-Type", contentType)
 
 		rr := httptest.NewRecorder()
@@ -382,7 +362,7 @@ func TestFileHandler_UploadToOffer(t *testing.T) {
 		assert.Equal(t, "offer-attachment.docx", result.Filename)
 		assert.NotNil(t, result.OfferID)
 		assert.Equal(t, offer.ID, *result.OfferID)
-		// File should inherit company from offer (stalbygg in this test setup)
+		// File uses company from context (X-Company-Id header)
 		assert.Equal(t, domain.CompanyStalbygg, result.CompanyID)
 	})
 
