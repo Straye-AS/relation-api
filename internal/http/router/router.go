@@ -287,6 +287,10 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/offers", rt.customerHandler.ListOffers)
 				r.Get("/{id}/projects", rt.customerHandler.ListProjects)
 
+				// File endpoints
+				r.Get("/{id}/files", rt.fileHandler.ListCustomerFiles)
+				r.Post("/{id}/files", rt.fileHandler.UploadToCustomer)
+
 				// Individual property update endpoints
 				r.Put("/{id}/status", rt.customerHandler.UpdateStatus)
 				r.Put("/{id}/tier", rt.customerHandler.UpdateTier)
@@ -325,6 +329,10 @@ func (rt *Router) Setup() http.Handler {
 				r.Get("/{id}/activities", rt.projectHandler.GetActivities)
 				r.Get("/{id}/contacts", rt.contactHandler.GetContactsForEntity)
 				r.Get("/{id}/offers", rt.projectHandler.GetProjectOffers) // List offers in project (offer folder model)
+
+				// File endpoints
+				r.Get("/{id}/files", rt.fileHandler.ListProjectFiles)
+				r.Post("/{id}/files", rt.fileHandler.UploadToProject)
 
 				// Individual property update endpoints
 				r.Put("/{id}/name", rt.projectHandler.UpdateName)
@@ -391,7 +399,8 @@ func (rt *Router) Setup() http.Handler {
 				// Sub-resources
 				r.Get("/{id}/items", rt.offerHandler.GetItems)
 				r.Post("/{id}/items", rt.offerHandler.AddItem)
-				r.Get("/{id}/files", rt.offerHandler.GetFiles)
+				r.Get("/{id}/files", rt.fileHandler.ListOfferFiles)
+				r.Post("/{id}/files", rt.fileHandler.UploadToOffer)
 				r.Get("/{id}/activities", rt.offerHandler.GetActivities)
 				r.Get("/{id}/suppliers", rt.offerHandler.GetSuppliers)
 				r.Post("/{id}/suppliers", rt.offerHandler.AddSupplier)
@@ -443,9 +452,10 @@ func (rt *Router) Setup() http.Handler {
 
 			// Files
 			r.Route("/files", func(r chi.Router) {
-				r.Post("/upload", rt.fileHandler.Upload)
+				r.Post("/upload", rt.fileHandler.Upload) // Legacy upload endpoint
 				r.Get("/{id}", rt.fileHandler.GetByID)
 				r.Get("/{id}/download", rt.fileHandler.Download)
+				r.Delete("/{id}", rt.fileHandler.Delete)
 			})
 
 			// Dashboard & Search
@@ -499,6 +509,10 @@ func (rt *Router) Setup() http.Handler {
 
 				// Offers endpoint
 				r.Get("/{id}/offers", rt.supplierHandler.ListOffers)
+
+				// File endpoints
+				r.Get("/{id}/files", rt.fileHandler.ListSupplierFiles)
+				r.Post("/{id}/files", rt.fileHandler.UploadToSupplier)
 
 				// Contact endpoints
 				r.Get("/{id}/contacts", rt.supplierHandler.ListContacts)

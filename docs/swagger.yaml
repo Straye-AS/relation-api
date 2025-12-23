@@ -1517,14 +1517,20 @@ definitions:
         type: string
       createdAt:
         type: string
+      customerId:
+        type: string
       filename:
         type: string
       id:
         type: string
       offerId:
         type: string
+      projectId:
+        type: string
       size:
         type: integer
+      supplierId:
+        type: string
     type: object
   domain.FuzzyCustomerSearchResponse:
     properties:
@@ -5048,6 +5054,88 @@ paths:
       summary: Create customer
       tags:
       - Customers
+  /customers/{customerId}/files:
+    get:
+      description: Get all files attached to a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: customerId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileDTO'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List customer files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file and attach it to a customer
+      parameters:
+      - description: Customer ID
+        format: uuid
+        in: path
+        name: customerId
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Upload file to customer
+      tags:
+      - Files
   /customers/{id}:
     delete:
       consumes:
@@ -6677,9 +6765,43 @@ paths:
       tags:
       - Deals
   /files/{id}:
-    get:
+    delete:
+      description: Delete a file from both storage and database
       parameters:
       - description: File ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete file
+      tags:
+      - Files
+    get:
+      description: Get file metadata by ID
+      parameters:
+      - description: File ID
+        format: uuid
         in: path
         name: id
         required: true
@@ -6691,6 +6813,14 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -6699,8 +6829,10 @@ paths:
       - Files
   /files/{id}/download:
     get:
+      description: Download file content by ID
       parameters:
       - description: File ID
+        format: uuid
         in: path
         name: id
         required: true
@@ -6710,6 +6842,14 @@ paths:
       responses:
         "200":
           description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
@@ -6720,6 +6860,9 @@ paths:
     post:
       consumes:
       - multipart/form-data
+      deprecated: true
+      description: 'Upload a file with optional offer attachment. Deprecated: Use
+        entity-specific upload endpoints instead.'
       parameters:
       - description: File to upload
         in: formData
@@ -6737,10 +6880,22 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
       security:
       - BearerAuth: []
       - ApiKeyAuth: []
-      summary: Upload file
+      summary: Upload file (legacy)
       tags:
       - Files
   /inquiries:
@@ -9293,6 +9448,88 @@ paths:
       summary: Win an offer within a project
       tags:
       - Offers
+  /offers/{offerId}/files:
+    get:
+      description: Get all files attached to an offer
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: offerId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileDTO'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List offer files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file and attach it to an offer
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: offerId
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Upload file to offer
+      tags:
+      - Files
   /offers/admin/trigger-dw-sync:
     post:
       description: |-
@@ -9982,6 +10219,88 @@ paths:
       summary: Reopen a completed or cancelled project
       tags:
       - Projects
+  /projects/{projectId}/files:
+    get:
+      description: Get all files attached to a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileDTO'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List project files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file and attach it to a project
+      parameters:
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Upload file to project
+      tags:
+      - Files
   /search:
     get:
       parameters:
@@ -11068,6 +11387,88 @@ paths:
       summary: Update supplier website
       tags:
       - Suppliers
+  /suppliers/{supplierId}/files:
+    get:
+      description: Get all files attached to a supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: supplierId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileDTO'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List supplier files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file and attach it to a supplier
+      parameters:
+      - description: Supplier ID
+        format: uuid
+        in: path
+        name: supplierId
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.FileDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Upload file to supplier
+      tags:
+      - Files
   /users:
     get:
       description: Returns a list of active users. Super admins and gruppen users
