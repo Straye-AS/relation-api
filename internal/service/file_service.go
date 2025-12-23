@@ -54,7 +54,7 @@ func NewFileService(
 // ============================================================================
 
 // UploadToCustomer uploads a file and attaches it to a customer
-// companyID is optional - if empty, inherits from customer's company or defaults to "gruppen"
+// companyID is always provided from the auth context (X-Company-Id header)
 func (s *FileService) UploadToCustomer(ctx context.Context, customerID uuid.UUID, filename, contentType string, data io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
 	// Verify customer exists
 	customer, err := s.customerRepo.GetByID(ctx, customerID)
@@ -62,20 +62,10 @@ func (s *FileService) UploadToCustomer(ctx context.Context, customerID uuid.UUID
 		return nil, fmt.Errorf("customer not found: %w", err)
 	}
 
-	// Determine company: use provided, then inherit from customer, then default to gruppen
-	effectiveCompanyID := companyID
-	if effectiveCompanyID == "" {
-		if customer.CompanyID != nil {
-			effectiveCompanyID = *customer.CompanyID
-		} else {
-			effectiveCompanyID = domain.CompanyGruppen
-		}
-	}
-
-	// Upload file
+	// Upload file with the provided company
 	file := &domain.File{
 		CustomerID: &customerID,
-		CompanyID:  effectiveCompanyID,
+		CompanyID:  companyID,
 	}
 
 	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "customer", customer.Name)
@@ -87,7 +77,7 @@ func (s *FileService) UploadToCustomer(ctx context.Context, customerID uuid.UUID
 }
 
 // UploadToProject uploads a file and attaches it to a project
-// companyID is required - projects are cross-company and don't have an inherent company
+// companyID is always provided from the auth context (X-Company-Id header)
 func (s *FileService) UploadToProject(ctx context.Context, projectID uuid.UUID, filename, contentType string, data io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
 	// Verify project exists
 	project, err := s.projectRepo.GetByID(ctx, projectID)
@@ -95,12 +85,7 @@ func (s *FileService) UploadToProject(ctx context.Context, projectID uuid.UUID, 
 		return nil, fmt.Errorf("project not found: %w", err)
 	}
 
-	// Company is required for project files since projects are cross-company
-	if companyID == "" {
-		return nil, fmt.Errorf("company_id is required for project file uploads")
-	}
-
-	// Upload file
+	// Upload file with the provided company
 	file := &domain.File{
 		ProjectID: &projectID,
 		CompanyID: companyID,
@@ -115,7 +100,7 @@ func (s *FileService) UploadToProject(ctx context.Context, projectID uuid.UUID, 
 }
 
 // UploadToOffer uploads a file and attaches it to an offer
-// companyID is optional - if empty, inherits from the offer's company
+// companyID is always provided from the auth context (X-Company-Id header)
 func (s *FileService) UploadToOffer(ctx context.Context, offerID uuid.UUID, filename, contentType string, data io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
 	// Verify offer exists
 	offer, err := s.offerRepo.GetByID(ctx, offerID)
@@ -123,16 +108,10 @@ func (s *FileService) UploadToOffer(ctx context.Context, offerID uuid.UUID, file
 		return nil, fmt.Errorf("offer not found: %w", err)
 	}
 
-	// Determine company: use provided or inherit from offer (offers always have a company)
-	effectiveCompanyID := companyID
-	if effectiveCompanyID == "" {
-		effectiveCompanyID = offer.CompanyID
-	}
-
-	// Upload file
+	// Upload file with the provided company
 	file := &domain.File{
 		OfferID:   &offerID,
-		CompanyID: effectiveCompanyID,
+		CompanyID: companyID,
 	}
 
 	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "offer", offer.Title)
@@ -144,7 +123,7 @@ func (s *FileService) UploadToOffer(ctx context.Context, offerID uuid.UUID, file
 }
 
 // UploadToSupplier uploads a file and attaches it to a supplier
-// companyID is optional - if empty, inherits from supplier's company or defaults to "gruppen"
+// companyID is always provided from the auth context (X-Company-Id header)
 func (s *FileService) UploadToSupplier(ctx context.Context, supplierID uuid.UUID, filename, contentType string, data io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
 	// Verify supplier exists
 	supplier, err := s.supplierRepo.GetByID(ctx, supplierID)
@@ -152,20 +131,10 @@ func (s *FileService) UploadToSupplier(ctx context.Context, supplierID uuid.UUID
 		return nil, fmt.Errorf("supplier not found: %w", err)
 	}
 
-	// Determine company: use provided, then inherit from supplier, then default to gruppen
-	effectiveCompanyID := companyID
-	if effectiveCompanyID == "" {
-		if supplier.CompanyID != nil {
-			effectiveCompanyID = *supplier.CompanyID
-		} else {
-			effectiveCompanyID = domain.CompanyGruppen
-		}
-	}
-
-	// Upload file
+	// Upload file with the provided company
 	file := &domain.File{
 		SupplierID: &supplierID,
-		CompanyID:  effectiveCompanyID,
+		CompanyID:  companyID,
 	}
 
 	dto, err := s.uploadFile(ctx, file, filename, contentType, data, "supplier", supplier.Name)
@@ -177,7 +146,7 @@ func (s *FileService) UploadToSupplier(ctx context.Context, supplierID uuid.UUID
 }
 
 // UploadToOfferSupplier uploads a file and attaches it to an offer-supplier relationship
-// companyID is optional - if empty, inherits from the offer's company
+// companyID is always provided from the auth context (X-Company-Id header)
 func (s *FileService) UploadToOfferSupplier(ctx context.Context, offerID, supplierID uuid.UUID, filename, contentType string, data io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error) {
 	// Verify offer-supplier relationship exists
 	offerSupplier, err := s.offerRepo.GetOfferSupplier(ctx, offerID, supplierID)
@@ -185,21 +154,10 @@ func (s *FileService) UploadToOfferSupplier(ctx context.Context, offerID, suppli
 		return nil, fmt.Errorf("offer-supplier relationship not found: %w", err)
 	}
 
-	// Determine company: use provided or inherit from the offer
-	effectiveCompanyID := companyID
-	if effectiveCompanyID == "" {
-		// Get the offer to inherit its company
-		offer, err := s.offerRepo.GetByID(ctx, offerID)
-		if err != nil {
-			return nil, fmt.Errorf("offer not found: %w", err)
-		}
-		effectiveCompanyID = offer.CompanyID
-	}
-
-	// Upload file
+	// Upload file with the provided company
 	file := &domain.File{
 		OfferSupplierID: &offerSupplier.ID,
-		CompanyID:       effectiveCompanyID,
+		CompanyID:       companyID,
 	}
 
 	entityName := fmt.Sprintf("%s - %s", offerSupplier.OfferTitle, offerSupplier.SupplierName)

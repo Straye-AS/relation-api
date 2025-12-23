@@ -17,30 +17,23 @@ Files are stored in Azure Blob Storage (production) or local filesystem (develop
 
 **All files must be associated with a company.** This enables proper multi-tenant filtering and access control.
 
+### How Company is Determined
+
+**The file's company is determined from the `X-Company-Id` header** - the same header used for all API requests to establish company context. This ensures consistency across the application.
+
+- If no company context is provided in the header, the upload will be rejected with a 400 error
+- Use `gruppen` for files that should be visible across all companies
+
 ### Valid Company IDs
 
 | ID | Company |
 |----|---------|
-| `gruppen` | Straye Gruppen (parent company / "all") |
+| `gruppen` | Straye Gruppen (visible to all companies) |
 | `stalbygg` | Stålbygg |
 | `hybridbygg` | Hybridbygg |
 | `industri` | Industri |
 | `tak` | Tak |
 | `montasje` | Montasje |
-
-### Company Inheritance Rules
-
-The API automatically inherits the company from the parent entity when possible:
-
-| Entity Type | Company Behavior |
-|-------------|------------------|
-| **Customer files** | Inherits from customer's company, defaults to `gruppen` |
-| **Offer files** | Inherits from offer's company |
-| **Project files** | ⚠️ **Requires explicit `company_id`** (projects are cross-company) |
-| **Supplier files** | Inherits from supplier's company, defaults to `gruppen` |
-| **Offer-Supplier files** | Inherits from offer's company |
-
-**Important:** For project uploads, you MUST provide `company_id` in the form data.
 
 ## API Endpoints
 
@@ -95,24 +88,20 @@ interface FileDTO {
 type CompanyID = 'gruppen' | 'stalbygg' | 'hybridbygg' | 'industri' | 'tak' | 'montasje';
 
 // Generic upload function for any entity type
+// Company is determined by the X-Company-Id header (set globally in your API client)
 async function uploadFile(
   entityType: 'customers' | 'projects' | 'offers' | 'suppliers',
   entityId: string,
-  file: File,
-  companyId?: CompanyID  // Required for projects, optional for others
+  file: File
 ): Promise<FileDTO> {
   const formData = new FormData();
   formData.append('file', file);
-
-  // Add company_id if provided (required for projects!)
-  if (companyId) {
-    formData.append('company_id', companyId);
-  }
 
   const response = await fetch(`/api/${entityType}/${entityId}/files`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
+      'X-Company-Id': currentCompanyId,  // REQUIRED: determines file's company
       // Note: Do NOT set Content-Type header - browser sets it with boundary
     },
     body: formData,
@@ -126,35 +115,31 @@ async function uploadFile(
   return response.json();
 }
 
-// Usage examples
-await uploadFile('customers', customerId, file);                    // Inherits from customer
-await uploadFile('offers', offerId, file);                          // Inherits from offer
-await uploadFile('projects', projectId, file, 'stalbygg');          // REQUIRED: explicit company
-await uploadFile('suppliers', supplierId, file);                    // Inherits from supplier
-await uploadFile('customers', customerId, file, 'hybridbygg');      // Override inherited company
+// Usage examples - company comes from X-Company-Id header
+await uploadFile('customers', customerId, file);
+await uploadFile('offers', offerId, file);
+await uploadFile('projects', projectId, file);
+await uploadFile('suppliers', supplierId, file);
 ```
 
 ### 1b. Upload File to Offer-Supplier (Supplier within an Offer)
 
 ```typescript
 // Upload a file specific to a supplier's involvement in an offer
+// Company is determined by the X-Company-Id header
 async function uploadOfferSupplierFile(
   offerId: string,
   supplierId: string,
-  file: File,
-  companyId?: CompanyID  // Optional - inherits from offer
+  file: File
 ): Promise<FileDTO> {
   const formData = new FormData();
   formData.append('file', file);
-
-  if (companyId) {
-    formData.append('company_id', companyId);
-  }
 
   const response = await fetch(`/api/offers/${offerId}/suppliers/${supplierId}/files`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
+      'X-Company-Id': currentCompanyId,  // REQUIRED: determines file's company
     },
     body: formData,
   });
@@ -175,6 +160,7 @@ async function listOfferSupplierFiles(
   const response = await fetch(`/api/offers/${offerId}/suppliers/${supplierId}/files`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
+      'X-Company-Id': currentCompanyId,
     },
   });
 
@@ -255,47 +241,30 @@ async function deleteFile(fileId: string): Promise<void> {
 
 ```tsx
 import { useState, useCallback } from 'react';
-
-type CompanyID = 'gruppen' | 'stalbygg' | 'hybridbygg' | 'industri' | 'tak' | 'montasje';
+import { useCompanyContext } from './CompanyContext'; // Your app's company context
 
 interface FileUploadProps {
   entityType: 'customers' | 'projects' | 'offers' | 'suppliers';
   entityId: string;
-  companyId?: CompanyID;           // Required for projects
-  requireCompanySelect?: boolean;  // Show company dropdown
   onUploadComplete?: (file: FileDTO) => void;
 }
-
-const COMPANIES: { id: CompanyID; name: string }[] = [
-  { id: 'gruppen', name: 'Straye Gruppen (All)' },
-  { id: 'stalbygg', name: 'Stålbygg' },
-  { id: 'hybridbygg', name: 'Hybridbygg' },
-  { id: 'industri', name: 'Industri' },
-  { id: 'tak', name: 'Tak' },
-  { id: 'montasje', name: 'Montasje' },
-];
 
 export function FileUpload({
   entityType,
   entityId,
-  companyId: defaultCompanyId,
-  requireCompanySelect = false,
   onUploadComplete
 }: FileUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCompany, setSelectedCompany] = useState<CompanyID | undefined>(defaultCompanyId);
-
-  // Projects always require company selection
-  const showCompanySelect = requireCompanySelect || entityType === 'projects';
+  const { currentCompanyId } = useCompanyContext(); // Get company from app context
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate company for projects
-    if (entityType === 'projects' && !selectedCompany) {
-      setError('Please select a company for project files');
+    // Company context is required
+    if (!currentCompanyId) {
+      setError('Please select a company before uploading files');
       return;
     }
 
@@ -306,15 +275,11 @@ export function FileUpload({
       const formData = new FormData();
       formData.append('file', file);
 
-      // Add company_id if available
-      if (selectedCompany) {
-        formData.append('company_id', selectedCompany);
-      }
-
       const response = await fetch(`/api/${entityType}/${entityId}/files`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getAccessToken()}`,
+          'X-Company-Id': currentCompanyId,  // Company from app context
         },
         body: formData,
       });
@@ -332,29 +297,18 @@ export function FileUpload({
       setUploading(false);
       e.target.value = ''; // Reset input
     }
-  }, [entityType, entityId, selectedCompany, onUploadComplete]);
+  }, [entityType, entityId, currentCompanyId, onUploadComplete]);
 
   return (
     <div className="file-upload">
-      {showCompanySelect && (
-        <select
-          value={selectedCompany || ''}
-          onChange={(e) => setSelectedCompany(e.target.value as CompanyID)}
-          disabled={uploading}
-        >
-          <option value="">Select company...</option>
-          {COMPANIES.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      )}
       <input
         type="file"
         onChange={handleUpload}
-        disabled={uploading || (showCompanySelect && !selectedCompany)}
+        disabled={uploading || !currentCompanyId}
       />
       {uploading && <span>Uploading...</span>}
       {error && <span className="error">{error}</span>}
+      {!currentCompanyId && <span className="warning">Select a company to upload files</span>}
     </div>
   );
 }
@@ -477,20 +431,20 @@ Error response format:
 
 | Error Message | Cause | Solution |
 |---------------|-------|----------|
-| `company_id is required for project files` | Project upload without company | Add `company_id` to form data |
-| `invalid company_id` | Unknown company value | Use valid company ID from list |
+| `company context is required for file uploads` | Missing X-Company-Id header | Set the X-Company-Id header with a valid company ID |
 | `file is required` | No file in form data | Ensure `file` field is populated |
 
 ## Best Practices
 
-1. **Always provide company for projects** - Project uploads require explicit `company_id`
-2. **Show upload progress** - For large files, consider using `XMLHttpRequest` with progress events
-3. **Validate file types** - Check file extensions/MIME types before upload if needed
-4. **Handle errors gracefully** - Display user-friendly error messages
-5. **Confirm deletes** - Always confirm before deleting files
-6. **Refresh lists** - Reload file list after upload/delete operations
-7. **File size display** - Format file sizes in human-readable format (KB, MB)
-8. **Show company badge** - Display the company association in file lists
+1. **Always set X-Company-Id header** - All file uploads require the company header
+2. **Use a global API client** - Configure X-Company-Id once in your HTTP client/interceptor
+3. **Show upload progress** - For large files, consider using `XMLHttpRequest` with progress events
+4. **Validate file types** - Check file extensions/MIME types before upload if needed
+5. **Handle errors gracefully** - Display user-friendly error messages
+6. **Confirm deletes** - Always confirm before deleting files
+7. **Refresh lists** - Reload file list after upload/delete operations
+8. **File size display** - Format file sizes in human-readable format (KB, MB)
+9. **Show company badge** - Display the company association in file lists
 
 ## Integration Points
 
@@ -498,11 +452,11 @@ Add file upload/list components to these views:
 
 | View | Entity Type | Company Handling |
 |------|-------------|------------------|
-| Customer Detail | `customers` | Inherits from customer |
-| Project Detail | `projects` | **Show company selector** |
-| Offer Detail | `offers` | Inherits from offer |
-| Supplier Detail | `suppliers` | Inherits from supplier |
-| Offer Supplier Section | `offer-supplier` | Inherits from offer |
+| Customer Detail | `customers` | From X-Company-Id header |
+| Project Detail | `projects` | From X-Company-Id header |
+| Offer Detail | `offers` | From X-Company-Id header |
+| Supplier Detail | `suppliers` | From X-Company-Id header |
+| Offer Supplier Section | `offer-supplier` | From X-Company-Id header |
 
 ### Offer-Supplier Files Use Case
 
@@ -517,7 +471,7 @@ function OfferSupplierCard({ offerId, supplier }: { offerId: string; supplier: O
       <p>Status: {supplier.status}</p>
 
       {/* Files specific to this supplier for this offer */}
-      {/* Company is inherited from the offer automatically */}
+      {/* Company comes from X-Company-Id header (set in your API client) */}
       <FileList
         endpoint={`/api/offers/${offerId}/suppliers/${supplier.id}/files`}
       />

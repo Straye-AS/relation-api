@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/straye-as/relation-api/internal/auth"
 	"github.com/straye-as/relation-api/internal/domain"
 	"github.com/straye-as/relation-api/internal/service"
 	"go.uber.org/zap"
@@ -33,15 +34,14 @@ func NewFileHandler(fileService *service.FileService, maxUploadMB int64, logger 
 
 // UploadToCustomer godoc
 // @Summary Upload file to customer
-// @Description Upload a file and attach it to a customer
+// @Description Upload a file and attach it to a customer. Company is determined from the X-Company-Id header.
 // @Tags Files
 // @Accept multipart/form-data
 // @Produce json
 // @Param id path string true "Customer ID" format(uuid)
 // @Param file formData file true "File to upload"
-// @Param company_id formData string false "Company ID (optional, inherits from customer or defaults to 'gruppen')"
 // @Success 201 {object} domain.FileDTO
-// @Failure 400 {object} domain.APIError
+// @Failure 400 {object} domain.APIError "Missing company context or invalid request"
 // @Failure 404 {object} domain.APIError
 // @Failure 413 {object} domain.APIError
 // @Failure 500 {object} domain.APIError
@@ -68,15 +68,14 @@ func (h *FileHandler) UploadToCustomer(w http.ResponseWriter, r *http.Request) {
 
 // UploadToProject godoc
 // @Summary Upload file to project
-// @Description Upload a file and attach it to a project. Company ID is required since projects are cross-company.
+// @Description Upload a file and attach it to a project. Company is determined from the X-Company-Id header.
 // @Tags Files
 // @Accept multipart/form-data
 // @Produce json
 // @Param id path string true "Project ID" format(uuid)
 // @Param file formData file true "File to upload"
-// @Param company_id formData string true "Company ID (required for projects)"
 // @Success 201 {object} domain.FileDTO
-// @Failure 400 {object} domain.APIError
+// @Failure 400 {object} domain.APIError "Missing company context or invalid request"
 // @Failure 404 {object} domain.APIError
 // @Failure 413 {object} domain.APIError
 // @Failure 500 {object} domain.APIError
@@ -103,15 +102,14 @@ func (h *FileHandler) UploadToProject(w http.ResponseWriter, r *http.Request) {
 
 // UploadToOffer godoc
 // @Summary Upload file to offer
-// @Description Upload a file and attach it to an offer
+// @Description Upload a file and attach it to an offer. Company is determined from the X-Company-Id header.
 // @Tags Files
 // @Accept multipart/form-data
 // @Produce json
 // @Param id path string true "Offer ID" format(uuid)
 // @Param file formData file true "File to upload"
-// @Param company_id formData string false "Company ID (optional, inherits from offer)"
 // @Success 201 {object} domain.FileDTO
-// @Failure 400 {object} domain.APIError
+// @Failure 400 {object} domain.APIError "Missing company context or invalid request"
 // @Failure 404 {object} domain.APIError
 // @Failure 413 {object} domain.APIError
 // @Failure 500 {object} domain.APIError
@@ -138,15 +136,14 @@ func (h *FileHandler) UploadToOffer(w http.ResponseWriter, r *http.Request) {
 
 // UploadToSupplier godoc
 // @Summary Upload file to supplier
-// @Description Upload a file and attach it to a supplier
+// @Description Upload a file and attach it to a supplier. Company is determined from the X-Company-Id header.
 // @Tags Files
 // @Accept multipart/form-data
 // @Produce json
 // @Param id path string true "Supplier ID" format(uuid)
 // @Param file formData file true "File to upload"
-// @Param company_id formData string false "Company ID (optional, inherits from supplier or defaults to 'gruppen')"
 // @Success 201 {object} domain.FileDTO
-// @Failure 400 {object} domain.APIError
+// @Failure 400 {object} domain.APIError "Missing company context or invalid request"
 // @Failure 404 {object} domain.APIError
 // @Failure 413 {object} domain.APIError
 // @Failure 500 {object} domain.APIError
@@ -297,16 +294,15 @@ func (h *FileHandler) ListSupplierFiles(w http.ResponseWriter, r *http.Request) 
 
 // UploadToOfferSupplier godoc
 // @Summary Upload file to offer-supplier relationship
-// @Description Upload a file and attach it to a specific supplier within an offer
+// @Description Upload a file and attach it to a specific supplier within an offer. Company is determined from the X-Company-Id header.
 // @Tags Files
 // @Accept multipart/form-data
 // @Produce json
 // @Param offerId path string true "Offer ID" format(uuid)
 // @Param supplierId path string true "Supplier ID" format(uuid)
 // @Param file formData file true "File to upload"
-// @Param company_id formData string false "Company ID (optional, inherits from offer)"
 // @Success 201 {object} domain.FileDTO
-// @Failure 400 {object} domain.APIError
+// @Failure 400 {object} domain.APIError "Missing company context or invalid request"
 // @Failure 404 {object} domain.APIError
 // @Failure 413 {object} domain.APIError
 // @Failure 500 {object} domain.APIError
@@ -482,21 +478,24 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Helper Methods
 // ============================================================================
 
-// handleFileUploadWithCompany is a helper that handles file upload logic with company_id support
+// handleFileUploadWithCompany is a helper that handles file upload logic with company from auth context
 func (h *FileHandler) handleFileUploadWithCompany(r *http.Request, uploadFn func(filename, contentType string, file io.Reader, companyID domain.CompanyID) (*domain.FileDTO, error)) (*domain.FileDTO, error) {
+	// Get company from auth context (set via X-Company-Id header)
+	userCtx, ok := auth.FromContext(r.Context())
+	if !ok {
+		return nil, fmt.Errorf("company context is required for file uploads")
+	}
+
+	companyID := userCtx.CompanyID
+	if companyID == "" {
+		return nil, fmt.Errorf("company context is required for file uploads")
+	}
+
 	// Limit request size
 	r.Body = http.MaxBytesReader(nil, r.Body, h.maxUploadMB*1024*1024)
 
 	if err := r.ParseMultipartForm(h.maxUploadMB * 1024 * 1024); err != nil {
 		return nil, fmt.Errorf("file too large: maximum size is %dMB", h.maxUploadMB)
-	}
-
-	// Extract company_id from form data (optional for most entities)
-	companyID := domain.CompanyID(r.FormValue("company_id"))
-
-	// Validate company_id if provided
-	if companyID != "" && !domain.IsValidCompanyID(string(companyID)) {
-		return nil, fmt.Errorf("invalid company_id: must be one of: gruppen, stalbygg, hybridbygg, industri, tak, montasje")
 	}
 
 	file, header, err := r.FormFile("file")
@@ -529,14 +528,8 @@ func (h *FileHandler) handleUploadError(w http.ResponseWriter, err error, entity
 		return
 	}
 
-	// Check for invalid company_id
-	if strings.Contains(errMsg, "invalid company_id") {
-		respondWithError(w, http.StatusBadRequest, errMsg)
-		return
-	}
-
-	// Check for company_id required
-	if strings.Contains(errMsg, "company_id is required") {
+	// Check for company context required
+	if strings.Contains(errMsg, "company context is required") {
 		respondWithError(w, http.StatusBadRequest, errMsg)
 		return
 	}
