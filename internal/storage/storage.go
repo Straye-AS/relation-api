@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/config"
+	"go.uber.org/zap"
 )
 
 // Storage defines the interface for file storage operations
@@ -18,14 +19,18 @@ type Storage interface {
 	Delete(ctx context.Context, storagePath string) error
 }
 
-// NewStorage creates a new storage instance based on configuration
-func NewStorage(cfg *config.StorageConfig) (Storage, error) {
+// NewStorage creates a new storage instance based on configuration.
+// For local mode, files are stored on the local filesystem.
+// For cloud/azure mode, files are stored in Azure Blob Storage.
+func NewStorage(cfg *config.StorageConfig, logger *zap.Logger) (Storage, error) {
 	switch cfg.Mode {
 	case "local":
 		return NewLocalStorage(cfg.LocalBasePath)
-	case "cloud":
-		// Could implement Azure Blob Storage or S3 here
-		return nil, fmt.Errorf("cloud storage not yet implemented")
+	case "cloud", "azure":
+		if cfg.CloudConnectionString == "" {
+			return nil, fmt.Errorf("cloud connection string required for azure storage")
+		}
+		return NewAzureBlobStorage(cfg.CloudConnectionString, cfg.CloudContainer, logger)
 	default:
 		return nil, fmt.Errorf("unsupported storage mode: %s", cfg.Mode)
 	}

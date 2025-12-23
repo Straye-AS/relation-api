@@ -105,7 +105,7 @@ func run() error {
 	}
 
 	// Initialize storage
-	fileStorage, err := storage.NewStorage(&cfg.Storage)
+	fileStorage, err := storage.NewStorage(&cfg.Storage, log)
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
