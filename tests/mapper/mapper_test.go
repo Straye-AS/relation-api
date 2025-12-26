@@ -722,3 +722,32 @@ func TestToOfferDTO_NoWarningWhenDWTotalFixedPriceIsZero(t *testing.T) {
 	// No warnings - DW hasn't been synced yet
 	assert.Nil(t, dto.Warnings)
 }
+
+func TestToOfferDTO_WarningWhenSyncedButMissingFixedPrice(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:             "Order Synced But Missing Fixed Price",
+		CustomerID:        &customerID,
+		CustomerName:      "Test Customer",
+		CompanyID:         domain.CompanyStalbygg,
+		Phase:             domain.OfferPhaseOrder, // Order phase
+		Value:             100000,                 // Offer value
+		DWTotalFixedPrice: 0,                      // No fixed price entered
+		DWLastSyncedAt:    &now,                   // Has been synced
+		Status:            domain.OfferStatusActive,
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	// Warning should be present - synced but missing fixed price
+	assert.NotNil(t, dto.Warnings)
+	assert.Len(t, dto.Warnings, 1)
+	assert.Contains(t, dto.Warnings, domain.OfferWarningMissingDWTotalFixedPrice)
+}

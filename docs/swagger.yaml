@@ -1846,11 +1846,12 @@ definitions:
       warnings:
         description: |-
           Validation warnings - computed at DTO mapping time
-          Possible values: value.not.equals.dwTotalFixedPrice
+          Possible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice
         items:
           $ref: '#/definitions/domain.OfferWarning'
           enum:
           - value.not.equals.dwTotalFixedPrice
+          - missing.dwTotalFixedPrice
         type: array
     type: object
   domain.OfferDetailDTO:
@@ -2000,11 +2001,12 @@ definitions:
       warnings:
         description: |-
           Validation warnings - computed at DTO mapping time
-          Possible values: value.not.equals.dwTotalFixedPrice
+          Possible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice
         items:
           $ref: '#/definitions/domain.OfferWarning'
           enum:
           - value.not.equals.dwTotalFixedPrice
+          - missing.dwTotalFixedPrice
         type: array
     type: object
   domain.OfferExternalSyncResponse:
@@ -2177,9 +2179,11 @@ definitions:
   domain.OfferWarning:
     enum:
     - value.not.equals.dwTotalFixedPrice
+    - missing.dwTotalFixedPrice
     type: string
     x-enum-varnames:
     - OfferWarningValueNotEqualsDWTotalFixedPrice
+    - OfferWarningMissingDWTotalFixedPrice
   domain.OfferWithItemsDTO:
     properties:
       companyId:

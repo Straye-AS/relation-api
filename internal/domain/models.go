@@ -530,6 +530,11 @@ const (
 	// does not match the DWTotalFixedPrice (contract value) from the data warehouse.
 	// This warning is only applicable when the offer is in the "order" phase.
 	OfferWarningValueNotEqualsDWTotalFixedPrice OfferWarning = "value.not.equals.dwTotalFixedPrice"
+
+	// OfferWarningMissingDWTotalFixedPrice indicates that the offer has been synced
+	// from the data warehouse but DWTotalFixedPrice is 0, meaning the project leader
+	// has not entered the contract value in the ERP system.
+	OfferWarningMissingDWTotalFixedPrice OfferWarning = "missing.dwTotalFixedPrice"
 )
 
 // Offer represents a sales proposal and, when in order phase, the execution of work

@@ -15139,11 +15139,12 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "warnings": {
-                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalFixedPrice",
+                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice",
                     "type": "array",
                     "items": {
                         "enum": [
-                            "value.not.equals.dwTotalFixedPrice"
+                            "value.not.equals.dwTotalFixedPrice",
+                            "missing.dwTotalFixedPrice"
                         ],
                         "$ref": "#/definitions/domain.OfferWarning"
                     }
@@ -15352,11 +15353,12 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "warnings": {
-                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalFixedPrice",
+                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice",
                     "type": "array",
                     "items": {
                         "enum": [
-                            "value.not.equals.dwTotalFixedPrice"
+                            "value.not.equals.dwTotalFixedPrice",
+                            "missing.dwTotalFixedPrice"
                         ],
                         "$ref": "#/definitions/domain.OfferWarning"
                     }
@@ -15599,10 +15601,12 @@ const docTemplate = `{
         "domain.OfferWarning": {
             "type": "string",
             "enum": [
-                "value.not.equals.dwTotalFixedPrice"
+                "value.not.equals.dwTotalFixedPrice",
+                "missing.dwTotalFixedPrice"
             ],
             "x-enum-varnames": [
-                "OfferWarningValueNotEqualsDWTotalFixedPrice"
+                "OfferWarningValueNotEqualsDWTotalFixedPrice",
+                "OfferWarningMissingDWTotalFixedPrice"
             ]
         },
         "domain.OfferWithItemsDTO": {

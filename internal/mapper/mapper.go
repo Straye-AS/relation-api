@@ -342,6 +342,12 @@ func computeOfferWarnings(offer *domain.Offer) []domain.OfferWarning {
 
 	var warnings []domain.OfferWarning
 
+	// Check if offer has been synced but DWTotalFixedPrice is still 0
+	// This means the project leader hasn't entered the contract value in the ERP
+	if offer.DWLastSyncedAt != nil && offer.DWTotalFixedPrice == 0 {
+		warnings = append(warnings, domain.OfferWarningMissingDWTotalFixedPrice)
+	}
+
 	// Check if Value differs from DWTotalFixedPrice (contract value from assignments)
 	// Only add warning if DWTotalFixedPrice has been synced (non-zero) and differs from Value
 	if offer.DWTotalFixedPrice != 0 && offer.Value != offer.DWTotalFixedPrice {
