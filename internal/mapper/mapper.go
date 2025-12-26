@@ -269,6 +269,9 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		teamMembers = []string(offer.TeamMembers)
 	}
 
+	// Compute warnings for data discrepancies
+	warnings := computeOfferWarnings(offer)
+
 	return domain.OfferDTO{
 		ID:                    offer.ID,
 		Title:                 offer.Title,
@@ -318,11 +321,45 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		// Data Warehouse synced fields
 		DWTotalIncome:   offer.DWTotalIncome,
 		DWMaterialCosts: offer.DWMaterialCosts,
-		DWEmployeeCosts: offer.DWEmployeeCosts,
-		DWOtherCosts:    offer.DWOtherCosts,
-		DWNetResult:     offer.DWNetResult,
-		DWLastSyncedAt:  formatTimePointer(offer.DWLastSyncedAt),
+		DWEmployeeCosts:   offer.DWEmployeeCosts,
+		DWOtherCosts:      offer.DWOtherCosts,
+		DWNetResult:       offer.DWNetResult,
+		DWTotalFixedPrice: offer.DWTotalFixedPrice,
+		DWLastSyncedAt:    formatTimePointer(offer.DWLastSyncedAt),
+		// Validation warnings
+		Warnings: warnings,
 	}
+}
+
+// computeOfferWarnings computes validation warnings for an offer.
+// Warnings are only computed for offers in the "order" phase.
+// Returns nil if no warnings are applicable.
+func computeOfferWarnings(offer *domain.Offer) []domain.OfferWarning {
+	// Only check for warnings in order phase
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil
+	}
+
+	var warnings []domain.OfferWarning
+
+	// Check if offer has been synced but DWTotalFixedPrice is still 0
+	// This means the project leader hasn't entered the contract value in the ERP
+	if offer.DWLastSyncedAt != nil && offer.DWTotalFixedPrice == 0 {
+		warnings = append(warnings, domain.OfferWarningMissingDWTotalFixedPrice)
+	}
+
+	// Check if Value differs from DWTotalFixedPrice (contract value from assignments)
+	// Only add warning if DWTotalFixedPrice has been synced (non-zero) and differs from Value
+	if offer.DWTotalFixedPrice != 0 && offer.Value != offer.DWTotalFixedPrice {
+		warnings = append(warnings, domain.OfferWarningValueNotEqualsDWTotalFixedPrice)
+	}
+
+	// Return nil instead of empty slice for cleaner JSON output
+	if len(warnings) == 0 {
+		return nil
+	}
+
+	return warnings
 }
 
 // ToOfferItemDTO converts OfferItem to OfferItemDTO
@@ -908,4 +945,32 @@ func SupplierToWithDetailsDTOWithFileCount(supplier *domain.Supplier, stats *Sup
 	}
 
 	return dto
+}
+
+// AssignmentToDTO converts Assignment to AssignmentDTO
+func AssignmentToDTO(assignment *domain.Assignment) domain.AssignmentDTO {
+	return domain.AssignmentDTO{
+		ID:               assignment.ID,
+		DWAssignmentID:   assignment.DWAssignmentID,
+		DWProjectID:      assignment.DWProjectID,
+		OfferID:          assignment.OfferID,
+		CompanyID:        assignment.CompanyID,
+		AssignmentNumber: assignment.AssignmentNumber,
+		Description:      assignment.Description,
+		FixedPriceAmount: assignment.FixedPriceAmount,
+		StatusID:         assignment.StatusID,
+		ProgressID:       assignment.ProgressID,
+		DWSyncedAt:       assignment.DWSyncedAt.UTC().Format(time.RFC3339),
+		CreatedAt:        assignment.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:        assignment.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// AssignmentsToDTOs converts a slice of Assignments to AssignmentDTOs
+func AssignmentsToDTOs(assignments []domain.Assignment) []domain.AssignmentDTO {
+	dtos := make([]domain.AssignmentDTO, len(assignments))
+	for i := range assignments {
+		dtos[i] = AssignmentToDTO(&assignments[i])
+	}
+	return dtos
 }

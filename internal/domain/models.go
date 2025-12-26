@@ -521,6 +521,22 @@ const (
 	OfferStatusArchived OfferStatus = "archived"
 )
 
+// OfferWarning represents a warning code for offer data discrepancies
+// Warning codes are string-based for extensibility
+type OfferWarning string
+
+const (
+	// OfferWarningValueNotEqualsDWTotalFixedPrice indicates that the offer's Value
+	// does not match the DWTotalFixedPrice (contract value) from the data warehouse.
+	// This warning is only applicable when the offer is in the "order" phase.
+	OfferWarningValueNotEqualsDWTotalFixedPrice OfferWarning = "value.not.equals.dwTotalFixedPrice"
+
+	// OfferWarningMissingDWTotalFixedPrice indicates that the offer has been synced
+	// from the data warehouse but DWTotalFixedPrice is 0, meaning the project leader
+	// has not entered the contract value in the ERP system.
+	OfferWarningMissingDWTotalFixedPrice OfferWarning = "missing.dwTotalFixedPrice"
+)
+
 // Offer represents a sales proposal and, when in order phase, the execution of work
 type Offer struct {
 	BaseModel
@@ -570,9 +586,10 @@ type Offer struct {
 	DWTotalIncome   float64    `gorm:"column:dw_total_income;default:0"`   // Income from DW (accounts 3000-3999)
 	DWMaterialCosts float64    `gorm:"column:dw_material_costs;default:0"` // Material costs (accounts 4000-4999)
 	DWEmployeeCosts float64    `gorm:"column:dw_employee_costs;default:0"` // Employee costs (accounts 5000-5999)
-	DWOtherCosts    float64    `gorm:"column:dw_other_costs;default:0"`    // Other costs (accounts >= 6000)
-	DWNetResult     float64    `gorm:"column:dw_net_result;default:0"`     // Net result (income - costs)
-	DWLastSyncedAt  *time.Time `gorm:"column:dw_last_synced_at"`           // Last successful sync timestamp
+	DWOtherCosts       float64    `gorm:"column:dw_other_costs;default:0"`       // Other costs (accounts >= 6000)
+	DWNetResult        float64    `gorm:"column:dw_net_result;default:0"`        // Net result (income - costs)
+	DWTotalFixedPrice  float64    `gorm:"column:dw_total_fixed_price;default:0"` // Sum of FixedPriceAmount from synced assignments
+	DWLastSyncedAt     *time.Time `gorm:"column:dw_last_synced_at"`              // Last successful sync timestamp
 	// Relations
 	Items []OfferItem `gorm:"foreignKey:OfferID;constraint:OnDelete:CASCADE"`
 	Files []File      `gorm:"foreignKey:OfferID"`
@@ -1177,4 +1194,47 @@ type OfferSupplier struct {
 // TableName overrides the default table name for OfferSupplier
 func (OfferSupplier) TableName() string {
 	return "offer_suppliers"
+}
+
+// Assignment represents an ERP work order synced from the datawarehouse.
+// This is a read-only table populated by sync operations.
+// Assignments belong to ERP projects which are matched to offers via external_reference.
+type Assignment struct {
+	ID uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+
+	// Datawarehouse references
+	DWAssignmentID int64 `gorm:"column:dw_assignment_id;not null"`          // AssignmentId from DW
+	DWProjectID    int64 `gorm:"column:dw_project_id;not null"`             // ProjectId from DW (internal reference)
+
+	// Link to local offer (matched via external_reference = project Code)
+	OfferID   *uuid.UUID `gorm:"type:uuid;column:offer_id;index"`
+	Offer     *Offer     `gorm:"foreignKey:OfferID"`
+	CompanyID CompanyID  `gorm:"type:varchar(50);column:company_id;not null;index"`
+	Company   *Company   `gorm:"foreignKey:CompanyID"`
+
+	// Core assignment fields
+	AssignmentNumber string `gorm:"type:varchar(50);not null;index"` // e.g., "2406200"
+	Description      string `gorm:"type:text"`
+
+	// Financial field (just FixedPriceAmount for now, extensible via DWRawData)
+	FixedPriceAmount float64 `gorm:"type:decimal(15,2);default:0;column:fixed_price_amount"`
+
+	// Status tracking (enum IDs from DW)
+	StatusID   *int `gorm:"column:status_id"`   // Enum_AssignmentStatusId
+	ProgressID *int `gorm:"column:progress_id"` // Enum_AssignmentProgressId
+
+	// Extensibility: store full DW row as JSONB for future use without migrations
+	DWRawData string `gorm:"type:jsonb;column:dw_raw_data"`
+
+	// Sync metadata
+	DWSyncedAt time.Time `gorm:"column:dw_synced_at;not null;default:CURRENT_TIMESTAMP"`
+
+	// Standard timestamps
+	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+// TableName returns the table name for Assignment
+func (Assignment) TableName() string {
+	return "assignments"
 }

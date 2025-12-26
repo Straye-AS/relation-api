@@ -16,16 +16,18 @@ import (
 )
 
 type OfferHandler struct {
-	offerService *service.OfferService
-	dwClient     *datawarehouse.Client
-	logger       *zap.Logger
+	offerService      *service.OfferService
+	assignmentService *service.AssignmentService
+	dwClient          *datawarehouse.Client
+	logger            *zap.Logger
 }
 
-func NewOfferHandler(offerService *service.OfferService, dwClient *datawarehouse.Client, logger *zap.Logger) *OfferHandler {
+func NewOfferHandler(offerService *service.OfferService, assignmentService *service.AssignmentService, dwClient *datawarehouse.Client, logger *zap.Logger) *OfferHandler {
 	return &OfferHandler{
-		offerService: offerService,
-		dwClient:     dwClient,
-		logger:       logger,
+		offerService:      offerService,
+		assignmentService: assignmentService,
+		dwClient:          dwClient,
+		logger:            logger,
 	}
 }
 

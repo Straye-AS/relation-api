@@ -232,6 +232,91 @@ definitions:
     required:
     - phase
     type: object
+  domain.AssignmentDTO:
+    properties:
+      assignmentNumber:
+        description: e.g., "2406200"
+        type: string
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      createdAt:
+        description: ISO 8601
+        type: string
+      description:
+        type: string
+      dwAssignmentId:
+        description: Original ID from datawarehouse
+        type: integer
+      dwProjectId:
+        description: Project ID from datawarehouse
+        type: integer
+      dwSyncedAt:
+        description: ISO 8601
+        type: string
+      fixedPriceAmount:
+        description: Primary financial field
+        type: number
+      id:
+        type: string
+      offerId:
+        type: string
+      progressId:
+        type: integer
+      statusId:
+        type: integer
+      updatedAt:
+        description: ISO 8601
+        type: string
+    type: object
+  domain.AssignmentSummaryDTO:
+    properties:
+      assignmentCount:
+        description: Number of assignments
+        type: integer
+      difference:
+        description: offerValue - totalFixedPriceAmount
+        type: number
+      differencePercent:
+        description: (difference / offerValue) * 100
+        type: number
+      lastSyncedAt:
+        description: ISO 8601, most recent sync
+        type: string
+      offerId:
+        type: string
+      offerValue:
+        description: Offer's value field
+        type: number
+      totalFixedPriceAmount:
+        description: Sum of all assignments' FixedPriceAmount
+        type: number
+    type: object
+  domain.AssignmentSyncResultDTO:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+      created:
+        description: Number of new assignments created
+        type: integer
+      deleted:
+        description: Number of stale assignments removed
+        type: integer
+      error:
+        type: string
+      externalReference:
+        type: string
+      offerId:
+        type: string
+      synced:
+        description: Number of assignments synced
+        type: integer
+      syncedAt:
+        description: ISO 8601
+        type: string
+      updated:
+        description: Number of existing assignments updated
+        type: integer
+    type: object
   domain.AuditAction:
     enum:
     - create
@@ -1668,6 +1753,9 @@ definitions:
       dwOtherCosts:
         description: Other costs from data warehouse
         type: number
+      dwTotalFixedPrice:
+        description: Sum of FixedPriceAmount from synced assignments
+        type: number
       dwTotalIncome:
         description: Data Warehouse synced fields
         type: number
@@ -1755,6 +1843,16 @@ definitions:
         type: string
       value:
         type: number
+      warnings:
+        description: |-
+          Validation warnings - computed at DTO mapping time
+          Possible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice
+        items:
+          $ref: '#/definitions/domain.OfferWarning'
+          enum:
+          - value.not.equals.dwTotalFixedPrice
+          - missing.dwTotalFixedPrice
+        type: array
     type: object
   domain.OfferDetailDTO:
     properties:
@@ -1807,6 +1905,9 @@ definitions:
         type: number
       dwOtherCosts:
         description: Other costs from data warehouse
+        type: number
+      dwTotalFixedPrice:
+        description: Sum of FixedPriceAmount from synced assignments
         type: number
       dwTotalIncome:
         description: Data Warehouse synced fields
@@ -1897,6 +1998,16 @@ definitions:
         type: string
       value:
         type: number
+      warnings:
+        description: |-
+          Validation warnings - computed at DTO mapping time
+          Possible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice
+        items:
+          $ref: '#/definitions/domain.OfferWarning'
+          enum:
+          - value.not.equals.dwTotalFixedPrice
+          - missing.dwTotalFixedPrice
+        type: array
     type: object
   domain.OfferExternalSyncResponse:
     properties:
@@ -1915,6 +2026,9 @@ definitions:
         type: number
       dwOtherCosts:
         description: Persisted DW other costs
+        type: number
+      dwTotalFixedPrice:
+        description: Sum of FixedPriceAmount from synced assignments
         type: number
       dwTotalIncome:
         description: Current offer financial values after sync
@@ -2062,6 +2176,14 @@ definitions:
       updatedAt:
         type: string
     type: object
+  domain.OfferWarning:
+    enum:
+    - value.not.equals.dwTotalFixedPrice
+    - missing.dwTotalFixedPrice
+    type: string
+    x-enum-varnames:
+    - OfferWarningValueNotEqualsDWTotalFixedPrice
+    - OfferWarningMissingDWTotalFixedPrice
   domain.OfferWithItemsDTO:
     properties:
       companyId:
@@ -7547,6 +7669,123 @@ paths:
       summary: Advance offer phase
       tags:
       - Offers
+  /offers/{id}/assignments:
+    get:
+      consumes:
+      - application/json
+      description: Returns all synced assignments (work orders) for a specific offer
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.AssignmentDTO'
+            type: array
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List assignments for an offer
+      tags:
+      - Assignments
+  /offers/{id}/assignments/summary:
+    get:
+      consumes:
+      - application/json
+      description: |-
+        Returns aggregated assignment data with comparison to the offer value.
+        Includes total FixedPriceAmount, count, and difference calculations.
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AssignmentSummaryDTO'
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get assignment summary for an offer
+      tags:
+      - Assignments
+  /offers/{id}/assignments/sync:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Fetches assignments (work orders) from the ERP datawarehouse and syncs them to the local database.
+        The offer must have an external_reference that matches the project Code in the ERP system.
+      parameters:
+      - description: Offer ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AssignmentSyncResultDTO'
+        "400":
+          description: Invalid offer ID
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.APIError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.APIError'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Sync assignments for an offer
+      tags:
+      - Assignments
   /offers/{id}/budget:
     get:
       consumes:
@@ -9559,12 +9798,12 @@ paths:
     post:
       description: |-
         Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).
-        This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.
+        Also syncs all assignments for offers in "order" phase. This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.
       produces:
       - application/json
       responses:
         "200":
-          description: Sync results with synced/failed counts
+          description: Sync results with synced/failed counts for offers and assignments
           schema:
             additionalProperties: true
             type: object

@@ -42,6 +42,7 @@ type Router struct {
 	notificationHandler     *handler.NotificationHandler
 	activityHandler         *handler.ActivityHandler
 	supplierHandler         *handler.SupplierHandler
+	assignmentHandler       *handler.AssignmentHandler
 }
 
 func NewRouter(
@@ -68,6 +69,7 @@ func NewRouter(
 	notificationHandler *handler.NotificationHandler,
 	activityHandler *handler.ActivityHandler,
 	supplierHandler *handler.SupplierHandler,
+	assignmentHandler *handler.AssignmentHandler,
 ) *Router {
 	return &Router{
 		cfg:                     cfg,
@@ -93,6 +95,7 @@ func NewRouter(
 		notificationHandler:     notificationHandler,
 		activityHandler:         activityHandler,
 		supplierHandler:         supplierHandler,
+		assignmentHandler:       assignmentHandler,
 	}
 }
 
@@ -426,6 +429,11 @@ func (rt *Router) Setup() http.Handler {
 
 				// Data warehouse sync (POC)
 				r.Get("/{id}/external-sync", rt.offerHandler.GetExternalSync)
+
+				// Assignments (ERP work orders synced from datawarehouse)
+				r.Post("/{id}/assignments/sync", rt.assignmentHandler.SyncAssignments)
+				r.Get("/{id}/assignments", rt.assignmentHandler.ListAssignments)
+				r.Get("/{id}/assignments/summary", rt.assignmentHandler.GetAssignmentSummary)
 
 				// Admin endpoints
 				r.Post("/admin/trigger-dw-sync", rt.offerHandler.TriggerBulkDWSync)

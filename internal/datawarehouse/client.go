@@ -684,6 +684,165 @@ func (c *Client) GetERPCustomers(ctx context.Context) ([]ERPCustomer, error) {
 	return customers, nil
 }
 
+// ERPAssignment represents an assignment (work order) from the ERP data warehouse.
+// Assignments belong to projects and contain work order details.
+type ERPAssignment struct {
+	AssignmentID     int64   `json:"assignmentId"`     // Primary key in DW
+	ProjectID        int64   `json:"projectId"`        // FK to project (internal reference)
+	AssignmentNumber string  `json:"assignmentNumber"` // e.g., "2406200"
+	Description      string  `json:"description"`
+	FixedPriceAmount float64 `json:"fixedPriceAmount"` // Primary financial field
+	StatusID         *int    `json:"statusId"`         // Enum_AssignmentStatusId
+	ProgressID       *int    `json:"progressId"`       // Enum_AssignmentProgressId
+	RawData          map[string]interface{} `json:"rawData"` // Full row for extensibility
+}
+
+// GetProjectsTableName returns the fully qualified table name for a company's projects table.
+func GetProjectsTableName(companyID string) (string, error) {
+	prefix, ok := CompanyMapping[companyID]
+	if !ok {
+		return "", fmt.Errorf("unknown company ID: %s", companyID)
+	}
+	return fmt.Sprintf("cw_%s_projects", prefix), nil
+}
+
+// GetAssignmentsTableName returns the fully qualified table name for a company's assignments table.
+func GetAssignmentsTableName(companyID string) (string, error) {
+	prefix, ok := CompanyMapping[companyID]
+	if !ok {
+		return "", fmt.Errorf("unknown company ID: %s", companyID)
+	}
+	return fmt.Sprintf("cw_%s_assignments", prefix), nil
+}
+
+// GetProjectAssignments retrieves all assignments for a project by project code (external reference).
+// The projectCode matches the Code column in the projects table (e.g., "24062").
+// Returns all assignments linked to that project via the internal ProjectId reference.
+func (c *Client) GetProjectAssignments(ctx context.Context, companyID, projectCode string) ([]ERPAssignment, error) {
+	if c == nil || c.db == nil {
+		return nil, fmt.Errorf("data warehouse client not initialized")
+	}
+
+	projectsTable, err := GetProjectsTableName(companyID)
+	if err != nil {
+		return nil, fmt.Errorf("get projects table name: %w", err)
+	}
+
+	assignmentsTable, err := GetAssignmentsTableName(companyID)
+	if err != nil {
+		return nil, fmt.Errorf("get assignments table name: %w", err)
+	}
+
+	// Query assignments by looking up the project's internal ID via its Code
+	query := fmt.Sprintf(`
+		SELECT
+			a.AssignmentId,
+			a.ProjectId,
+			ISNULL(a.AssignmentNumber, '') as AssignmentNumber,
+			ISNULL(a.Description, '') as Description,
+			ISNULL(a.FixedPriceAmount, 0) as FixedPriceAmount,
+			a.Enum_AssignmentStatusId as StatusId,
+			a.Enum_AssignmentProgressId as ProgressId,
+			a.FixedPrice,
+			a.FixedPriceInvoiced,
+			a.EstimatedTotalHours,
+			a.EstimatedCompletionPercentage,
+			a.Archived,
+			a.ExternalReference,
+			a.CustomerReference,
+			a.StartDateTimeUTC,
+			a.EndDateTimeUTC,
+			a.xLastUpdated
+		FROM %s a
+		INNER JOIN %s p ON a.ProjectId = p.ProjectId
+		WHERE p.Code = @p1
+		  AND ISNULL(a.Sys_Deactivated, 0) = 0
+		ORDER BY a.AssignmentNumber
+	`, assignmentsTable, projectsTable)
+
+	c.logger.Debug("Querying ERP assignments",
+		zap.String("company_id", companyID),
+		zap.String("project_code", projectCode),
+	)
+
+	rows, err := c.ExecuteQuery(ctx, query, projectCode)
+	if err != nil {
+		return nil, fmt.Errorf("query ERP assignments: %w", err)
+	}
+
+	assignments := make([]ERPAssignment, 0, len(rows))
+	for _, row := range rows {
+		assignment := ERPAssignment{
+			AssignmentID:     parseInt64(row["AssignmentId"]),
+			ProjectID:        parseInt64(row["ProjectId"]),
+			AssignmentNumber: parseString(row["AssignmentNumber"]),
+			Description:      parseString(row["Description"]),
+			FixedPriceAmount: parseFloat64Safe(row["FixedPriceAmount"]),
+			StatusID:         parseIntPtr(row["StatusId"]),
+			ProgressID:       parseIntPtr(row["ProgressId"]),
+			RawData:          row, // Store full row for extensibility
+		}
+		assignments = append(assignments, assignment)
+	}
+
+	c.logger.Info("Retrieved ERP assignments",
+		zap.String("company_id", companyID),
+		zap.String("project_code", projectCode),
+		zap.Int("count", len(assignments)),
+	)
+
+	return assignments, nil
+}
+
+// parseInt64 safely extracts an int64 from a database result value.
+func parseInt64(val interface{}) int64 {
+	if val == nil {
+		return 0
+	}
+	switch v := val.(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	case []byte:
+		var i int64
+		fmt.Sscanf(string(v), "%d", &i)
+		return i
+	default:
+		return 0
+	}
+}
+
+// parseIntPtr safely extracts a pointer to int from a database result value.
+func parseIntPtr(val interface{}) *int {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case int64:
+		i := int(v)
+		return &i
+	case int:
+		return &v
+	case float64:
+		i := int(v)
+		return &i
+	default:
+		return nil
+	}
+}
+
+// parseFloat64Safe wraps parseFloat64 and returns 0 on error
+func parseFloat64Safe(val interface{}) float64 {
+	f, err := parseFloat64(val)
+	if err != nil {
+		return 0
+	}
+	return f
+}
+
 // parseString safely extracts a string from a database result value.
 func parseString(val interface{}) string {
 	if val == nil {

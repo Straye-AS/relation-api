@@ -5717,7 +5717,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).\nThis is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.",
+                "description": "Manually triggers a sync of ALL offers with external_reference from the data warehouse (regardless of phase).\nAlso syncs all assignments for offers in \"order\" phase. This is an admin-only endpoint for forcing a full sync outside of the scheduled cron job.",
                 "produces": [
                     "application/json"
                 ],
@@ -5727,7 +5727,7 @@ const docTemplate = `{
                 "summary": "Trigger bulk data warehouse sync (Admin only)",
                 "responses": {
                     "200": {
-                        "description": "Sync results with synced/failed counts",
+                        "description": "Sync results with synced/failed counts for offers and assignments",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -6157,6 +6157,186 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/assignments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns all synced assignments (work orders) for a specific offer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assignments"
+                ],
+                "summary": "List assignments for an offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.AssignmentDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/assignments/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns aggregated assignment data with comparison to the offer value.\nIncludes total FixedPriceAmount, count, and difference calculations.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assignments"
+                ],
+                "summary": "Get assignment summary for an offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AssignmentSummaryDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    }
+                }
+            }
+        },
+        "/offers/{id}/assignments/sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Fetches assignments (work orders) from the ERP datawarehouse and syncs them to the local database.\nThe offer must have an external_reference that matches the project Code in the ERP system.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assignments"
+                ],
+                "summary": "Sync assignments for an offer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Offer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AssignmentSyncResultDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid offer ID",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "404": {
+                        "description": "Offer not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.APIError"
                         }
                     }
                 }
@@ -12667,6 +12847,126 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.AssignmentDTO": {
+            "type": "object",
+            "properties": {
+                "assignmentNumber": {
+                    "description": "e.g., \"2406200\"",
+                    "type": "string"
+                },
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "createdAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "dwAssignmentId": {
+                    "description": "Original ID from datawarehouse",
+                    "type": "integer"
+                },
+                "dwProjectId": {
+                    "description": "Project ID from datawarehouse",
+                    "type": "integer"
+                },
+                "dwSyncedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "fixedPriceAmount": {
+                    "description": "Primary financial field",
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "progressId": {
+                    "type": "integer"
+                },
+                "statusId": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.AssignmentSummaryDTO": {
+            "type": "object",
+            "properties": {
+                "assignmentCount": {
+                    "description": "Number of assignments",
+                    "type": "integer"
+                },
+                "difference": {
+                    "description": "offerValue - totalFixedPriceAmount",
+                    "type": "number"
+                },
+                "differencePercent": {
+                    "description": "(difference / offerValue) * 100",
+                    "type": "number"
+                },
+                "lastSyncedAt": {
+                    "description": "ISO 8601, most recent sync",
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "offerValue": {
+                    "description": "Offer's value field",
+                    "type": "number"
+                },
+                "totalFixedPriceAmount": {
+                    "description": "Sum of all assignments' FixedPriceAmount",
+                    "type": "number"
+                }
+            }
+        },
+        "domain.AssignmentSyncResultDTO": {
+            "type": "object",
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
+                },
+                "created": {
+                    "description": "Number of new assignments created",
+                    "type": "integer"
+                },
+                "deleted": {
+                    "description": "Number of stale assignments removed",
+                    "type": "integer"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "externalReference": {
+                    "type": "string"
+                },
+                "offerId": {
+                    "type": "string"
+                },
+                "synced": {
+                    "description": "Number of assignments synced",
+                    "type": "integer"
+                },
+                "syncedAt": {
+                    "description": "ISO 8601",
+                    "type": "string"
+                },
+                "updated": {
+                    "description": "Number of existing assignments updated",
+                    "type": "integer"
+                }
+            }
+        },
         "domain.AuditAction": {
             "type": "string",
             "enum": [
@@ -14712,6 +15012,10 @@ const docTemplate = `{
                     "description": "Other costs from data warehouse",
                     "type": "number"
                 },
+                "dwTotalFixedPrice": {
+                    "description": "Sum of FixedPriceAmount from synced assignments",
+                    "type": "number"
+                },
                 "dwTotalIncome": {
                     "description": "Data Warehouse synced fields",
                     "type": "number"
@@ -14833,6 +15137,17 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                },
+                "warnings": {
+                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice",
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "value.not.equals.dwTotalFixedPrice",
+                            "missing.dwTotalFixedPrice"
+                        ],
+                        "$ref": "#/definitions/domain.OfferWarning"
+                    }
                 }
             }
         },
@@ -14906,6 +15221,10 @@ const docTemplate = `{
                 },
                 "dwOtherCosts": {
                     "description": "Other costs from data warehouse",
+                    "type": "number"
+                },
+                "dwTotalFixedPrice": {
+                    "description": "Sum of FixedPriceAmount from synced assignments",
                     "type": "number"
                 },
                 "dwTotalIncome": {
@@ -15032,6 +15351,17 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                },
+                "warnings": {
+                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalFixedPrice, missing.dwTotalFixedPrice",
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "value.not.equals.dwTotalFixedPrice",
+                            "missing.dwTotalFixedPrice"
+                        ],
+                        "$ref": "#/definitions/domain.OfferWarning"
+                    }
                 }
             }
         },
@@ -15058,6 +15388,10 @@ const docTemplate = `{
                 },
                 "dwOtherCosts": {
                     "description": "Persisted DW other costs",
+                    "type": "number"
+                },
+                "dwTotalFixedPrice": {
+                    "description": "Sum of FixedPriceAmount from synced assignments",
                     "type": "number"
                 },
                 "dwTotalIncome": {
@@ -15263,6 +15597,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "domain.OfferWarning": {
+            "type": "string",
+            "enum": [
+                "value.not.equals.dwTotalFixedPrice",
+                "missing.dwTotalFixedPrice"
+            ],
+            "x-enum-varnames": [
+                "OfferWarningValueNotEqualsDWTotalFixedPrice",
+                "OfferWarningMissingDWTotalFixedPrice"
+            ]
         },
         "domain.OfferWithItemsDTO": {
             "type": "object",

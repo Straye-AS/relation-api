@@ -76,7 +76,7 @@ func createOfferHandler(t *testing.T, db *gorm.DB) *handler.OfferHandler {
 		db,
 	)
 
-	return handler.NewOfferHandler(offerService, nil, logger)
+	return handler.NewOfferHandler(offerService, nil, nil, logger)
 }
 
 func createOfferTestContext() context.Context {
