@@ -526,10 +526,10 @@ const (
 type OfferWarning string
 
 const (
-	// OfferWarningValueNotEqualsDWTotalIncome indicates that the offer's Value
-	// does not match the DWTotalIncome from the data warehouse.
+	// OfferWarningValueNotEqualsDWTotalFixedPrice indicates that the offer's Value
+	// does not match the DWTotalFixedPrice (contract value) from the data warehouse.
 	// This warning is only applicable when the offer is in the "order" phase.
-	OfferWarningValueNotEqualsDWTotalIncome OfferWarning = "value.not.equals.dwTotalIncome"
+	OfferWarningValueNotEqualsDWTotalFixedPrice OfferWarning = "value.not.equals.dwTotalFixedPrice"
 )
 
 // Offer represents a sales proposal and, when in order phase, the execution of work

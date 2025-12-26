@@ -342,10 +342,10 @@ func computeOfferWarnings(offer *domain.Offer) []domain.OfferWarning {
 
 	var warnings []domain.OfferWarning
 
-	// Check if Value differs from DWTotalIncome
-	// Only add warning if DWTotalIncome has been synced (non-zero) and differs from Value
-	if offer.DWTotalIncome != 0 && offer.Value != offer.DWTotalIncome {
-		warnings = append(warnings, domain.OfferWarningValueNotEqualsDWTotalIncome)
+	// Check if Value differs from DWTotalFixedPrice (contract value from assignments)
+	// Only add warning if DWTotalFixedPrice has been synced (non-zero) and differs from Value
+	if offer.DWTotalFixedPrice != 0 && offer.Value != offer.DWTotalFixedPrice {
+		warnings = append(warnings, domain.OfferWarningValueNotEqualsDWTotalFixedPrice)
 	}
 
 	// Return nil instead of empty slice for cleaner JSON output

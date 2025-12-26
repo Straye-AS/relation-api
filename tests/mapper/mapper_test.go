@@ -611,14 +611,14 @@ func TestToOfferDTO_WarningsAddedWhenOrderPhaseAndValuesDiffer(t *testing.T) {
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		Title:         "Order with Value Mismatch",
-		CustomerID:    &customerID,
-		CustomerName:  "Test Customer",
-		CompanyID:     domain.CompanyStalbygg,
-		Phase:         domain.OfferPhaseOrder, // Must be in order phase
-		Value:         100000,                 // Offer value
-		DWTotalIncome: 120000,                 // DW value differs
-		Status:        domain.OfferStatusActive,
+		Title:             "Order with Value Mismatch",
+		CustomerID:        &customerID,
+		CustomerName:      "Test Customer",
+		CompanyID:         domain.CompanyStalbygg,
+		Phase:             domain.OfferPhaseOrder, // Must be in order phase
+		Value:             100000,                 // Offer value
+		DWTotalFixedPrice: 120000,                 // DW contract value differs
+		Status:            domain.OfferStatusActive,
 	}
 
 	dto := mapper.ToOfferDTO(offer)
@@ -626,7 +626,7 @@ func TestToOfferDTO_WarningsAddedWhenOrderPhaseAndValuesDiffer(t *testing.T) {
 	// Warnings should be populated
 	assert.NotNil(t, dto.Warnings)
 	assert.Len(t, dto.Warnings, 1)
-	assert.Contains(t, dto.Warnings, domain.OfferWarningValueNotEqualsDWTotalIncome)
+	assert.Contains(t, dto.Warnings, domain.OfferWarningValueNotEqualsDWTotalFixedPrice)
 }
 
 func TestToOfferDTO_NoWarningWhenOrderPhaseAndValuesEqual(t *testing.T) {
@@ -639,14 +639,14 @@ func TestToOfferDTO_NoWarningWhenOrderPhaseAndValuesEqual(t *testing.T) {
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		Title:         "Order with Matching Values",
-		CustomerID:    &customerID,
-		CustomerName:  "Test Customer",
-		CompanyID:     domain.CompanyStalbygg,
-		Phase:         domain.OfferPhaseOrder, // Must be in order phase
-		Value:         100000,                 // Offer value
-		DWTotalIncome: 100000,                 // DW value matches
-		Status:        domain.OfferStatusActive,
+		Title:             "Order with Matching Values",
+		CustomerID:        &customerID,
+		CustomerName:      "Test Customer",
+		CompanyID:         domain.CompanyStalbygg,
+		Phase:             domain.OfferPhaseOrder, // Must be in order phase
+		Value:             100000,                 // Offer value
+		DWTotalFixedPrice: 100000,                 // DW contract value matches
+		Status:            domain.OfferStatusActive,
 	}
 
 	dto := mapper.ToOfferDTO(offer)
@@ -679,14 +679,14 @@ func TestToOfferDTO_NoWarningWhenNotInOrderPhase(t *testing.T) {
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
-				Title:         "Offer Not in Order Phase",
-				CustomerID:    &customerID,
-				CustomerName:  "Test Customer",
-				CompanyID:     domain.CompanyStalbygg,
-				Phase:         tc.phase, // Not order phase
-				Value:         100000,   // Offer value
-				DWTotalIncome: 120000,   // DW value differs - but should NOT trigger warning
-				Status:        domain.OfferStatusActive,
+				Title:             "Offer Not in Order Phase",
+				CustomerID:        &customerID,
+				CustomerName:      "Test Customer",
+				CompanyID:         domain.CompanyStalbygg,
+				Phase:             tc.phase, // Not order phase
+				Value:             100000,   // Offer value
+				DWTotalFixedPrice: 120000,   // DW value differs - but should NOT trigger warning
+				Status:            domain.OfferStatusActive,
 			}
 
 			dto := mapper.ToOfferDTO(offer)
@@ -697,7 +697,7 @@ func TestToOfferDTO_NoWarningWhenNotInOrderPhase(t *testing.T) {
 	}
 }
 
-func TestToOfferDTO_NoWarningWhenDWTotalIncomeIsZero(t *testing.T) {
+func TestToOfferDTO_NoWarningWhenDWTotalFixedPriceIsZero(t *testing.T) {
 	now := time.Now()
 	customerID := uuid.New()
 
@@ -707,14 +707,14 @@ func TestToOfferDTO_NoWarningWhenDWTotalIncomeIsZero(t *testing.T) {
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		Title:         "Order with No DW Sync",
-		CustomerID:    &customerID,
-		CustomerName:  "Test Customer",
-		CompanyID:     domain.CompanyStalbygg,
-		Phase:         domain.OfferPhaseOrder, // Order phase
-		Value:         100000,                 // Offer value
-		DWTotalIncome: 0,                      // Not synced yet (zero value)
-		Status:        domain.OfferStatusActive,
+		Title:             "Order with No DW Sync",
+		CustomerID:        &customerID,
+		CustomerName:      "Test Customer",
+		CompanyID:         domain.CompanyStalbygg,
+		Phase:             domain.OfferPhaseOrder, // Order phase
+		Value:             100000,                 // Offer value
+		DWTotalFixedPrice: 0,                      // Not synced yet (zero value)
+		Status:            domain.OfferStatusActive,
 	}
 
 	dto := mapper.ToOfferDTO(offer)

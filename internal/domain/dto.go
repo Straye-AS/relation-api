@@ -221,8 +221,8 @@ type OfferDTO struct {
 	DWTotalFixedPrice float64 `json:"dwTotalFixedPrice"`        // Sum of FixedPriceAmount from synced assignments
 	DWLastSyncedAt    *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
 	// Validation warnings - computed at DTO mapping time
-	// Possible values: value.not.equals.dwTotalIncome
-	Warnings []OfferWarning `json:"warnings,omitempty" enums:"value.not.equals.dwTotalIncome"` // Warning codes for data discrepancies
+	// Possible values: value.not.equals.dwTotalFixedPrice
+	Warnings []OfferWarning `json:"warnings,omitempty" enums:"value.not.equals.dwTotalFixedPrice"` // Warning codes for data discrepancies
 }
 
 type OfferItemDTO struct {
