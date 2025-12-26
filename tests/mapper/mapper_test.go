@@ -596,3 +596,129 @@ func TestToFileDTOs_EmptySlice(t *testing.T) {
 	assert.NotNil(t, dtos)
 	assert.Len(t, dtos, 0)
 }
+
+// ============================================================================
+// Offer Warnings Tests
+// ============================================================================
+
+func TestToOfferDTO_WarningsAddedWhenOrderPhaseAndValuesDiffer(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:         "Order with Value Mismatch",
+		CustomerID:    &customerID,
+		CustomerName:  "Test Customer",
+		CompanyID:     domain.CompanyStalbygg,
+		Phase:         domain.OfferPhaseOrder, // Must be in order phase
+		Value:         100000,                 // Offer value
+		DWTotalIncome: 120000,                 // DW value differs
+		Status:        domain.OfferStatusActive,
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	// Warnings should be populated
+	assert.NotNil(t, dto.Warnings)
+	assert.Len(t, dto.Warnings, 1)
+	assert.Contains(t, dto.Warnings, domain.OfferWarningValueNotEqualsDWTotalIncome)
+}
+
+func TestToOfferDTO_NoWarningWhenOrderPhaseAndValuesEqual(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:         "Order with Matching Values",
+		CustomerID:    &customerID,
+		CustomerName:  "Test Customer",
+		CompanyID:     domain.CompanyStalbygg,
+		Phase:         domain.OfferPhaseOrder, // Must be in order phase
+		Value:         100000,                 // Offer value
+		DWTotalIncome: 100000,                 // DW value matches
+		Status:        domain.OfferStatusActive,
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	// No warnings should be present
+	assert.Nil(t, dto.Warnings)
+}
+
+func TestToOfferDTO_NoWarningWhenNotInOrderPhase(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	testCases := []struct {
+		name  string
+		phase domain.OfferPhase
+	}{
+		{"draft phase", domain.OfferPhaseDraft},
+		{"in_progress phase", domain.OfferPhaseInProgress},
+		{"sent phase", domain.OfferPhaseSent},
+		{"completed phase", domain.OfferPhaseCompleted},
+		{"lost phase", domain.OfferPhaseLost},
+		{"expired phase", domain.OfferPhaseExpired},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			offer := &domain.Offer{
+				BaseModel: domain.BaseModel{
+					ID:        uuid.New(),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				Title:         "Offer Not in Order Phase",
+				CustomerID:    &customerID,
+				CustomerName:  "Test Customer",
+				CompanyID:     domain.CompanyStalbygg,
+				Phase:         tc.phase, // Not order phase
+				Value:         100000,   // Offer value
+				DWTotalIncome: 120000,   // DW value differs - but should NOT trigger warning
+				Status:        domain.OfferStatusActive,
+			}
+
+			dto := mapper.ToOfferDTO(offer)
+
+			// No warnings should be present regardless of value mismatch
+			assert.Nil(t, dto.Warnings, "Warnings should be nil for phase: %s", tc.phase)
+		})
+	}
+}
+
+func TestToOfferDTO_NoWarningWhenDWTotalIncomeIsZero(t *testing.T) {
+	now := time.Now()
+	customerID := uuid.New()
+
+	offer := &domain.Offer{
+		BaseModel: domain.BaseModel{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Title:         "Order with No DW Sync",
+		CustomerID:    &customerID,
+		CustomerName:  "Test Customer",
+		CompanyID:     domain.CompanyStalbygg,
+		Phase:         domain.OfferPhaseOrder, // Order phase
+		Value:         100000,                 // Offer value
+		DWTotalIncome: 0,                      // Not synced yet (zero value)
+		Status:        domain.OfferStatusActive,
+	}
+
+	dto := mapper.ToOfferDTO(offer)
+
+	// No warnings - DW hasn't been synced yet
+	assert.Nil(t, dto.Warnings)
+}

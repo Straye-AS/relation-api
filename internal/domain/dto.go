@@ -215,11 +215,14 @@ type OfferDTO struct {
 	// Data Warehouse synced fields
 	DWTotalIncome   float64 `json:"dwTotalIncome"`            // Income from data warehouse
 	DWMaterialCosts float64 `json:"dwMaterialCosts"`          // Material costs from data warehouse
-	DWEmployeeCosts    float64 `json:"dwEmployeeCosts"`          // Employee costs from data warehouse
-	DWOtherCosts       float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
-	DWNetResult        float64 `json:"dwNetResult"`              // Net result from data warehouse
-	DWTotalFixedPrice  float64 `json:"dwTotalFixedPrice"`        // Sum of FixedPriceAmount from synced assignments
-	DWLastSyncedAt     *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
+	DWEmployeeCosts   float64 `json:"dwEmployeeCosts"`          // Employee costs from data warehouse
+	DWOtherCosts      float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
+	DWNetResult       float64 `json:"dwNetResult"`              // Net result from data warehouse
+	DWTotalFixedPrice float64 `json:"dwTotalFixedPrice"`        // Sum of FixedPriceAmount from synced assignments
+	DWLastSyncedAt    *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
+	// Validation warnings - computed at DTO mapping time
+	// Possible values: value.not.equals.dwTotalIncome
+	Warnings []OfferWarning `json:"warnings,omitempty" enums:"value.not.equals.dwTotalIncome"` // Warning codes for data discrepancies
 }
 
 type OfferItemDTO struct {
