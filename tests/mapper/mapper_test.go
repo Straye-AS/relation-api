@@ -626,7 +626,7 @@ func TestToOfferDTO_WarningsAddedWhenOrderPhaseAndValuesDiffer(t *testing.T) {
 	// Warnings should be populated
 	assert.NotNil(t, dto.Warnings)
 	assert.Len(t, dto.Warnings, 1)
-	assert.Contains(t, dto.Warnings, string(domain.OfferWarningValueNotEqualsDWTotalIncome))
+	assert.Contains(t, dto.Warnings, domain.OfferWarningValueNotEqualsDWTotalIncome)
 }
 
 func TestToOfferDTO_NoWarningWhenOrderPhaseAndValuesEqual(t *testing.T) {

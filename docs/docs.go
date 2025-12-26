@@ -14833,6 +14833,16 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                },
+                "warnings": {
+                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalIncome",
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "value.not.equals.dwTotalIncome"
+                        ],
+                        "$ref": "#/definitions/domain.OfferWarning"
+                    }
                 }
             }
         },
@@ -15032,6 +15042,16 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                },
+                "warnings": {
+                    "description": "Validation warnings - computed at DTO mapping time\nPossible values: value.not.equals.dwTotalIncome",
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "value.not.equals.dwTotalIncome"
+                        ],
+                        "$ref": "#/definitions/domain.OfferWarning"
+                    }
                 }
             }
         },
@@ -15263,6 +15283,15 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "domain.OfferWarning": {
+            "type": "string",
+            "enum": [
+                "value.not.equals.dwTotalIncome"
+            ],
+            "x-enum-varnames": [
+                "OfferWarningValueNotEqualsDWTotalIncome"
+            ]
         },
         "domain.OfferWithItemsDTO": {
             "type": "object",

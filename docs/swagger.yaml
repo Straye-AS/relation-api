@@ -1755,6 +1755,15 @@ definitions:
         type: string
       value:
         type: number
+      warnings:
+        description: |-
+          Validation warnings - computed at DTO mapping time
+          Possible values: value.not.equals.dwTotalIncome
+        items:
+          $ref: '#/definitions/domain.OfferWarning'
+          enum:
+          - value.not.equals.dwTotalIncome
+        type: array
     type: object
   domain.OfferDetailDTO:
     properties:
@@ -1897,6 +1906,15 @@ definitions:
         type: string
       value:
         type: number
+      warnings:
+        description: |-
+          Validation warnings - computed at DTO mapping time
+          Possible values: value.not.equals.dwTotalIncome
+        items:
+          $ref: '#/definitions/domain.OfferWarning'
+          enum:
+          - value.not.equals.dwTotalIncome
+        type: array
     type: object
   domain.OfferExternalSyncResponse:
     properties:
@@ -2062,6 +2080,12 @@ definitions:
       updatedAt:
         type: string
     type: object
+  domain.OfferWarning:
+    enum:
+    - value.not.equals.dwTotalIncome
+    type: string
+    x-enum-varnames:
+    - OfferWarningValueNotEqualsDWTotalIncome
   domain.OfferWithItemsDTO:
     properties:
       companyId:

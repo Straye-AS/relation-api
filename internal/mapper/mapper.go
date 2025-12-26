@@ -333,18 +333,18 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 // computeOfferWarnings computes validation warnings for an offer.
 // Warnings are only computed for offers in the "order" phase.
 // Returns nil if no warnings are applicable.
-func computeOfferWarnings(offer *domain.Offer) []string {
+func computeOfferWarnings(offer *domain.Offer) []domain.OfferWarning {
 	// Only check for warnings in order phase
 	if offer.Phase != domain.OfferPhaseOrder {
 		return nil
 	}
 
-	var warnings []string
+	var warnings []domain.OfferWarning
 
 	// Check if Value differs from DWTotalIncome
 	// Only add warning if DWTotalIncome has been synced (non-zero) and differs from Value
 	if offer.DWTotalIncome != 0 && offer.Value != offer.DWTotalIncome {
-		warnings = append(warnings, string(domain.OfferWarningValueNotEqualsDWTotalIncome))
+		warnings = append(warnings, domain.OfferWarningValueNotEqualsDWTotalIncome)
 	}
 
 	// Return nil instead of empty slice for cleaner JSON output
