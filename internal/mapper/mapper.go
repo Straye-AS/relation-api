@@ -269,6 +269,9 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		teamMembers = []string(offer.TeamMembers)
 	}
 
+	// Compute warnings for data discrepancies
+	warnings := computeOfferWarnings(offer)
+
 	return domain.OfferDTO{
 		ID:                    offer.ID,
 		Title:                 offer.Title,
@@ -322,7 +325,34 @@ func ToOfferDTO(offer *domain.Offer) domain.OfferDTO {
 		DWOtherCosts:    offer.DWOtherCosts,
 		DWNetResult:     offer.DWNetResult,
 		DWLastSyncedAt:  formatTimePointer(offer.DWLastSyncedAt),
+		// Validation warnings
+		Warnings: warnings,
 	}
+}
+
+// computeOfferWarnings computes validation warnings for an offer.
+// Warnings are only computed for offers in the "order" phase.
+// Returns nil if no warnings are applicable.
+func computeOfferWarnings(offer *domain.Offer) []string {
+	// Only check for warnings in order phase
+	if offer.Phase != domain.OfferPhaseOrder {
+		return nil
+	}
+
+	var warnings []string
+
+	// Check if Value differs from DWTotalIncome
+	// Only add warning if DWTotalIncome has been synced (non-zero) and differs from Value
+	if offer.DWTotalIncome != 0 && offer.Value != offer.DWTotalIncome {
+		warnings = append(warnings, string(domain.OfferWarningValueNotEqualsDWTotalIncome))
+	}
+
+	// Return nil instead of empty slice for cleaner JSON output
+	if len(warnings) == 0 {
+		return nil
+	}
+
+	return warnings
 }
 
 // ToOfferItemDTO converts OfferItem to OfferItemDTO

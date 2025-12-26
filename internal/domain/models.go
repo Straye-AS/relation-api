@@ -521,6 +521,17 @@ const (
 	OfferStatusArchived OfferStatus = "archived"
 )
 
+// OfferWarning represents a warning code for offer data discrepancies
+// Warning codes are string-based for extensibility
+type OfferWarning string
+
+const (
+	// OfferWarningValueNotEqualsDWTotalIncome indicates that the offer's Value
+	// does not match the DWTotalIncome from the data warehouse.
+	// This warning is only applicable when the offer is in the "order" phase.
+	OfferWarningValueNotEqualsDWTotalIncome OfferWarning = "value.not.equals.dwTotalIncome"
+)
+
 // Offer represents a sales proposal and, when in order phase, the execution of work
 type Offer struct {
 	BaseModel

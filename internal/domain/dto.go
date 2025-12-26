@@ -219,6 +219,8 @@ type OfferDTO struct {
 	DWOtherCosts    float64 `json:"dwOtherCosts"`             // Other costs from data warehouse
 	DWNetResult     float64 `json:"dwNetResult"`              // Net result from data warehouse
 	DWLastSyncedAt  *string `json:"dwLastSyncedAt,omitempty"` // ISO 8601 - Last sync timestamp
+	// Validation warnings - computed at DTO mapping time
+	Warnings []string `json:"warnings,omitempty"` // List of warning codes for data discrepancies
 }
 
 type OfferItemDTO struct {
