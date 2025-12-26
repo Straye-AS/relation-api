@@ -13800,7 +13800,6 @@ const docTemplate = `{
         "domain.CreateInquiryRequest": {
             "type": "object",
             "required": [
-                "customerId",
                 "title"
             ],
             "properties": {
@@ -13813,8 +13812,9 @@ const docTemplate = `{
                 "dueDate": {
                     "type": "string"
                 },
-                "notes": {
-                    "type": "string"
+                "responsible": {
+                    "type": "string",
+                    "maxLength": 200
                 },
                 "title": {
                     "type": "string",
