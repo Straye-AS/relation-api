@@ -1312,13 +1312,13 @@ type CreateOfferFromDealResponse struct {
 type InquiryDTO = OfferDTO
 
 // CreateInquiryRequest contains the data needed to create a new inquiry (draft offer)
-// Minimal fields required - responsibleUserId and companyId are optional
+// Minimal fields required - customerId is optional (can be linked later)
 type CreateInquiryRequest struct {
 	Title       string     `json:"title" validate:"required,max=200"`
-	CustomerID  uuid.UUID  `json:"customerId" validate:"required"`
+	CustomerID  *uuid.UUID `json:"customerId,omitempty"`
 	Description string     `json:"description,omitempty"`
-	Notes       string     `json:"notes,omitempty"`
 	DueDate     *time.Time `json:"dueDate,omitempty"`
+	Responsible string     `json:"responsible,omitempty" validate:"omitempty,max=200"`
 }
 
 // ConvertInquiryRequest contains options for converting an inquiry to an offer

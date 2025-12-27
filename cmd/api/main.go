@@ -175,7 +175,7 @@ func run() error {
 	if dwClient != nil {
 		offerService.SetDataWarehouseClient(dwClient)
 	}
-	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, companyService, log, db)
+	inquiryService := service.NewInquiryService(offerRepo, customerRepo, activityRepo, userRepo, companyService, log, db)
 	dealService := service.NewDealService(dealRepo, dealStageHistoryRepo, customerRepo, projectRepo, activityRepo, offerRepo, budgetItemRepo, notificationRepo, log, db)
 	dashboardService := service.NewDashboardService(customerRepo, projectRepo, offerRepo, activityRepo, notificationRepo, supplierRepo, log)
 	permissionService := service.NewPermissionService(userRoleRepo, userPermissionRepo, activityRepo, log)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/straye-as/relation-api/internal/auth"
@@ -19,6 +20,7 @@ type InquiryService struct {
 	offerRepo      *repository.OfferRepository
 	customerRepo   *repository.CustomerRepository
 	activityRepo   *repository.ActivityRepository
+	userRepo       *repository.UserRepository
 	companyService *CompanyService
 	logger         *zap.Logger
 	db             *gorm.DB
@@ -29,6 +31,7 @@ func NewInquiryService(
 	offerRepo *repository.OfferRepository,
 	customerRepo *repository.CustomerRepository,
 	activityRepo *repository.ActivityRepository,
+	userRepo *repository.UserRepository,
 	companyService *CompanyService,
 	logger *zap.Logger,
 	db *gorm.DB,
@@ -37,6 +40,7 @@ func NewInquiryService(
 		offerRepo:      offerRepo,
 		customerRepo:   customerRepo,
 		activityRepo:   activityRepo,
+		userRepo:       userRepo,
 		companyService: companyService,
 		logger:         logger,
 		db:             db,
@@ -45,35 +49,48 @@ func NewInquiryService(
 
 // Create creates a new inquiry (offer in draft phase)
 func (s *InquiryService) Create(ctx context.Context, req *domain.CreateInquiryRequest) (*domain.OfferDTO, error) {
-	// Verify customer exists
-	customer, err := s.customerRepo.GetByID(ctx, req.CustomerID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCustomerNotFound
-		}
-		return nil, fmt.Errorf("failed to verify customer: %w", err)
-	}
-
-	// Use customer's company if available, otherwise default to gruppen
+	var customerID *uuid.UUID
+	var customerName string
 	companyID := domain.CompanyGruppen
-	if customer.CompanyID != nil && *customer.CompanyID != "" {
-		companyID = domain.CompanyID(*customer.CompanyID)
+
+	// If customerId is provided, verify customer exists
+	if req.CustomerID != nil {
+		customer, err := s.customerRepo.GetByID(ctx, *req.CustomerID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrCustomerNotFound
+			}
+			return nil, fmt.Errorf("failed to verify customer: %w", err)
+		}
+		customerID = req.CustomerID
+		customerName = customer.Name
+
+		// Use customer's company if available
+		if customer.CompanyID != nil && *customer.CompanyID != "" {
+			companyID = domain.CompanyID(*customer.CompanyID)
+		}
 	}
 
 	// Create inquiry (offer in draft phase) with minimal required fields
 	inquiry := &domain.Offer{
 		Title:        req.Title,
-		CustomerID:   &req.CustomerID,
-		CustomerName: customer.Name,
+		CustomerID:   customerID,
+		CustomerName: customerName,
 		CompanyID:    companyID,
 		Phase:        domain.OfferPhaseDraft, // Always draft for inquiries
 		Probability:  0,
 		Value:        0,
 		Status:       domain.OfferStatusActive,
 		Description:  req.Description,
-		Notes:        req.Notes,
 		DueDate:      req.DueDate,
 		// ResponsibleUserID and OfferNumber are NOT set - will be set on conversion
+	}
+
+	// Set responsible if provided - resolve email to user ID if possible
+	if req.Responsible != "" {
+		if resolvedID := s.resolveResponsible(ctx, req.Responsible); resolvedID != "" {
+			inquiry.ResponsibleUserID = resolvedID
+		}
 	}
 
 	if err := s.offerRepo.Create(ctx, inquiry); err != nil {
@@ -81,14 +98,17 @@ func (s *InquiryService) Create(ctx context.Context, req *domain.CreateInquiryRe
 	}
 
 	// Reload with relations
-	inquiry, err = s.offerRepo.GetByID(ctx, inquiry.ID)
+	inquiry, err := s.offerRepo.GetByID(ctx, inquiry.ID)
 	if err != nil {
 		s.logger.Warn("failed to reload inquiry after create", zap.Error(err))
 	}
 
 	// Log activity
-	s.logActivity(ctx, inquiry.ID, "Inquiry created",
-		fmt.Sprintf("Inquiry '%s' was created for customer %s", inquiry.Title, inquiry.CustomerName))
+	activityMessage := fmt.Sprintf("Inquiry '%s' was created", inquiry.Title)
+	if customerName != "" {
+		activityMessage = fmt.Sprintf("Inquiry '%s' was created for customer %s", inquiry.Title, customerName)
+	}
+	s.logActivity(ctx, inquiry.ID, "Inquiry created", activityMessage)
 
 	dto := mapper.ToOfferDTO(inquiry)
 	return &dto, nil
@@ -277,6 +297,39 @@ func (s *InquiryService) Convert(ctx context.Context, id uuid.UUID, req *domain.
 		Offer:       &dto,
 		OfferNumber: offerNumber,
 	}, nil
+}
+
+// resolveResponsible resolves a responsible identifier to a user ID
+// If the input looks like an email (contains @), it tries to find the user by email
+// and returns their ID. Returns empty string if user cannot be found.
+// If input doesn't contain @, it's assumed to be a valid user ID and returned as-is.
+func (s *InquiryService) resolveResponsible(ctx context.Context, responsible string) string {
+	// If it doesn't look like an email, return as-is (assume it's already a user ID)
+	if !strings.Contains(responsible, "@") {
+		return responsible
+	}
+
+	// Try to find user by email
+	if s.userRepo != nil {
+		user, err := s.userRepo.GetByEmail(ctx, responsible)
+		if err == nil && user != nil {
+			s.logger.Debug("resolved email to user ID",
+				zap.String("email", responsible),
+				zap.String("userId", user.ID))
+			return user.ID
+		}
+		// Log if lookup failed (but don't fail the request)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Warn("failed to lookup user by email",
+				zap.String("email", responsible),
+				zap.Error(err))
+		}
+	}
+
+	// User not found - return empty (will not be stored)
+	s.logger.Debug("could not resolve email to user ID, responsible will be null",
+		zap.String("email", responsible))
+	return ""
 }
 
 // logActivity creates an activity log entry for an offer

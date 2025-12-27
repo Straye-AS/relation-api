@@ -908,13 +908,13 @@ definitions:
         type: string
       dueDate:
         type: string
-      notes:
+      responsible:
+        maxLength: 200
         type: string
       title:
         maxLength: 200
         type: string
     required:
-    - customerId
     - title
     type: object
   domain.CreateOfferFromDealRequest:
