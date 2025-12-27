@@ -1117,7 +1117,7 @@ func TestOfferService_AcceptOrder(t *testing.T) {
 		assert.Equal(t, domain.OfferPhaseOrder, result.Offer.Phase)
 	})
 
-	t.Run("accept order adds O suffix to offer number", func(t *testing.T) {
+	t.Run("accept order preserves offer number unchanged", func(t *testing.T) {
 		offer := fixtures.createTestOffer(t, ctx, "Test Accept Order Number", domain.OfferPhaseSent)
 		originalNumber := offer.OfferNumber
 
@@ -1126,8 +1126,8 @@ func TestOfferService_AcceptOrder(t *testing.T) {
 		result, err := svc.AcceptOrder(ctx, offer.ID, req)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		// Offer number should have "O" suffix
-		assert.Equal(t, originalNumber+"O", result.Offer.OfferNumber)
+		// Offer number should remain unchanged (never modified once assigned)
+		assert.Equal(t, originalNumber, result.Offer.OfferNumber)
 	})
 
 	t.Run("cannot accept order from draft phase", func(t *testing.T) {

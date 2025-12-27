@@ -13858,6 +13858,14 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "companyId": {
+                    "description": "Optional: defaults to \"gruppen\" if not provided",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CompanyID"
+                        }
+                    ]
+                },
                 "customerId": {
                     "type": "string"
                 },

@@ -223,6 +223,8 @@ func (h *InquiryHandler) handleInquiryError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Conversion requires responsibleUserId or companyId with default responsible user")
 	case errors.Is(err, service.ErrCustomerNotFound):
 		respondWithError(w, http.StatusNotFound, "Customer not found")
+	case errors.Is(err, service.ErrInvalidCompanyID):
+		respondWithError(w, http.StatusBadRequest, "Invalid company ID. Valid values: gruppen, stalbygg, hybridbygg, industri, tak, montasje")
 	case errors.Is(err, service.ErrUnauthorized):
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
 	default:

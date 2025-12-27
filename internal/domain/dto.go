@@ -1316,6 +1316,7 @@ type InquiryDTO = OfferDTO
 type CreateInquiryRequest struct {
 	Title       string     `json:"title" validate:"required,max=200"`
 	CustomerID  *uuid.UUID `json:"customerId,omitempty"`
+	CompanyID   *CompanyID `json:"companyId,omitempty"` // Optional: defaults to "gruppen" if not provided
 	Description string     `json:"description,omitempty"`
 	DueDate     *time.Time `json:"dueDate,omitempty"`
 	Responsible string     `json:"responsible,omitempty" validate:"omitempty,max=200"`

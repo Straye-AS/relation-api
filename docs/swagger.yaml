@@ -902,6 +902,10 @@ definitions:
     type: object
   domain.CreateInquiryRequest:
     properties:
+      companyId:
+        allOf:
+        - $ref: '#/definitions/domain.CompanyID'
+        description: 'Optional: defaults to "gruppen" if not provided'
       customerId:
         type: string
       description:
