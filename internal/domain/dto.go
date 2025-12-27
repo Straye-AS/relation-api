@@ -1334,6 +1334,11 @@ type ConvertInquiryResponse struct {
 	OfferNumber string    `json:"offerNumber"`
 }
 
+// UpdateInquiryCompanyRequest for updating the company of an inquiry
+type UpdateInquiryCompanyRequest struct {
+	CompanyID CompanyID `json:"companyId" validate:"required"`
+}
+
 // ============================================================================
 // Offer Property Update Request DTOs
 // ============================================================================

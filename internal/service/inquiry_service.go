@@ -204,6 +204,51 @@ func (s *InquiryService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// UpdateCompany updates the company of an inquiry
+func (s *InquiryService) UpdateCompany(ctx context.Context, id uuid.UUID, req *domain.UpdateInquiryCompanyRequest) (*domain.OfferDTO, error) {
+	inquiry, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrInquiryNotFound
+		}
+		return nil, fmt.Errorf("failed to get inquiry: %w", err)
+	}
+
+	// Verify it's actually an inquiry (draft phase)
+	if inquiry.Phase != domain.OfferPhaseDraft {
+		return nil, ErrNotAnInquiry
+	}
+
+	// Validate company ID
+	if !domain.IsValidCompanyID(string(req.CompanyID)) {
+		return nil, ErrInvalidCompanyID
+	}
+
+	oldCompanyID := inquiry.CompanyID
+
+	// Update the company
+	updates := map[string]interface{}{
+		"company_id": req.CompanyID,
+	}
+
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update inquiry company: %w", err)
+	}
+
+	// Reload the inquiry
+	inquiry, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload inquiry after update: %w", err)
+	}
+
+	// Log activity
+	s.logActivity(ctx, inquiry.ID, "Inquiry company updated",
+		fmt.Sprintf("Inquiry '%s' company changed from %s to %s", inquiry.Title, oldCompanyID, req.CompanyID))
+
+	dto := mapper.ToOfferDTO(inquiry)
+	return &dto, nil
+}
+
 // Convert converts an inquiry to an offer (phase=in_progress)
 // Logic:
 // - responsibleUserId only: infer company from user's department/companyId

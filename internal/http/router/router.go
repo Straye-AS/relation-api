@@ -351,6 +351,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Post("/", rt.inquiryHandler.Create)
 				r.Get("/{id}", rt.inquiryHandler.GetByID)
 				r.Delete("/{id}", rt.inquiryHandler.Delete)
+				r.Put("/{id}/company", rt.inquiryHandler.UpdateCompany)
 				r.Post("/{id}/convert", rt.inquiryHandler.Convert)
 			})
 
