@@ -271,7 +271,8 @@ func (s *AssignmentService) GetAssignmentSummaryForOffer(ctx context.Context, of
 }
 
 // SyncAllAssignmentsFromDataWarehouse syncs assignments for all offers in "order" phase
-// that have an external_reference. Uses the same maxAge window as offer sync.
+// that have an external_reference. Unlike offer sync, this syncs ALL order-phase offers
+// each time since assignments can change independently of offer financials.
 // Continues on error for individual offers.
 // Returns counts for successfully synced and failed offers.
 func (s *AssignmentService) SyncAllAssignmentsFromDataWarehouse(ctx context.Context) (synced int, failed int, err error) {
@@ -281,10 +282,10 @@ func (s *AssignmentService) SyncAllAssignmentsFromDataWarehouse(ctx context.Cont
 		return 0, 0, ErrDWClientNotAvailable
 	}
 
-	// Get "order" phase offers with external_reference (same as offer sync)
-	// Uses 55 minute maxAge to match hourly cron timing
-	maxAge := 55 * time.Minute
-	offers, err := s.offerRepo.GetOffersNeedingDWSync(ctx, maxAge)
+	// Get ALL "order" phase offers with external_reference
+	// Unlike offer financials, we sync assignments for all orders each time
+	// since assignments can change independently of when financials were last synced
+	offers, err := s.offerRepo.GetAllOffersForDWSync(ctx)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get offers for assignment sync: %w", err)
 	}
