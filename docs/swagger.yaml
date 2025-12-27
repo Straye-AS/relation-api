@@ -9105,6 +9105,41 @@ paths:
       summary: Update offer responsible user
       tags:
       - Offers
+  /offers/{id}/revert-to-sent:
+    post:
+      description: Transitions an offer from order phase back to sent phase. Allows
+        re-negotiation of an accepted order.
+      parameters:
+      - description: Offer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reverted offer
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid offer ID or offer not in order phase
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Offer not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Revert an order back to sent phase
+      tags:
+      - Offers
   /offers/{id}/send:
     post:
       description: Transitions an offer from draft or in_progress phase to sent phase.

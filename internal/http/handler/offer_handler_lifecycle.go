@@ -8,6 +8,7 @@ package handler
 // - Data warehouse sync
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -275,6 +276,28 @@ func (h *OfferHandler) AcceptOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Trigger DW sync for the new order (async to not block response)
+	// Use background context since the HTTP request context will be cancelled after response
+	go func(offerID uuid.UUID, logger *zap.Logger) {
+		ctx := context.Background()
+
+		// Sync offer financials
+		if _, err := h.offerService.SyncFromDataWarehouse(ctx, offerID); err != nil {
+			logger.Warn("failed to sync offer financials on order acceptance",
+				zap.Error(err),
+				zap.String("offer_id", offerID.String()))
+		}
+
+		// Sync assignments
+		if h.assignmentService != nil {
+			if _, err := h.assignmentService.SyncAssignmentsForOffer(ctx, offerID); err != nil {
+				logger.Warn("failed to sync assignments on order acceptance",
+					zap.Error(err),
+					zap.String("offer_id", offerID.String()))
+			}
+		}
+	}(id, h.logger)
+
 	respondJSON(w, http.StatusOK, response)
 }
 
@@ -460,6 +483,36 @@ func (h *OfferHandler) ReopenOffer(w http.ResponseWriter, r *http.Request) {
 	offer, err := h.offerService.ReopenOffer(r.Context(), id)
 	if err != nil {
 		h.logger.Error("failed to reopen offer", zap.Error(err), zap.String("offer_id", id.String()))
+		h.handleOfferError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, offer)
+}
+
+// RevertToSent godoc
+// @Summary Revert an order back to sent phase
+// @Description Transitions an offer from order phase back to sent phase. Allows re-negotiation of an accepted order.
+// @Tags Offers
+// @Produce json
+// @Param id path string true "Offer ID"
+// @Success 200 {object} domain.OfferDTO "Reverted offer"
+// @Failure 400 {object} domain.ErrorResponse "Invalid offer ID or offer not in order phase"
+// @Failure 404 {object} domain.ErrorResponse "Offer not found"
+// @Failure 500 {object} domain.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /offers/{id}/revert-to-sent [post]
+func (h *OfferHandler) RevertToSent(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid offer ID: must be a valid UUID")
+		return
+	}
+
+	offer, err := h.offerService.RevertToSent(r.Context(), id)
+	if err != nil {
+		h.logger.Error("failed to revert offer to sent", zap.Error(err), zap.String("offer_id", id.String()))
 		h.handleOfferError(w, err)
 		return
 	}
