@@ -11,7 +11,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -202,15 +201,8 @@ func (s *OfferService) AcceptOrder(ctx context.Context, id uuid.UUID, req *domai
 
 	oldPhase := offer.Phase
 
-	// Store original offer number before modification
-	originalOfferNumber := offer.OfferNumber
-
-	// Update offer number with "O" suffix to mark as order (only if not already suffixed)
-	if originalOfferNumber != "" && !strings.HasSuffix(originalOfferNumber, "O") && !strings.HasSuffix(originalOfferNumber, "W") {
-		offer.OfferNumber = originalOfferNumber + "O"
-	}
-
 	// Transition to order phase
+	// Note: offer_number is never modified once assigned
 	offer.Phase = domain.OfferPhaseOrder
 
 	// Set updated by fields
@@ -230,7 +222,7 @@ func (s *OfferService) AcceptOrder(ctx context.Context, id uuid.UUID, req *domai
 	}
 
 	// Log activity
-	activityBody := fmt.Sprintf("Tilbudet '%s' ble akseptert som ordre (fase: %s -> ordre)", offer.Title, oldPhase)
+	activityBody := fmt.Sprintf("Tilbudet '%s' ble akseptert som ordre (fase: %s -> order)", offer.Title, oldPhase)
 	if req.Notes != "" {
 		activityBody = fmt.Sprintf("%s. Notater: %s", activityBody, req.Notes)
 	}
@@ -578,7 +570,6 @@ func (s *OfferService) ReopenOffer(ctx context.Context, id uuid.UUID) (*domain.O
 
 // RevertToSent transitions an order offer back to sent phase
 // This allows re-negotiation of an accepted order.
-// Note: This does NOT remove the O suffix from the offer number.
 func (s *OfferService) RevertToSent(ctx context.Context, id uuid.UUID) (*domain.OfferDTO, error) {
 	offer, err := s.offerRepo.GetByID(ctx, id)
 	if err != nil {

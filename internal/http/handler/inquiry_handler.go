@@ -212,6 +212,49 @@ func (h *InquiryHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, result)
 }
 
+// UpdateCompany godoc
+// @Summary Update inquiry company
+// @Description Updates the company of an inquiry
+// @Tags Inquiries
+// @Accept json
+// @Produce json
+// @Param id path string true "Inquiry ID"
+// @Param request body domain.UpdateInquiryCompanyRequest true "Company update data"
+// @Success 200 {object} domain.OfferDTO
+// @Failure 400 {object} domain.ErrorResponse "Invalid ID, not an inquiry, or invalid company"
+// @Failure 404 {object} domain.ErrorResponse "Inquiry not found"
+// @Failure 500 {object} domain.ErrorResponse
+// @Security BearerAuth
+// @Security ApiKeyAuth
+// @Router /inquiries/{id}/company [put]
+func (h *InquiryHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid inquiry ID: must be a valid UUID")
+		return
+	}
+
+	var req domain.UpdateInquiryCompanyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body: malformed JSON")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		respondValidationError(w, err)
+		return
+	}
+
+	inquiry, err := h.inquiryService.UpdateCompany(r.Context(), id, &req)
+	if err != nil {
+		h.logger.Error("failed to update inquiry company", zap.Error(err), zap.String("inquiry_id", id.String()))
+		h.handleInquiryError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, inquiry)
+}
+
 // handleInquiryError maps service errors to HTTP status codes
 func (h *InquiryHandler) handleInquiryError(w http.ResponseWriter, err error) {
 	switch {
@@ -223,6 +266,8 @@ func (h *InquiryHandler) handleInquiryError(w http.ResponseWriter, err error) {
 		respondWithError(w, http.StatusBadRequest, "Conversion requires responsibleUserId or companyId with default responsible user")
 	case errors.Is(err, service.ErrCustomerNotFound):
 		respondWithError(w, http.StatusNotFound, "Customer not found")
+	case errors.Is(err, service.ErrInvalidCompanyID):
+		respondWithError(w, http.StatusBadRequest, "Invalid company ID. Valid values: gruppen, stalbygg, hybridbygg, industri, tak, montasje")
 	case errors.Is(err, service.ErrUnauthorized):
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
 	default:

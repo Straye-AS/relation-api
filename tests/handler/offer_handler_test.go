@@ -133,9 +133,9 @@ func TestOfferHandler_List(t *testing.T) {
 	customer := testutil.CreateTestCustomer(t, db, "Test Customer")
 	ctx := createOfferTestContext()
 
-	// Create test offers
+	// Create test offers (use in_progress phase since draft offers are excluded from /offers endpoint)
 	for i := 0; i < 5; i++ {
-		createTestOffer(t, db, customer, domain.OfferPhaseDraft)
+		createTestOffer(t, db, customer, domain.OfferPhaseInProgress)
 	}
 
 	t.Run("list all offers", func(t *testing.T) {
@@ -188,7 +188,8 @@ func TestOfferHandler_List(t *testing.T) {
 	})
 
 	t.Run("list with phase filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/offers?phase=draft", nil)
+		// Filter by in_progress phase (draft phase is excluded from /offers endpoint)
+		req := httptest.NewRequest(http.MethodGet, "/offers?phase=in_progress", nil)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()

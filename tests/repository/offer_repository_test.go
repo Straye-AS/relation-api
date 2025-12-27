@@ -256,9 +256,10 @@ func TestOfferRepository_List(t *testing.T) {
 	repo := repository.NewOfferRepository(db)
 
 	// Create test offers with different phases and statuses
-	createOfferTestOffer(t, db, "Test Offer List 1", domain.OfferPhaseDraft, domain.OfferStatusActive)
+	// Note: Using non-draft phases since List method is typically used for offers, not inquiries
+	createOfferTestOffer(t, db, "Test Offer List 1", domain.OfferPhaseInProgress, domain.OfferStatusActive)
 	createOfferTestOffer(t, db, "Test Offer List 2", domain.OfferPhaseSent, domain.OfferStatusActive)
-	createOfferTestOffer(t, db, "Test Offer List 3", domain.OfferPhaseDraft, domain.OfferStatusInactive)
+	createOfferTestOffer(t, db, "Test Offer List 3", domain.OfferPhaseOrder, domain.OfferStatusInactive)
 
 	t.Run("list all", func(t *testing.T) {
 		offers, total, err := repo.List(context.Background(), 1, 10, nil, nil, nil)
@@ -268,13 +269,13 @@ func TestOfferRepository_List(t *testing.T) {
 	})
 
 	t.Run("filter by phase", func(t *testing.T) {
-		phase := domain.OfferPhaseDraft
+		phase := domain.OfferPhaseSent
 		offers, total, err := repo.List(context.Background(), 1, 10, nil, nil, &phase)
 		assert.NoError(t, err)
-		assert.GreaterOrEqual(t, total, int64(2))
+		assert.GreaterOrEqual(t, total, int64(1))
 
 		for _, offer := range offers {
-			assert.Equal(t, domain.OfferPhaseDraft, offer.Phase)
+			assert.Equal(t, domain.OfferPhaseSent, offer.Phase)
 		}
 	})
 }
@@ -284,9 +285,10 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	repo := repository.NewOfferRepository(db)
 
 	// Create test offers with different phases and statuses
-	createOfferTestOffer(t, db, "Test Offer Filter 1", domain.OfferPhaseDraft, domain.OfferStatusActive)
+	// Note: ListWithFilters excludes draft phase (drafts are accessed via /inquiries)
+	createOfferTestOffer(t, db, "Test Offer Filter 1", domain.OfferPhaseInProgress, domain.OfferStatusActive)
 	createOfferTestOffer(t, db, "Test Offer Filter 2", domain.OfferPhaseSent, domain.OfferStatusActive)
-	createOfferTestOffer(t, db, "Test Offer Filter 3", domain.OfferPhaseDraft, domain.OfferStatusInactive)
+	createOfferTestOffer(t, db, "Test Offer Filter 3", domain.OfferPhaseInProgress, domain.OfferStatusInactive)
 	createOfferTestOffer(t, db, "Test Offer Filter 4", domain.OfferPhaseOrder, domain.OfferStatusArchived)
 
 	t.Run("filter by status active", func(t *testing.T) {
@@ -326,7 +328,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	})
 
 	t.Run("filter by phase and status", func(t *testing.T) {
-		phase := domain.OfferPhaseDraft
+		phase := domain.OfferPhaseInProgress
 		status := domain.OfferStatusActive
 		filters := &repository.OfferFilters{Phase: &phase, Status: &status}
 		offers, total, err := repo.ListWithFilters(context.Background(), 1, 10, filters, repository.DefaultSortConfig())
@@ -334,7 +336,7 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 		assert.GreaterOrEqual(t, total, int64(1))
 
 		for _, offer := range offers {
-			assert.Equal(t, domain.OfferPhaseDraft, offer.Phase)
+			assert.Equal(t, domain.OfferPhaseInProgress, offer.Phase)
 			assert.Equal(t, domain.OfferStatusActive, offer.Status)
 		}
 	})
@@ -347,9 +349,9 @@ func TestOfferRepository_ListWithFilters(t *testing.T) {
 	})
 
 	t.Run("pagination respects max page size", func(t *testing.T) {
-		// Create many offers
+		// Create many offers (use non-draft phase)
 		for i := 0; i < 5; i++ {
-			createOfferTestOffer(t, db, "Test Offer Pagination Extra", domain.OfferPhaseDraft, domain.OfferStatusActive)
+			createOfferTestOffer(t, db, "Test Offer Pagination Extra", domain.OfferPhaseInProgress, domain.OfferStatusActive)
 		}
 
 		// Request more than max page size

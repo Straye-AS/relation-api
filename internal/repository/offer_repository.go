@@ -156,6 +156,9 @@ func (r *OfferRepository) ListWithFilters(ctx context.Context, page, pageSize in
 	// Apply multi-tenant company filter
 	query = ApplyCompanyFilter(ctx, query)
 
+	// Always exclude draft phase - drafts are inquiries and accessed via /inquiries endpoint
+	query = query.Where("phase != ?", domain.OfferPhaseDraft)
+
 	// Apply filters
 	if filters != nil {
 		if filters.CustomerID != nil {

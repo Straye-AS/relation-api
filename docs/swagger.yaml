@@ -902,6 +902,10 @@ definitions:
     type: object
   domain.CreateInquiryRequest:
     properties:
+      companyId:
+        allOf:
+        - $ref: '#/definitions/domain.CompanyID'
+        description: 'Optional: defaults to "gruppen" if not provided'
       customerId:
         type: string
       description:
@@ -3059,6 +3063,13 @@ definitions:
         $ref: '#/definitions/domain.DealStage'
     required:
     - stage
+    type: object
+  domain.UpdateInquiryCompanyRequest:
+    properties:
+      companyId:
+        $ref: '#/definitions/domain.CompanyID'
+    required:
+    - companyId
     type: object
   domain.UpdateOfferCostRequest:
     properties:
@@ -7107,6 +7118,48 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Get inquiry
+      tags:
+      - Inquiries
+  /inquiries/{id}/company:
+    put:
+      consumes:
+      - application/json
+      description: Updates the company of an inquiry
+      parameters:
+      - description: Inquiry ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Company update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.UpdateInquiryCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OfferDTO'
+        "400":
+          description: Invalid ID, not an inquiry, or invalid company
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "404":
+          description: Inquiry not found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Update inquiry company
       tags:
       - Inquiries
   /inquiries/{id}/convert:

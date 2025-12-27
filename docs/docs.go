@@ -5181,6 +5181,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/inquiries/{id}/company": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the company of an inquiry",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inquiries"
+                ],
+                "summary": "Update inquiry company",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inquiry ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Company update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.UpdateInquiryCompanyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.OfferDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID, not an inquiry, or invalid company",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Inquiry not found",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/inquiries/{id}/convert": {
             "post": {
                 "security": [
@@ -13858,6 +13925,14 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "companyId": {
+                    "description": "Optional: defaults to \"gruppen\" if not provided",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CompanyID"
+                        }
+                    ]
+                },
                 "customerId": {
                     "type": "string"
                 },
@@ -16946,6 +17021,17 @@ const docTemplate = `{
                 },
                 "stage": {
                     "$ref": "#/definitions/domain.DealStage"
+                }
+            }
+        },
+        "domain.UpdateInquiryCompanyRequest": {
+            "type": "object",
+            "required": [
+                "companyId"
+            ],
+            "properties": {
+                "companyId": {
+                    "$ref": "#/definitions/domain.CompanyID"
                 }
             }
         },

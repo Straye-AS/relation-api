@@ -65,10 +65,18 @@ func (s *InquiryService) Create(ctx context.Context, req *domain.CreateInquiryRe
 		customerID = req.CustomerID
 		customerName = customer.Name
 
-		// Use customer's company if available
+		// Use customer's company if available (can be overridden by explicit companyId)
 		if customer.CompanyID != nil && *customer.CompanyID != "" {
 			companyID = domain.CompanyID(*customer.CompanyID)
 		}
+	}
+
+	// If companyId is explicitly provided, validate and use it (overrides customer's company)
+	if req.CompanyID != nil && *req.CompanyID != "" {
+		if !domain.IsValidCompanyID(string(*req.CompanyID)) {
+			return nil, ErrInvalidCompanyID
+		}
+		companyID = *req.CompanyID
 	}
 
 	// Create inquiry (offer in draft phase) with minimal required fields
@@ -86,10 +94,12 @@ func (s *InquiryService) Create(ctx context.Context, req *domain.CreateInquiryRe
 		// ResponsibleUserID and OfferNumber are NOT set - will be set on conversion
 	}
 
-	// Set responsible if provided - resolve email to user ID if possible
+	// Set responsible if provided - resolve email to user ID and get display name
 	if req.Responsible != "" {
-		if resolvedID := s.resolveResponsible(ctx, req.Responsible); resolvedID != "" {
-			inquiry.ResponsibleUserID = resolvedID
+		userID, userName := s.resolveResponsible(ctx, req.Responsible)
+		if userID != "" {
+			inquiry.ResponsibleUserID = userID
+			inquiry.ResponsibleUserName = userName
 		}
 	}
 
@@ -194,6 +204,51 @@ func (s *InquiryService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// UpdateCompany updates the company of an inquiry
+func (s *InquiryService) UpdateCompany(ctx context.Context, id uuid.UUID, req *domain.UpdateInquiryCompanyRequest) (*domain.OfferDTO, error) {
+	inquiry, err := s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrInquiryNotFound
+		}
+		return nil, fmt.Errorf("failed to get inquiry: %w", err)
+	}
+
+	// Verify it's actually an inquiry (draft phase)
+	if inquiry.Phase != domain.OfferPhaseDraft {
+		return nil, ErrNotAnInquiry
+	}
+
+	// Validate company ID
+	if !domain.IsValidCompanyID(string(req.CompanyID)) {
+		return nil, ErrInvalidCompanyID
+	}
+
+	oldCompanyID := inquiry.CompanyID
+
+	// Update the company
+	updates := map[string]interface{}{
+		"company_id": req.CompanyID,
+	}
+
+	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
+		return nil, fmt.Errorf("failed to update inquiry company: %w", err)
+	}
+
+	// Reload the inquiry
+	inquiry, err = s.offerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload inquiry after update: %w", err)
+	}
+
+	// Log activity
+	s.logActivity(ctx, inquiry.ID, "Inquiry company updated",
+		fmt.Sprintf("Inquiry '%s' company changed from %s to %s", inquiry.Title, oldCompanyID, req.CompanyID))
+
+	dto := mapper.ToOfferDTO(inquiry)
+	return &dto, nil
+}
+
 // Convert converts an inquiry to an offer (phase=in_progress)
 // Logic:
 // - responsibleUserId only: infer company from user's department/companyId
@@ -250,6 +305,15 @@ func (s *InquiryService) Convert(ctx context.Context, id uuid.UUID, req *domain.
 		return nil, ErrInquiryMissingConversionData
 	}
 
+	// Get responsible user's display name
+	var responsibleUserName string
+	if s.userRepo != nil {
+		user, err := s.userRepo.GetByStringID(ctx, responsibleUserID)
+		if err == nil && user != nil {
+			responsibleUserName = user.DisplayName
+		}
+	}
+
 	// Validate company ID for offer number generation
 	if !domain.IsValidCompanyID(string(companyID)) {
 		return nil, ErrInvalidCompanyID
@@ -271,10 +335,11 @@ func (s *InquiryService) Convert(ctx context.Context, id uuid.UUID, req *domain.
 
 	// Update inquiry -> offer
 	updates := map[string]interface{}{
-		"phase":               domain.OfferPhaseInProgress,
-		"company_id":          companyID,
-		"responsible_user_id": responsibleUserID,
-		"offer_number":        offerNumber,
+		"phase":                 domain.OfferPhaseInProgress,
+		"company_id":            companyID,
+		"responsible_user_id":   responsibleUserID,
+		"responsible_user_name": responsibleUserName,
+		"offer_number":          offerNumber,
 	}
 
 	if err := s.offerRepo.UpdateFields(ctx, id, updates); err != nil {
@@ -299,37 +364,54 @@ func (s *InquiryService) Convert(ctx context.Context, id uuid.UUID, req *domain.
 	}, nil
 }
 
-// resolveResponsible resolves a responsible identifier to a user ID
-// If the input looks like an email (contains @), it tries to find the user by email
-// and returns their ID. Returns empty string if user cannot be found.
-// If input doesn't contain @, it's assumed to be a valid user ID and returned as-is.
-func (s *InquiryService) resolveResponsible(ctx context.Context, responsible string) string {
-	// If it doesn't look like an email, return as-is (assume it's already a user ID)
-	if !strings.Contains(responsible, "@") {
-		return responsible
+// resolveResponsible resolves a responsible identifier to a user ID and display name.
+// If the input looks like an email (contains @), it tries to find the user by email.
+// If input doesn't contain @, it's assumed to be a valid user ID and looks up the user.
+// Returns (userID, displayName) - both empty if user cannot be found.
+func (s *InquiryService) resolveResponsible(ctx context.Context, responsible string) (string, string) {
+	if s.userRepo == nil || responsible == "" {
+		return "", ""
 	}
 
-	// Try to find user by email
-	if s.userRepo != nil {
-		user, err := s.userRepo.GetByEmail(ctx, responsible)
-		if err == nil && user != nil {
-			s.logger.Debug("resolved email to user ID",
-				zap.String("email", responsible),
-				zap.String("userId", user.ID))
-			return user.ID
+	var user *domain.User
+	var err error
+
+	// If it looks like an email, find by email
+	if strings.Contains(responsible, "@") {
+		user, err = s.userRepo.GetByEmail(ctx, responsible)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.Warn("failed to lookup user by email",
+					zap.String("email", responsible),
+					zap.Error(err))
+			}
+			s.logger.Debug("could not resolve email to user, responsible will be null",
+				zap.String("email", responsible))
+			return "", ""
 		}
-		// Log if lookup failed (but don't fail the request)
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			s.logger.Warn("failed to lookup user by email",
-				zap.String("email", responsible),
-				zap.Error(err))
+	} else {
+		// Assume it's a user ID - look it up to get display name
+		user, err = s.userRepo.GetByStringID(ctx, responsible)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.Warn("failed to lookup user by ID",
+					zap.String("userId", responsible),
+					zap.Error(err))
+			}
+			// If we can't find the user, still set the ID but without a name
+			return responsible, ""
 		}
 	}
 
-	// User not found - return empty (will not be stored)
-	s.logger.Debug("could not resolve email to user ID, responsible will be null",
-		zap.String("email", responsible))
-	return ""
+	if user != nil {
+		s.logger.Debug("resolved responsible to user",
+			zap.String("input", responsible),
+			zap.String("userId", user.ID),
+			zap.String("displayName", user.DisplayName))
+		return user.ID, user.DisplayName
+	}
+
+	return "", ""
 }
 
 // logActivity creates an activity log entry for an offer
