@@ -113,6 +113,13 @@ func (s *AssignmentService) SyncAssignmentsForOffer(ctx context.Context, offerID
 	validDWIDs := make([]int64, 0, len(erpAssignments))
 
 	for _, erp := range erpAssignments {
+		// Convert ProgressPercent (float64) to ProgressID (int) for storage
+		var progressID *int
+		if erp.ProgressPercent != nil {
+			p := int(*erp.ProgressPercent)
+			progressID = &p
+		}
+
 		inputs = append(inputs, repository.AssignmentUpsertInput{
 			DWAssignmentID:   erp.AssignmentID,
 			DWProjectID:      erp.ProjectID,
@@ -122,7 +129,7 @@ func (s *AssignmentService) SyncAssignmentsForOffer(ctx context.Context, offerID
 			Description:      erp.Description,
 			FixedPriceAmount: erp.FixedPriceAmount,
 			StatusID:         erp.StatusID,
-			ProgressID:       erp.ProgressID,
+			ProgressID:       progressID,
 			RawData:          erp.RawData,
 		})
 		validDWIDs = append(validDWIDs, erp.AssignmentID)
@@ -420,6 +427,13 @@ func (s *AssignmentService) syncAssignmentsForOfferInternal(ctx context.Context,
 	validDWIDs := make([]int64, 0, len(erpAssignments))
 
 	for _, erp := range erpAssignments {
+		// Convert ProgressPercent (float64) to ProgressID (int) for storage
+		var progressID *int
+		if erp.ProgressPercent != nil {
+			p := int(*erp.ProgressPercent)
+			progressID = &p
+		}
+
 		inputs = append(inputs, repository.AssignmentUpsertInput{
 			DWAssignmentID:   erp.AssignmentID,
 			DWProjectID:      erp.ProjectID,
@@ -429,7 +443,7 @@ func (s *AssignmentService) syncAssignmentsForOfferInternal(ctx context.Context,
 			Description:      erp.Description,
 			FixedPriceAmount: erp.FixedPriceAmount,
 			StatusID:         erp.StatusID,
-			ProgressID:       erp.ProgressID,
+			ProgressID:       progressID,
 			RawData:          erp.RawData,
 		})
 		validDWIDs = append(validDWIDs, erp.AssignmentID)

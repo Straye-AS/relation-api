@@ -15154,6 +15154,9 @@ const docTemplate = `{
         "domain.OfferDetailDTO": {
             "type": "object",
             "properties": {
+                "assignmentsCount": {
+                    "type": "integer"
+                },
                 "budgetItems": {
                     "type": "array",
                     "items": {

@@ -995,9 +995,10 @@ type ProjectOffersDTO struct {
 // OfferDetailDTO includes offer with budget items and summary
 type OfferDetailDTO struct {
 	OfferDTO
-	BudgetItems   []BudgetItemDTO   `json:"budgetItems,omitempty"`
-	BudgetSummary *BudgetSummaryDTO `json:"budgetSummary,omitempty"`
-	FilesCount    int               `json:"filesCount"`
+	BudgetItems      []BudgetItemDTO   `json:"budgetItems,omitempty"`
+	BudgetSummary    *BudgetSummaryDTO `json:"budgetSummary,omitempty"`
+	FilesCount       int               `json:"filesCount"`
+	AssignmentsCount int               `json:"assignmentsCount"`
 }
 
 type ProjectBudgetDTO struct {

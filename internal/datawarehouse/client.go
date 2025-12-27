@@ -36,13 +36,36 @@ const (
 	OtherCostMin     = 6000
 )
 
-// CompanyMapping maps Straye company identifiers to data warehouse table name prefixes
+// CompanyMapping maps Straye company identifiers to data warehouse table name prefixes.
+// Used for company-specific tables like nxt_<prefix>_generalledgertransaction.
 var CompanyMapping = map[string]string{
 	"tak":        "strayetak",
 	"stalbygg":   "strayestaal",
 	"montasje":   "strayemontasje",
 	"hybridbygg": "strayehybridbygg",
 	"industri":   "strayeindustri",
+}
+
+// FirmanrMapping maps Straye company identifiers to Firmanr values used in shared views.
+// The dbo.Prosjekter and dbo.Arbeidsordre views contain data for all companies,
+// filtered by the Firmanr column.
+var FirmanrMapping = map[string]int{
+	"gruppen":    1, // Straye Gruppen AS
+	"tak":        3, // Straye Tak AS
+	"industri":   4, // Straye Industri AS
+	"hybridbygg": 5, // Straye Hybridbygg AS
+	"stalbygg":   6, // Straye Stålbygg AS
+	"montasje":   7, // Straye Montasje AS
+}
+
+// GetFirmanr returns the Firmanr value for a given company ID.
+// Returns an error if the company ID is unknown.
+func GetFirmanr(companyID string) (int, error) {
+	firmanr, ok := FirmanrMapping[companyID]
+	if !ok {
+		return 0, fmt.Errorf("unknown company ID for Firmanr mapping: %s", companyID)
+	}
+	return firmanr, nil
 }
 
 // Client provides read-only access to the MS SQL Server data warehouse.
@@ -686,107 +709,123 @@ func (c *Client) GetERPCustomers(ctx context.Context) ([]ERPCustomer, error) {
 
 // ERPAssignment represents an assignment (work order) from the ERP data warehouse.
 // Assignments belong to projects and contain work order details.
+// Data is sourced from the dbo.Arbeidsordre view which contains all companies.
 type ERPAssignment struct {
-	AssignmentID     int64   `json:"assignmentId"`     // Primary key in DW
-	ProjectID        int64   `json:"projectId"`        // FK to project (internal reference)
-	AssignmentNumber string  `json:"assignmentNumber"` // e.g., "2406200"
-	Description      string  `json:"description"`
-	FixedPriceAmount float64 `json:"fixedPriceAmount"` // Primary financial field
-	StatusID         *int    `json:"statusId"`         // Enum_AssignmentStatusId
-	ProgressID       *int    `json:"progressId"`       // Enum_AssignmentProgressId
-	RawData          map[string]interface{} `json:"rawData"` // Full row for extensibility
+	AssignmentID      int64    `json:"assignmentId"`      // ArbeidsordreInternId - internal primary key
+	AssignmentNumber  string   `json:"assignmentNumber"`  // Arbeidsordrenr - e.g., "2406200"
+	Description       string   `json:"description"`       // Beskrivelse
+	ProjectID         int64    `json:"projectId"`         // ProsjektId - FK to project
+	ProjectNumber     string   `json:"projectNumber"`     // Prosjektnr - project code
+	FixedPriceAmount  float64  `json:"fixedPriceAmount"`  // Fastpris - fixed price amount
+	StatusID          *int     `json:"statusId"`          // ArbeidsordrestatusNr
+	ProgressPercent   *float64 `json:"progressPercent"`   // FullførtProsent - completion percentage
+	RawData           map[string]interface{} `json:"rawData"` // Full row for extensibility
 }
 
-// GetProjectsTableName returns the fully qualified table name for a company's projects table.
-func GetProjectsTableName(companyID string) (string, error) {
-	prefix, ok := CompanyMapping[companyID]
-	if !ok {
-		return "", fmt.Errorf("unknown company ID: %s", companyID)
-	}
-	return fmt.Sprintf("cw_%s_projects", prefix), nil
+// GetProjectsViewName returns the view name for projects.
+// All companies share the dbo.Prosjekter view, filtered by Firmanr.
+func GetProjectsViewName() string {
+	return "dbo.Prosjekter"
 }
 
-// GetAssignmentsTableName returns the fully qualified table name for a company's assignments table.
-func GetAssignmentsTableName(companyID string) (string, error) {
-	prefix, ok := CompanyMapping[companyID]
-	if !ok {
-		return "", fmt.Errorf("unknown company ID: %s", companyID)
-	}
-	return fmt.Sprintf("cw_%s_assignments", prefix), nil
+// GetAssignmentsViewName returns the view name for assignments (work orders).
+// All companies share the dbo.Arbeidsordre view, filtered by Firmanr.
+func GetAssignmentsViewName() string {
+	return "dbo.Arbeidsordre"
 }
 
 // GetProjectAssignments retrieves all assignments for a project by project code (external reference).
-// The projectCode matches the Code column in the projects table (e.g., "24062").
-// Returns all assignments linked to that project via the internal ProjectId reference.
+// The projectCode matches the Prosjektnr column in the Prosjekter view (e.g., "24062").
+// Returns all assignments linked to that project via the ProsjektId reference.
+// Uses the shared dbo.Arbeidsordre and dbo.Prosjekter views, filtered by Firmanr.
 func (c *Client) GetProjectAssignments(ctx context.Context, companyID, projectCode string) ([]ERPAssignment, error) {
 	if c == nil || c.db == nil {
 		return nil, fmt.Errorf("data warehouse client not initialized")
 	}
 
-	projectsTable, err := GetProjectsTableName(companyID)
+	firmanr, err := GetFirmanr(companyID)
 	if err != nil {
-		return nil, fmt.Errorf("get projects table name: %w", err)
+		return nil, fmt.Errorf("get firmanr: %w", err)
 	}
 
-	assignmentsTable, err := GetAssignmentsTableName(companyID)
-	if err != nil {
-		return nil, fmt.Errorf("get assignments table name: %w", err)
-	}
+	// Build the compound ProsjektId key: "<Firmanr>-<Prosjektnr>"
+	// This matches the ProsjektId format in dbo.Arbeidsordre
+	projektId := fmt.Sprintf("%d-%s", firmanr, projectCode)
 
-	// Query assignments by looking up the project's internal ID via its Code
-	query := fmt.Sprintf(`
+	// Query assignments from dbo.Arbeidsordre view by ProsjektId
+	// ArbeidsordreId is the unique assignment ID (not ArbeidsordreInternId which is "<Firmanr>-<Arbeidsordrenr>")
+	query := `
 		SELECT
-			a.AssignmentId,
-			a.ProjectId,
-			ISNULL(a.AssignmentNumber, '') as AssignmentNumber,
-			ISNULL(a.Description, '') as Description,
-			ISNULL(a.FixedPriceAmount, 0) as FixedPriceAmount,
-			a.Enum_AssignmentStatusId as StatusId,
-			a.Enum_AssignmentProgressId as ProgressId,
-			a.FixedPrice,
-			a.FixedPriceInvoiced,
-			a.EstimatedTotalHours,
-			a.EstimatedCompletionPercentage,
-			a.Archived,
-			a.ExternalReference,
-			a.CustomerReference,
-			a.StartDateTimeUTC,
-			a.EndDateTimeUTC,
-			a.xLastUpdated
-		FROM %s a
-		INNER JOIN %s p ON a.ProjectId = p.ProjectId
-		WHERE p.Code = @p1
-		  AND ISNULL(a.Sys_Deactivated, 0) = 0
-		ORDER BY a.AssignmentNumber
-	`, assignmentsTable, projectsTable)
+			a.ArbeidsordreId,
+			ISNULL(a.Arbeidsordrenr, '') as Arbeidsordrenr,
+			ISNULL(a.Beskrivelse, '') as Beskrivelse,
+			a.ProsjektId,
+			ISNULL(a.Prosjektnr, '') as Prosjektnr,
+			ISNULL(a.Fastpris, 0) as Fastpris,
+			a.Notat,
+			a.Arbeidsordrekategorinr,
+			a.Arbeidsordrekategori1nr,
+			a.ArbeidsordrestatusNr,
+			a.FullførtProsent
+		FROM dbo.Arbeidsordre a
+		WHERE a.ProsjektId = @p1
+		ORDER BY a.Arbeidsordrenr
+	`
 
-	c.logger.Debug("Querying ERP assignments",
+	c.logger.Debug("Querying ERP assignments from dbo.Arbeidsordre",
 		zap.String("company_id", companyID),
+		zap.String("projekt_id", projektId),
 		zap.String("project_code", projectCode),
 	)
 
-	rows, err := c.ExecuteQuery(ctx, query, projectCode)
+	rows, err := c.ExecuteQuery(ctx, query, projektId)
 	if err != nil {
 		return nil, fmt.Errorf("query ERP assignments: %w", err)
 	}
 
+	// Deduplicate by Arbeidsordrenr to avoid ON CONFLICT errors in upsert
+	// Arbeidsordrenr is unique within a Firmanr (company), and combined with company_id is globally unique
+	seen := make(map[int64]bool)
 	assignments := make([]ERPAssignment, 0, len(rows))
+	var duplicateIDs []int64
+
 	for _, row := range rows {
+		// Use Arbeidsordrenr as the numeric ID - unique within a company (Firmanr)
+		// Combined with company_id in our DB constraint, this is globally unique
+		assignmentID := parseInt64(row["Arbeidsordrenr"])
+
+		// Skip duplicates (shouldn't happen with Arbeidsordrenr per company, but safety check)
+		if seen[assignmentID] {
+			duplicateIDs = append(duplicateIDs, assignmentID)
+			continue
+		}
+		seen[assignmentID] = true
+
 		assignment := ERPAssignment{
-			AssignmentID:     parseInt64(row["AssignmentId"]),
-			ProjectID:        parseInt64(row["ProjectId"]),
-			AssignmentNumber: parseString(row["AssignmentNumber"]),
-			Description:      parseString(row["Description"]),
-			FixedPriceAmount: parseFloat64Safe(row["FixedPriceAmount"]),
-			StatusID:         parseIntPtr(row["StatusId"]),
-			ProgressID:       parseIntPtr(row["ProgressId"]),
+			AssignmentID:     assignmentID,
+			AssignmentNumber: parseString(row["Arbeidsordrenr"]),
+			Description:      parseString(row["Beskrivelse"]),
+			ProjectID:        0, // ProsjektId is a string like "3-24131", we don't need the numeric part
+			ProjectNumber:    parseString(row["Prosjektnr"]),
+			FixedPriceAmount: parseFloat64Safe(row["Fastpris"]),
+			StatusID:         parseIntPtr(row["ArbeidsordrestatusNr"]),
+			ProgressPercent:  parseFloat64Ptr(row["FullførtProsent"]),
 			RawData:          row, // Store full row for extensibility
 		}
 		assignments = append(assignments, assignment)
 	}
 
+	if len(duplicateIDs) > 0 {
+		c.logger.Warn("Skipped duplicate assignments from DW",
+			zap.String("project_code", projectCode),
+			zap.Int("duplicates", len(duplicateIDs)),
+			zap.Int64s("duplicate_ids", duplicateIDs),
+		)
+	}
+
 	c.logger.Info("Retrieved ERP assignments",
 		zap.String("company_id", companyID),
+		zap.String("projekt_id", projektId),
 		zap.String("project_code", projectCode),
 		zap.Int("count", len(assignments)),
 	)
@@ -808,7 +847,9 @@ func parseInt64(val interface{}) int64 {
 		return int64(v)
 	case []byte:
 		var i int64
-		fmt.Sscanf(string(v), "%d", &i)
+		if _, err := fmt.Sscanf(string(v), "%d", &i); err != nil {
+			return 0
+		}
 		return i
 	default:
 		return 0
@@ -841,6 +882,34 @@ func parseFloat64Safe(val interface{}) float64 {
 		return 0
 	}
 	return f
+}
+
+// parseFloat64Ptr safely extracts a pointer to float64 from a database result value.
+func parseFloat64Ptr(val interface{}) *float64 {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case float64:
+		return &v
+	case float32:
+		f := float64(v)
+		return &f
+	case int64:
+		f := float64(v)
+		return &f
+	case int:
+		f := float64(v)
+		return &f
+	case []byte:
+		var f float64
+		if _, err := fmt.Sscanf(string(v), "%f", &f); err == nil {
+			return &f
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 // parseString safely extracts a string from a database result value.

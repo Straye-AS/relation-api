@@ -1856,6 +1856,8 @@ definitions:
     type: object
   domain.OfferDetailDTO:
     properties:
+      assignmentsCount:
+        type: integer
       budgetItems:
         items:
           $ref: '#/definitions/domain.BudgetItemDTO'
