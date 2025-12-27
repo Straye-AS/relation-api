@@ -74,6 +74,8 @@ type DataWarehouseConfig struct {
 	PeriodicSyncCron string
 	// PeriodicSyncTimeout is the timeout for the periodic sync job (seconds)
 	PeriodicSyncTimeout int
+	// ForceSyncOnStartup forces a full sync on startup regardless of last sync time
+	ForceSyncOnStartup bool
 }
 
 type AzureAdConfig struct {
@@ -283,6 +285,11 @@ func Load() (*Config, error) {
 	// Check for DATAWAREHOUSE_PERIODIC_SYNC_ENABLED env var override
 	if v.GetBool("DATAWAREHOUSE_PERIODIC_SYNC_ENABLED") {
 		cfg.DataWarehouse.PeriodicSyncEnabled = true
+	}
+
+	// Check for FORCE_DW_SYNC_ON_STARTUP env var override
+	if v.GetBool("FORCE_DW_SYNC_ON_STARTUP") {
+		cfg.DataWarehouse.ForceSyncOnStartup = true
 	}
 
 	// NOTE: Data warehouse credentials are ONLY loaded from Azure Key Vault

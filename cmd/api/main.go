@@ -250,6 +250,7 @@ func run() error {
 
 		// Register the data warehouse sync job
 		// runStartupSync=true will sync stale offers and assignments (null or > 1 hour old) immediately
+		// forceSync=true will sync ALL offers regardless of last sync time
 		if err := jobs.RegisterDWSyncJob(
 			scheduler,
 			offerService,
@@ -257,7 +258,8 @@ func run() error {
 			log,
 			cfg.DataWarehouse.PeriodicSyncCron,
 			cfg.DataWarehouse.PeriodicSyncTimeoutDuration(),
-			true, // run startup sync for stale offers and assignments
+			true,                                  // run startup sync for stale offers and assignments
+			cfg.DataWarehouse.ForceSyncOnStartup,  // force sync ALL if FORCE_DW_SYNC_ON_STARTUP=true
 		); err != nil {
 			log.Error("Failed to register DW sync job", zap.Error(err))
 		} else {
@@ -265,6 +267,7 @@ func run() error {
 			log.Info("Scheduler started with DW sync job (offers + assignments)",
 				zap.String("cron_expr", cfg.DataWarehouse.PeriodicSyncCron),
 				zap.Duration("timeout", cfg.DataWarehouse.PeriodicSyncTimeoutDuration()),
+				zap.Bool("force_sync_on_startup", cfg.DataWarehouse.ForceSyncOnStartup),
 			)
 		}
 	} else {

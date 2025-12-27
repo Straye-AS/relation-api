@@ -378,6 +378,7 @@ func (rt *Router) Setup() http.Handler {
 				r.Put("/{id}/invoiced", rt.offerHandler.UpdateOfferInvoiced) // Update invoiced amount
 				r.Post("/{id}/complete", rt.offerHandler.CompleteOffer)      // Transition to completed phase
 				r.Post("/{id}/reopen", rt.offerHandler.ReopenOffer)          // Reopen completed offer back to order
+				r.Post("/{id}/revert-to-sent", rt.offerHandler.RevertToSent) // Revert order back to sent phase
 
 				// Individual property update endpoints
 				r.Put("/{id}/probability", rt.offerHandler.UpdateProbability)
