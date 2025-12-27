@@ -383,11 +383,15 @@ func (s *OfferService) GetByIDWithBudgetItems(ctx context.Context, id uuid.UUID)
 	// Get files count
 	filesCount, _ := s.offerRepo.GetFilesCount(ctx, id)
 
+	// Get assignments count
+	assignmentsCount, _ := s.offerRepo.GetAssignmentsCount(ctx, id)
+
 	dto := &domain.OfferDetailDTO{
-		OfferDTO:      offerDTO,
-		BudgetItems:   itemDTOs,
-		BudgetSummary: summaryDTO,
-		FilesCount:    filesCount,
+		OfferDTO:         offerDTO,
+		BudgetItems:      itemDTOs,
+		BudgetSummary:    summaryDTO,
+		FilesCount:       filesCount,
+		AssignmentsCount: assignmentsCount,
 	}
 
 	return dto, nil

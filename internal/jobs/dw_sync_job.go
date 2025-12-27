@@ -24,6 +24,10 @@ type OfferSyncService interface {
 	// SyncStaleOffersFromDataWarehouse syncs only offers that are stale (never synced or older than maxAge).
 	// Returns counts for successfully synced and failed offers.
 	SyncStaleOffersFromDataWarehouse(ctx context.Context, maxAge time.Duration) (synced int, failed int, err error)
+
+	// ForceSyncAllOffersFromDataWarehouse syncs ALL offers regardless of last sync time.
+	// Returns counts for successfully synced and failed offers.
+	ForceSyncAllOffersFromDataWarehouse(ctx context.Context) (synced int, failed int, err error)
 }
 
 // AssignmentSyncService defines the interface for syncing assignments from the data warehouse.
@@ -35,6 +39,10 @@ type AssignmentSyncService interface {
 	// SyncStaleAssignmentsFromDataWarehouse syncs assignments only for offers that are stale.
 	// Returns counts for successfully synced and failed offers.
 	SyncStaleAssignmentsFromDataWarehouse(ctx context.Context, maxAge time.Duration) (synced int, failed int, err error)
+
+	// ForceSyncAllAssignmentsFromDataWarehouse syncs assignments for ALL offers regardless of last sync time.
+	// Returns counts for successfully synced and failed offers.
+	ForceSyncAllAssignmentsFromDataWarehouse(ctx context.Context) (synced int, failed int, err error)
 }
 
 // DWSyncJob runs the data warehouse sync for all offers with external_reference
@@ -142,16 +150,60 @@ func (j *DWSyncJob) RunStartupSync(maxAge time.Duration) (synced int, failed int
 	return offersSynced, offersFailed
 }
 
+// RunForceSync runs a full sync for ALL offers and assignments on startup,
+// regardless of when they were last synced. Use this for debugging or to catch up.
+func (j *DWSyncJob) RunForceSync() (synced int, failed int) {
+	ctx, cancel := context.WithTimeout(context.Background(), j.timeout)
+	defer cancel()
+
+	start := time.Now()
+	j.logger.Info("starting FORCE data warehouse sync for ALL offers and assignments")
+
+	// Force sync all offer financials
+	offersSynced, offersFailed, err := j.offerService.ForceSyncAllOffersFromDataWarehouse(ctx)
+	if err != nil {
+		j.logger.Error("data warehouse force offer sync failed",
+			zap.Error(err),
+			zap.Duration("duration", time.Since(start)))
+		// Continue with assignment sync
+	}
+
+	// Force sync all assignments
+	var assignmentsSynced, assignmentsFailed int
+	if j.assignmentService != nil {
+		assignmentsSynced, assignmentsFailed, err = j.assignmentService.ForceSyncAllAssignmentsFromDataWarehouse(ctx)
+		if err != nil {
+			j.logger.Error("data warehouse force assignment sync failed",
+				zap.Error(err),
+				zap.Duration("duration", time.Since(start)))
+		}
+	}
+
+	duration := time.Since(start)
+
+	j.logger.Info("data warehouse FORCE sync completed",
+		zap.Int("offers_synced", offersSynced),
+		zap.Int("offers_failed", offersFailed),
+		zap.Int("assignments_synced", assignmentsSynced),
+		zap.Int("assignments_failed", assignmentsFailed),
+		zap.Duration("duration", duration))
+
+	return offersSynced, offersFailed
+}
+
 // RegisterDWSyncJob registers the data warehouse sync job with the scheduler.
 // The cronExpr should be a valid cron expression (e.g., "0 15 * * * *" for 15 minutes past every hour).
 // If runStartupSync is true, it will also run a sync for stale offers and assignments (null or > 1 hour old)
 // immediately in a background goroutine so it doesn't block API startup.
+// If forceSync is true, it will sync ALL offers regardless of last sync time (overrides runStartupSync).
 // assignmentService can be nil if assignment syncing is not needed.
-func RegisterDWSyncJob(scheduler *Scheduler, offerService OfferSyncService, assignmentService AssignmentSyncService, logger *zap.Logger, cronExpr string, timeout time.Duration, runStartupSync bool) error {
+func RegisterDWSyncJob(scheduler *Scheduler, offerService OfferSyncService, assignmentService AssignmentSyncService, logger *zap.Logger, cronExpr string, timeout time.Duration, runStartupSync bool, forceSync bool) error {
 	job := NewDWSyncJob(offerService, assignmentService, logger, timeout)
 
-	// Run startup sync for stale offers and assignments asynchronously if requested
-	if runStartupSync {
+	// Run startup sync asynchronously if requested
+	if forceSync {
+		go job.RunForceSync()
+	} else if runStartupSync {
 		go job.RunStartupSync(DefaultStaleMaxAge)
 	}
 

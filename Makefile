@@ -1,4 +1,4 @@
-run .PHONY: help build run run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed test-db-up test-db-down test-db-reset
+.PHONY: help build run run-sync run-dev api dev test test-all test-coverage test-integration lint docker-build docker-up docker-down docker-logs migrate-up migrate-down migrate-status migrate-create clean deps format security swagger seed test-db-up test-db-down test-db-reset
 
 GO ?= go
 BIN_DIR ?= bin
@@ -18,6 +18,9 @@ build: ## Build the application binaries
 
 run: swagger ## Run the application locally (single run, regenerates Swagger docs)
 	$(GO) run $(APP_CMD)
+
+run-sync: swagger ## Run with forced DW sync on startup (syncs ALL offers/assignments)
+	FORCE_DW_SYNC_ON_STARTUP=true $(GO) run $(APP_CMD)
 
 dev: ## Run the API with Air hot reload
 ifeq ($(strip $(AIR_BIN)),)

@@ -141,17 +141,33 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
   - `WAREHOUSE-PASSWORD`: Database password
 - Works in ANY environment (including development) when enabled and Key Vault is configured
 
-**Company Mapping** (Straye ID -> Table Prefix):
+**Company Mapping** (Straye ID -> Table Prefix for GL tables):
 - `tak` -> `strayetak`
 - `stalbygg` -> `strayestaal`
 - `montasje` -> `strayemontasje`
 - `hybridbygg` -> `strayehybridbygg`
 - `industri` -> `strayeindustri`
 
-**General Ledger Tables**: `dbo.nxt_<prefix>_generalledgertransaction`
+**Firmanr Mapping** (Straye ID -> Firmanr for shared views):
+- `gruppen` -> 1 (Straye Gruppen AS)
+- `tak` -> 3 (Straye Tak AS)
+- `industri` -> 4 (Straye Industri AS)
+- `hybridbygg` -> 5 (Straye Hybridbygg AS)
+- `stalbygg` -> 6 (Straye Stålbygg AS)
+- `montasje` -> 7 (Straye Montasje AS)
+
+**General Ledger Tables**: `nxt_<prefix>_generalledgertransaction`
+- Company-specific tables (use CompanyMapping)
 - Use `OrgUnit8` column to match against project `external_reference`
 - `AccountNo` column identifies the account type
 - `PostedAmountDomestic` column contains the transaction amount
+
+**Shared Views** (Projects & Assignments):
+- `dbo.Prosjekter` - All projects for all companies, filter by `Firmanr`
+  - Key columns: `Firmanr`, `ProsjektId`, `Prosjektnr`, `Prosjektnavn`, `Prosjektstatus`
+- `dbo.Arbeidsordre` - All assignments (work orders), filter by `Firmanr`
+  - Key columns: `Firmanr`, `ArbeidsordreInternId`, `Arbeidsordrenr`, `Beskrivelse`, `ProsjektId`, `Prosjektnr`, `Fastpris`, `ArbeidsordrestatusNr`, `FullførtProsent`
+- Use `GetFirmanr(companyID)` to get the Firmanr value for filtering
 
 **Account Number Ranges**:
 - `3000-3999`: Income/Revenue accounts
@@ -163,11 +179,11 @@ Read-only connectivity to the MS SQL Server data warehouse for reporting and fin
 **Usage**:
 ```go
 // Get client from main.go initialization
-results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM dbo.nxt_strayetak_generalledgertransaction WHERE OrgUnit2 = @ref", externalRef)
+results, err := dwClient.ExecuteQuery(ctx, "SELECT * FROM nxt_strayetak_generalledgertransaction WHERE OrgUnit2 = @ref", externalRef)
 
-// Get table name for a company
+// Get table name for a company (General Ledger)
 tableName, err := datawarehouse.GetGeneralLedgerTableName("tak")
-// Returns: "dbo.nxt_strayetak_generalledgertransaction"
+// Returns: "nxt_strayetak_generalledgertransaction"
 
 // Query project income/costs using helper methods
 income, err := dwClient.GetProjectIncome(ctx, "tak", "PROJECT-123")
@@ -176,6 +192,14 @@ costs, err := dwClient.GetProjectCosts(ctx, "tak", "PROJECT-123")
 // Or get all financials in one query
 financials, err := dwClient.GetProjectFinancials(ctx, "tak", "PROJECT-123")
 // Returns: ProjectFinancials{TotalIncome, TotalCosts, NetResult}
+
+// Get assignments for a project (uses shared views with Firmanr filter)
+assignments, err := dwClient.GetProjectAssignments(ctx, "tak", "24062")
+// Returns: []ERPAssignment with AssignmentNumber, Description, FixedPriceAmount, etc.
+
+// Get Firmanr for filtering shared views
+firmanr, err := datawarehouse.GetFirmanr("tak")
+// Returns: 3
 ```
 
 **Health Check**: `GET /health/datawarehouse` returns status, latency, and pool stats.

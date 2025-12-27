@@ -218,6 +218,21 @@ func (r *OfferRepository) GetFilesCount(ctx context.Context, offerID uuid.UUID) 
 	return int(count), err
 }
 
+// GetAssignmentsCount returns the number of assignments for an offer
+// Applies company filter via subquery for multi-tenant isolation
+func (r *OfferRepository) GetAssignmentsCount(ctx context.Context, offerID uuid.UUID) (int, error) {
+	var count int64
+
+	// Build subquery to filter offers by company
+	offerSubquery := r.db.WithContext(ctx).Model(&domain.Offer{}).Select("id").Where("id = ?", offerID)
+	offerSubquery = ApplyCompanyFilter(ctx, offerSubquery)
+
+	err := r.db.WithContext(ctx).Model(&domain.Assignment{}).
+		Where("offer_id IN (?)", offerSubquery).
+		Count(&count).Error
+	return int(count), err
+}
+
 func (r *OfferRepository) GetTotalPipelineValue(ctx context.Context) (float64, error) {
 	var total float64
 	query := r.db.WithContext(ctx).Model(&domain.Offer{}).
